@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root{
+  --c-income:#56E2C6;
+  --c-expense:#63C4FF;
+  --c-debt:#FF4DA2;
+  --c-saving:#FFD34E;
+}
+*{box-sizing:border-box}
