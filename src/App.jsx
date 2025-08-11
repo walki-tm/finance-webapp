@@ -12,6 +12,7 @@ import Budgeting from './pages/Budgeting.jsx';
 import TransactionModal from './components/TransactionModal.jsx'; // <-- Modale riutilizzabile
 import { saveState, loadState, uuid } from './lib/utils.js';
 import { MAIN_CATS } from './lib/constants.js';
+
 import {
   Layers3,
   LogOut,
@@ -27,10 +28,19 @@ import {
 
 // Stato iniziale dell'app (dati mock su client). In futuro saranno sostituiti da API/DB.
 const defaultData = () => ({
-  user: null,        // Entità User: {name, email}
-  theme: 'light',    // Tema iniziale: light
-  customIcons: {},   // Icone custom definite dall'utente (es. emoji)
-  // Entità Subcategories raggruppate per main
+  user: null,
+  theme: 'light',
+  customIcons: {},
+
+  // Nuove proprietà per le categorie main
+  customMainCats: [], // Categorie principali personalizzate dall'utente
+  mainEnabled: {      // Stato di visibilità delle categorie principali (core)
+    income: true,
+    expense: true,
+    debt: true,
+    saving: true
+  },
+
   subcats: {
     income: [
       { name: 'Stipendio', iconKey: 'earn' },
@@ -52,10 +62,11 @@ const defaultData = () => ({
       { name: 'PAC ETF', iconKey: 'money' }
     ]
   },
-  budgets: {},       // Entità Budgets: per anno -> per (main:sub) = amount
-  goals: {},         // Obiettivi (non usati ora)
-  transactions: []   // Entità Transactions: [{id, main, sub, amount, date, note}, ...]
+  budgets: {},
+  goals: {},
+  transactions: []
 });
+
 
 export default function App() {
   // Stato applicazione (persistito su localStorage)
@@ -119,6 +130,73 @@ export default function App() {
         [main]: (s.subcats[main] || []).filter((sc) => sc.name !== name)
       }
     }));
+
+  // ====== CRUD Categorie Main ======
+  const updateMainCat = (key, patch) =>
+    setState((s) => {
+      const isCore = MAIN_CATS.some((m) => m.key === key);
+      const next = { ...s };
+
+      // 1) enabled si gestisce SEMPRE in mainEnabled
+      if (Object.prototype.hasOwnProperty.call(patch, 'enabled')) {
+        next.mainEnabled = { ...(s.mainEnabled || {}), [key]: !!patch.enabled };
+      }
+
+      // 2) name/color:
+      if (isCore) {
+        // upsert override per categoria core dentro customMainCats
+        const idx = (s.customMainCats || []).findIndex((c) => c.key === key);
+        const base = MAIN_CATS.find((m) => m.key === key) || { key, name: key, color: '#5B86E5' };
+        if (idx === -1) {
+          // non esiste ancora un override → lo creo con i campi che arrivano nel patch
+          const newOverride = {
+            key,
+            name: patch.name ?? base.name,
+            color: patch.color ?? base.color,
+          };
+          next.customMainCats = [...(s.customMainCats || []), newOverride];
+        } else {
+          // esiste → aggiorno solo i campi previsti
+          next.customMainCats = s.customMainCats.map((c) =>
+            c.key === key
+              ? {
+                ...c,
+                ...(Object.prototype.hasOwnProperty.call(patch, 'name') ? { name: patch.name } : {}),
+                ...(Object.prototype.hasOwnProperty.call(patch, 'color') ? { color: patch.color } : {}),
+              }
+              : c
+          );
+        }
+      } else {
+        // categoria custom → patch diretto
+        next.customMainCats = (s.customMainCats || []).map((c) =>
+          c.key === key ? { ...c, ...patch } : c
+        );
+      }
+
+      return next;
+    });
+
+  const addMainCat = (obj) =>
+    setState((s) => ({
+      ...s,
+      customMainCats: [...(s.customMainCats || []), obj],
+      mainEnabled: { ...(s.mainEnabled || {}), [obj.key]: true },
+    }));
+
+  const removeMainCat = (key) =>
+    setState((s) => {
+      // rimuovo SOLO se è una custom (le core non si toccano)
+      if (MAIN_CATS.some((m) => m.key === key)) return s;
+      const { [key]: _omit, ...restEnabled } = s.mainEnabled || {};
+      return {
+        ...s,
+        customMainCats: (s.customMainCats || []).filter((c) => c.key !== key),
+        mainEnabled: restEnabled,
+      };
+    });
+
+
 
   // Upsert Budget (entità Budget) per anno corrente
   const upsertBudget = (main, sub, value) =>
@@ -280,6 +358,9 @@ export default function App() {
                   updateSubcat={updateSubcat}
                   removeSubcat={removeSubcat}
                   addCustomIcon={addCustomIcon}
+                  updateMainCat={updateMainCat}
+                  addMainCat={addMainCat}
+                  removeMainCat={removeMainCat}
                 />
               )}
 
