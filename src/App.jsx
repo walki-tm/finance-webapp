@@ -247,7 +247,7 @@ export default function App() {
                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm bg-gradient-to-tr from-sky-600 to-indigo-600 text-white hover:opacity-90"
               >
                 <Plus className="h-4 w-4" />
-                Nuova
+                Nuova Transazione
               </button>
             </div>
 

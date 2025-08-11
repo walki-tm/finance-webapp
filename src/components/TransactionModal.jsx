@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, AlertCircle, StickyNote, ChevronDown } from 'lucide-react';
 import { MAIN_CATS } from '../lib/constants.js';
+import { IconView } from './IconPicker.jsx';
 
-/** testo bianco/nero leggibile su sfondo HEX */
+/** calcola testo leggibile su uno sfondo HEX */
 function contrastText(hex) {
   const h = (hex || '#94a3b8').replace('#', '');
   const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
@@ -11,10 +12,19 @@ function contrastText(hex) {
   return yiq >= 160 ? '#0b1220' : '#ffffff';
 }
 
-/** Dropdown base (clic fuori, Esc, frecce ↑/↓, Enter) */
+/** HEX -> rgba(...) con alpha */
+function hexToRgba(hex, a = 1) {
+  const h = (hex || '#000000').replace('#', '');
+  const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const r = parseInt(v.slice(0, 2), 16);
+  const g = parseInt(v.slice(2, 4), 16);
+  const b = parseInt(v.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
+/** hook dropdown (click fuori / Esc) */
 function useDropdown(onClose) {
   const [open, setOpen] = useState(false);
-  const [idx, setIdx] = useState(-1);
   const ref = useRef(null);
 
   useEffect(() => {
@@ -28,51 +38,77 @@ function useDropdown(onClose) {
     }
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [open, onClose]);
 
-  return { open, setOpen, idx, setIdx, ref };
+  return { open, setOpen, ref };
 }
 
-/** Selettore Categoria (colorato) */
+/** Selettore Categoria con BADGE colorato */
 function CategorySelect({ value, onChange }) {
   const selected = MAIN_CATS.find(c => c.key === value) || MAIN_CATS[0];
-  const bg = selected.color;
-  const fg = contrastText(bg);
-  const { open, setOpen, idx, setIdx, ref } = useDropdown();
+  const mainColor = selected.color;
+  const textColor = contrastText(mainColor);
+  const { open, setOpen, ref } = useDropdown();
+
+  // rileva dark mode per forzare testo bianco
+  const dark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+
+  const badgeStyle = {
+    backgroundColor: hexToRgba(mainColor, dark ? 0.28 : 0.18),
+    color: dark ? '#ffffff' : (textColor === '#ffffff' ? '#ffffff' : '#0b1220'),
+    borderColor: mainColor,
+  };
 
   return (
     <div className="relative" ref={ref}>
+      {/* bottone chiuso */}
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full rounded-xl px-3 py-2 text-sm border focus:outline-none flex items-center justify-between"
-        style={{ backgroundColor: bg, color: fg, borderColor: bg }}
+        className="w-full rounded-xl px-2 py-2 text-sm border focus:outline-none flex items-center justify-between"
+        style={{ borderColor: mainColor, backgroundColor: hexToRgba(mainColor, dark ? 0.20 : 0.12) }}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className="font-medium">{selected.name}</span>
-        <ChevronDown className="h-4 w-4" style={{ color: fg }} />
+        <span
+          className="inline-flex items-center font-bold uppercase tracking-wide px-2 py-1 rounded-lg"
+          style={badgeStyle}
+        >
+          {selected.name}
+        </span>
+        <ChevronDown className="h-4 w-4" style={{ color: dark ? '#ffffff' : textColor }} />
       </button>
 
+      {/* menu aperto */}
       {open && (
         <div className="absolute z-50 mt-2 w-full rounded-xl border border-slate-200/20 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
           <ul role="listbox" className="py-1 max-h-64 overflow-auto">
-            {MAIN_CATS.map((c, i) => (
-              <li
-                key={c.key}
-                role="option"
-                aria-selected={c.key === value}
-                onMouseEnter={() => setIdx(i)}
-                onMouseLeave={() => setIdx(-1)}
-                onClick={() => { onChange(c.key); setOpen(false); }}
-                className={`px-3 py-2 cursor-pointer flex items-center justify-between ${c.key === value ? 'bg-slate-100 dark:bg-slate-800' : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-              >
-                <span style={{ color: c.color }} className="font-medium">{c.name}</span>
-                {c.key === value && <span className="text-xs text-slate-500">selezionata</span>}
-              </li>
-            ))}
+            {MAIN_CATS.map((c) => {
+              const t = contrastText(c.color);
+              return (
+                <li
+                  key={c.key}
+                  role="option"
+                  onClick={() => { onChange(c.key); setOpen(false); }}
+                  className="px-3 py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  <span
+                    className="inline-flex items-center font-bold uppercase tracking-wide px-2 py-1 rounded-lg"
+                    style={{
+                      backgroundColor: hexToRgba(c.color, dark ? 0.28 : 0.22),
+                      color: dark ? '#ffffff' : (t === '#ffffff' ? '#ffffff' : '#0b1220'),
+                      border: `1px solid ${c.color}`
+                    }}
+                  >
+                    {c.name}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
@@ -80,41 +116,61 @@ function CategorySelect({ value, onChange }) {
   );
 }
 
-/** Selettore Sottocategoria (testo colorato come categoria) */
+/** Selettore Sottocategoria con ICONA tonda + testo colorato */
 function SubcatSelect({ value, onChange, options = [], color }) {
   const selected = options.find(s => s.name === value) || options[0] || { name: '—' };
-  const { open, setOpen, idx, setIdx, ref } = useDropdown();
+  const { open, setOpen, ref } = useDropdown();
+
+  // dark mode per testo bianco
+  const dark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+
+  const IconBubble = ({ iconKey }) => (
+    <span
+      className="inline-flex items-center justify-center rounded-full"
+      style={{
+        width: 22, height: 22,
+        border: `2px solid ${color}`,
+        color,
+      }}
+    >
+      <IconView name={iconKey} className="h-3.5 w-3.5" />
+    </span>
+  );
 
   return (
     <div className="relative" ref={ref}>
+      {/* bottone chiuso */}
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
         className="w-full rounded-xl px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center justify-between"
-        style={{ color }}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className="font-medium">{selected.name}</span>
+        <span className="inline-flex items-center gap-2">
+          <IconBubble iconKey={selected.iconKey} />
+          <span className="font-semibold" style={{ color: dark ? '#ffffff' : color }}>
+            {selected.name}
+          </span>
+        </span>
         <ChevronDown className="h-4 w-4" />
       </button>
 
+      {/* menu aperto */}
       {open && (
         <div className="absolute z-50 mt-2 w-full rounded-xl border border-slate-200/20 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
           <ul role="listbox" className="py-1 max-h-64 overflow-auto">
-            {options.map((s, i) => (
+            {options.map((s) => (
               <li
                 key={s.name}
                 role="option"
-                aria-selected={s.name === value}
-                onMouseEnter={() => setIdx(i)}
-                onMouseLeave={() => setIdx(-1)}
                 onClick={() => { onChange(s.name); setOpen(false); }}
-                className={`px-3 py-2 cursor-pointer ${s.name === value ? 'bg-slate-100 dark:bg-slate-800' : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-                style={{ color }}
+                className="px-3 py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
               >
-                {s.name}
+                <span className="inline-flex items-center gap-2" style={{ color: dark ? '#ffffff' : color }}>
+                  <IconBubble iconKey={s.iconKey} />
+                  <span className="font-semibold">{s.name}</span>
+                </span>
               </li>
             ))}
           </ul>
@@ -202,7 +258,12 @@ export default function TransactionModal({
             {/* SOTTOCATEGORIA */}
             <div>
               <label className="block text-sm mb-1 text-white font-semibold">Sottocategoria</label>
-              <SubcatSelect value={sub} onChange={(v) => setSub(v)} options={listForMain} color={mainColor} />
+              <SubcatSelect
+                value={sub}
+                onChange={(v) => setSub(v)}
+                options={listForMain}
+                color={mainColor}
+              />
             </div>
 
             {/* DATA */}
@@ -233,7 +294,7 @@ export default function TransactionModal({
               />
             </div>
 
-            {/* NOTA */}
+            {/* NOTA (pulsante che rivela il campo) */}
             {!showNote && (
               <div className="md:col-span-2">
                 <button
@@ -260,7 +321,6 @@ export default function TransactionModal({
                 />
               </div>
             )}
-
 
             {/* ERRORE */}
             {error && (
