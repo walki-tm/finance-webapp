@@ -134,48 +134,35 @@ export default function App() {
   // ====== CRUD Categorie Main ======
   const updateMainCat = (key, patch) =>
     setState((s) => {
-      const isCore = MAIN_CATS.some((m) => m.key === key);
-      const next = { ...s };
+      // 1) capisco se è una "core" (una delle 4 di MAIN_CATS)
+      const isCore = MAIN_CATS.some(m => m.key === key);
 
-      // 1) enabled si gestisce SEMPRE in mainEnabled
-      if (Object.prototype.hasOwnProperty.call(patch, 'enabled')) {
-        next.mainEnabled = { ...(s.mainEnabled || {}), [key]: !!patch.enabled };
-      }
+      // 2) aggiorno la visibilità se nel patch c'è "enabled"
+      const nextEnabled =
+        patch.enabled !== undefined
+          ? { ...s.mainEnabled, [key]: patch.enabled }
+          : s.mainEnabled;
 
-      // 2) name/color:
-      if (isCore) {
-        // upsert override per categoria core dentro customMainCats
-        const idx = (s.customMainCats || []).findIndex((c) => c.key === key);
-        const base = MAIN_CATS.find((m) => m.key === key) || { key, name: key, color: '#5B86E5' };
-        if (idx === -1) {
-          // non esiste ancora un override → lo creo con i campi che arrivano nel patch
-          const newOverride = {
-            key,
-            name: patch.name ?? base.name,
-            color: patch.color ?? base.color,
-          };
-          next.customMainCats = [...(s.customMainCats || []), newOverride];
+      // 3) preparo a fare upsert (creare o aggiornare) l'override in customMainCats
+      const idx = (s.customMainCats || []).findIndex(c => c.key === key);
+      let nextCustom = [...(s.customMainCats || [])];
+
+      // 4) se mi hai passato nome/colore, devo salvarli:
+      const hasOvProps = ('name' in patch) || ('color' in patch);
+      if (hasOvProps) {
+        if (idx >= 0) {
+          // esiste già un override/custom con quella key → aggiorno
+          nextCustom[idx] = { ...nextCustom[idx], ...patch, key };
         } else {
-          // esiste → aggiorno solo i campi previsti
-          next.customMainCats = s.customMainCats.map((c) =>
-            c.key === key
-              ? {
-                ...c,
-                ...(Object.prototype.hasOwnProperty.call(patch, 'name') ? { name: patch.name } : {}),
-                ...(Object.prototype.hasOwnProperty.call(patch, 'color') ? { color: patch.color } : {}),
-              }
-              : c
-          );
+          // non esiste ancora → lo creo (vale sia per core-override sia per nuove custom)
+          nextCustom.push({ key, name: patch.name, color: patch.color });
         }
-      } else {
-        // categoria custom → patch diretto
-        next.customMainCats = (s.customMainCats || []).map((c) =>
-          c.key === key ? { ...c, ...patch } : c
-        );
       }
+      // se patch non ha name/color (es. solo enabled) → non tocco customMainCats
 
-      return next;
+      return { ...s, mainEnabled: nextEnabled, customMainCats: nextCustom };
     });
+
 
   const addMainCat = (obj) =>
     setState((s) => ({
