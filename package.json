@@ -6,14 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "icons:build": "node scripts/generate-icons-list.mjs",
+    "predev": "npm run icons:build",
+    "prebuild": "npm run icons:build"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.55.0",
+    "framer-motion": "^11.5.5",
+    "lucide-react": "^0.460.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "framer-motion": "^11.5.5",
-    "recharts": "^2.12.7",
-    "lucide-react": "^0.460.0"
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

@@ -1,12 +1,13 @@
 // src/pages/Categories.jsx
-import React, { useState } from 'react';
-import { Card, CardContent, Input, Button, Switch } from '../components/ui.jsx';
-import { MAIN_CATS } from '../lib/constants.js';
-import { Check, X } from 'lucide-react';
-import SvgIcon from '../components/SvgIcon.jsx';
-import IconBrowserModal from '../components/IconBrowserModal.jsx';
+import React, { useMemo, useRef, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { Card, CardContent, Input, Button, Switch } from "../components/ui.jsx";
+import { MAIN_CATS } from "../lib/constants.js";
+import { Check, X, MoreHorizontal, Save, ChevronDown } from "lucide-react";
+import SvgIcon from "../components/SvgIcon.jsx";
+import IconBrowserModal from "../components/IconBrowserModal.jsx";
 
-/* Error boundary */
+/* ---------------- Error boundary ---------------- */
 class ErrorBoundary extends React.Component {
   constructor(props){ super(props); this.state = { hasError:false, error:null }; }
   static getDerivedStateFromError(error){ return { hasError:true, error }; }
@@ -23,29 +24,42 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-/* Utils */
+/* ---------------- Utils ---------------- */
+const isDark = () =>
+  typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+
 function hexToRgba(hex, a = 1) {
-  const h = (hex || '#000000').replace('#', '');
-  const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const h = (hex || "#000000").replace("#", "");
+  const v = h.length === 3 ? h.split("").map(c => c + c).join("") : h;
   const r = parseInt(v.slice(0, 2), 16);
   const g = parseInt(v.slice(2, 4), 16);
   const b = parseInt(v.slice(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
-const isDark = () =>
-  typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+function toTitleCase(s=""){
+  return s
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map(w => w[0]?.toUpperCase() + w.slice(1))
+    .join(" ");
+}
+const CORE_KEYS = new Set(MAIN_CATS.map(m=>m.key));
+const CORE_DEFAULT = Object.fromEntries(MAIN_CATS.map(m=>[m.key, {name:m.name, color:m.color}]));
 
-function CategoryBadge({ color, children, size = 'md' }) {
+/* Badge categoria (main) */
+function CategoryBadge({ color, children, size = "md" }) {
   const dark = isDark();
-  const pad = size === 'sm' ? 'px-2 py-[3px] text-xs'
-    : size === 'lg' ? 'px-3 py-1.5 text-base'
-    : 'px-2.5 py-1 text-sm';
+  const pad =
+    size === "sm" ? "px-2 py-[7px] text-xs"
+    : size === "lg" ? "px-3 py-2 text-base"
+    : "px-2.5 py-1.5 text-sm";
   return (
     <span
       className={`inline-flex items-center font-bold uppercase tracking-wide rounded-lg ${pad}`}
       style={{
-        backgroundColor: hexToRgba(color, dark ? 0.22 : 0.16),
-        color: color,
+        backgroundColor: hexToRgba(color, dark ? 0.24 : 0.18),
+        color,
         border: `1px solid ${hexToRgba(color, 0.55)}`
       }}
     >
@@ -54,6 +68,7 @@ function CategoryBadge({ color, children, size = 'md' }) {
   );
 }
 
+/* Dropdown main custom – SELEZIONA più evidente */
 function CustomMainDropdown({ customs = [], value, onChange }) {
   const [open, setOpen] = useState(false);
   const sel = customs.find(c => c.key === value) || null;
@@ -63,16 +78,21 @@ function CustomMainDropdown({ customs = [], value, onChange }) {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="rounded-xl px-3 py-2 border min-w-[220px] flex items-center justify-center"
+        className="rounded-xl px-3 py-2 min-w-[220px] flex items-center justify-center border-2 transition hover:bg-slate-50 dark:hover:bg-slate-800/60"
         style={{
-          borderColor: sel ? sel.color : 'rgba(148,163,184,.4)',
-          backgroundColor: sel ? hexToRgba(sel.color, 0.16) : (isDark() ? 'rgba(148,163,184,.10)' : '#f8fafc')
+          borderColor: sel ? sel.color : "rgba(100,116,139,.65)",
+          backgroundColor: sel ? hexToRgba(sel.color, 0.14) : (isDark() ? "rgba(148,163,184,.08)" : "#fff")
         }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
       >
         {sel ? (
           <CategoryBadge color={sel.color}>{sel.name}</CategoryBadge>
         ) : (
-          <span className="text-xs font-semibold tracking-wide text-slate-500">SELEZIONA</span>
+          <span className="text-xs font-semibold tracking-wide inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
+            <ChevronDown className="h-4 w-4 opacity-80" />
+            SELEZIONA
+          </span>
         )}
       </button>
 
@@ -80,8 +100,8 @@ function CustomMainDropdown({ customs = [], value, onChange }) {
         <div className="absolute z-20 mt-2 w-[260px] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-2">
           <button
             type="button"
-            className="w-full text-center px-2 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
-            onClick={() => { onChange(''); setOpen(false); }}
+            className="w-full text-center px-2 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
+            onClick={() => { onChange(""); setOpen(false); }}
           >
             SELEZIONA
           </button>
@@ -114,7 +134,91 @@ function getMainPalette(state) {
   return { core, customs, all: [...core, ...customs] };
 }
 
-/* Tab 1 — Main */
+/* -------- Menu Azioni (⋮) con portal + position:fixed (niente clipping) -------- */
+function ActionsMenu({ onEdit, onRemove, onReset, disableRemove=false }) {
+  const btnRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    function place() {
+      if (!btnRef.current) return;
+      const r = btnRef.current.getBoundingClientRect();
+      // menu largo 176px circa → allineo a destra del bottone
+      setPos({ top: r.bottom + 6, left: Math.max(8, r.right - 176) });
+    }
+    if (open) {
+      place();
+      const close = (e) => { if (!(btnRef.current && btnRef.current.contains(e.target))) setOpen(false); };
+      const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+      window.addEventListener("resize", place);
+      window.addEventListener("scroll", place, true);
+      document.addEventListener("mousedown", close);
+      document.addEventListener("keydown", onKey);
+      return () => {
+        window.removeEventListener("resize", place);
+        window.removeEventListener("scroll", place, true);
+        document.removeEventListener("mousedown", close);
+        document.removeEventListener("keydown", onKey);
+      };
+    }
+  }, [open]);
+
+  return (
+    <>
+      <button
+        type="button"
+        ref={btnRef}
+        className="rounded-xl px-2 py-2 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+        onClick={() => setOpen(o=>!o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Azioni"
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </button>
+
+      {open && createPortal(
+        <div
+          className="fixed z-[9999] w-44 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl"
+          style={{ top: pos.top, left: pos.left }}
+        >
+          {onEdit && (
+            <button
+              type="button"
+              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+              onClick={()=>{ setOpen(false); onEdit(); }}
+            >
+              Modifica
+            </button>
+          )}
+          {onReset && (
+            <button
+              type="button"
+              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+              onClick={()=>{ setOpen(false); onReset(); }}
+            >
+              Ripristina
+            </button>
+          )}
+          {onRemove && (
+            <button
+              type="button"
+              disabled={disableRemove}
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 ${disableRemove ? "opacity-40 cursor-not-allowed" : "text-rose-600 dark:text-rose-400"}`}
+              onClick={()=>{ if(disableRemove) return; setOpen(false); onRemove(); }}
+            >
+              Rimuovi
+            </button>
+          )}
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
+/* ===================== TAB 1 — Categorie Main ===================== */
 function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) {
   const core = MAIN_CATS.map(m => ({ ...m, core: true }));
   const overridesMap = Object.fromEntries((state.customMainCats || []).map(c => [c.key, c]));
@@ -128,121 +232,238 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
     enabled: state.mainEnabled?.[m.key] !== false,
   }));
 
-  const usedColors = new Set(merged.map(m => (m.color || '').toLowerCase()));
-  const colorUsed = (c, current) => {
-    const low = (c || '').toLowerCase();
-    if (!low) return false;
-    if (current && current.toLowerCase() === low) return false;
-    return usedColors.has(low);
-  };
+  // ===== Modifica generale (draft locale) =====
+  const [editAll, setEditAll] = useState(false);
+  const [draftMap, setDraftMap] = useState({});
+  const [editingKey, setEditingKey] = useState(null); // inline row (singola)
 
-  const [editingColor, setEditingColor] = useState(null);
-  const [draftColor, setDraftColor] = useState('#5B86E5');
+  function startEditAll(){
+    const init = Object.fromEntries(merged.map(m=>[
+      m.key,
+      { name: m.name, color: m.color, enabled: m.enabled }
+    ]));
+    setDraftMap(init);
+    setEditAll(true);
+    setEditingKey(null);
+  }
+  function cancelEditAll(){
+    setEditAll(false);
+    setDraftMap({});
+  }
+  function saveEditAll(){
+    merged.forEach(m=>{
+      const draft = draftMap[m.key];
+      if (!draft) return;
+      const patch = {};
+      // nome in maiuscolo
+      const upName = (draft.name || "").toUpperCase();
+      if (upName !== m.name && m.key !== "income") patch.name = upName;
+      if (draft.color !== m.color) patch.color = draft.color;
+      if (draft.enabled !== m.enabled && m.key !== "income") patch.enabled = draft.enabled;
+      if (Object.keys(patch).length) updateMainCat(m.key, patch);
+    });
+    setEditAll(false);
+    setDraftMap({});
+  }
 
-  const startEditColor = (key, current) => { setEditingColor(key); setDraftColor(current || '#5B86E5'); };
-  const cancelEditColor = () => setEditingColor(null);
-  const saveEditColor = (m) => {
-    const c = draftColor;
-    if (colorUsed(c, m.color)) { alert('Colore già in uso.'); return; }
-    if (c && c !== m.color) updateMainCat(m.key, { color: c });
-    setEditingColor(null);
-  };
+  // ===== Modifica singola (inline) =====
+  const [nameDraft, setNameDraft] = useState("");
 
-  const handleAddRow = () => {
-    const tmpKey = `custom_${Date.now().toString(36)}`;
-    addMainCat({ key: tmpKey, name: 'Nuova categoria', color: '#5B86E5' });
-    setEditingColor(tmpKey);
-    setDraftColor('#5B86E5');
-  };
+  function enterRowEdit(m){
+    if (editAll) return;
+    if (m.key === "income") return; // nome non modificabile
+    setEditingKey(m.key);
+    setNameDraft(m.name);
+  }
+  function cancelRowEdit(){
+    setEditingKey(null);
+  }
+  function saveRowEdit(m){
+    const nv = nameDraft.trim().toUpperCase();
+    if (nv && nv !== m.name) updateMainCat(m.key, { name: nv });
+    setEditingKey(null);
+  }
+
+  function changeColor(m, val){
+    if (editAll){
+      setDraftMap(d=>({ ...d, [m.key]: { ...(d[m.key]||{ name:m.name, enabled:m.enabled }), color: val } }));
+    } else {
+      if (val && val !== m.color) updateMainCat(m.key, { color: val });
+    }
+  }
+  function toggleEnabled(m, v){
+    if (m.key === "income") return;
+    if (editAll){
+      setDraftMap(d=>({ ...d, [m.key]: { ...(d[m.key]||{ name:m.name, color:m.color }), enabled: v } }));
+    } else {
+      updateMainCat(m.key, { enabled: v });
+    }
+  }
+  function resetCore(m){
+    const def = CORE_DEFAULT[m.key];
+    if (!def) return;
+    if (editAll){
+      setDraftMap(d=>({ ...d, [m.key]: { ...(d[m.key]||{}), name: def.name.toUpperCase(), color: def.color } }));
+    } else {
+      updateMainCat(m.key, { name: def.name.toUpperCase(), color: def.color });
+    }
+  }
+
+  const headerActions = (
+    <div className="flex items-center gap-2">
+      {!editAll ? (
+        <>
+          <button
+            onClick={startEditAll}
+            className="px-3 py-2 rounded-xl text-sm border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            Modifica
+          </button>
+          <button
+            onClick={()=>{
+              const tmpKey = `custom_${Date.now().toString(36)}`;
+              addMainCat({ key: tmpKey, name: "NUOVA CATEGORIA", color: "#5B86E5" });
+              setEditingKey(tmpKey);
+              setNameDraft("NUOVA CATEGORIA");
+            }}
+            className="px-3 py-2 rounded-xl text-sm bg-gradient-to-tr from-sky-600 to-indigo-600 text-white hover:opacity-90"
+          >
+            + Aggiungi categoria
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            onClick={cancelEditAll}
+            className="px-3 py-2 rounded-xl text-sm border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            Annulla
+          </button>
+          <button
+            onClick={saveEditAll}
+            className="px-3 py-2 rounded-xl text-sm bg-gradient-to-tr from-sky-600 to-indigo-600 text-white hover:opacity-90 inline-flex items-center gap-2"
+          >
+            <Save className="h-4 w-4"/><span>Salva</span>
+          </button>
+        </>
+      )}
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      <div className="text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
+        <b>Doppio clic</b> per rinominare singolarmente. Clicca il <b>box colore</b> per cambiare tinta.
+        In <b>Modifica</b> generale, conferma con <b>Salva</b> in alto.
+      </div>
+
       <Card>
         <CardContent>
           <div className="flex items-center justify-between mb-3">
             <div className="font-medium">Categorie Main</div>
-            <Button onClick={handleAddRow}>+ Aggiungi categoria</Button>
+            {headerActions}
           </div>
 
           <div className="overflow-auto rounded-xl border border-slate-200/20">
             <table className="w-full text-sm">
               <thead className="bg-slate-100 dark:bg-slate-800">
                 <tr>
-                  <th className="text-left p-2">Categoria</th>
-                  <th className="text-left p-2">Nome</th>
-                  <th className="text-left p-2">Colore</th>
-                  <th className="text-left p-2">Visibile</th>
-                  <th className="text-left p-2">Azioni</th>
+                  <th className="text-left px-2 py-3">Categoria</th>
+                  <th className="text-left px-2 py-3">Nome</th>
+                  <th className="text-left px-2 py-3">Colore</th>
+                  <th className="text-left px-2 py-3">Visibile</th>
+                  <th className="text-left px-2 py-3">Azioni</th>
                 </tr>
               </thead>
-              <tbody>
-                {merged.map(m => (
-                  <tr key={m.key} className="border-t border-slate-200/10">
-                    <td className="p-2 whitespace-nowrap">
-                      <CategoryBadge color={m.color} size="lg">{m.name}</CategoryBadge>
-                    </td>
+              <tbody className="text-[#444] dark:text-slate-200">
+                {merged.map(m => {
+                  const draft = editAll ? (draftMap[m.key] || { name:m.name, color:m.color, enabled:m.enabled }) : null;
+                  const nameVal = (editAll ? draft.name : m.name) || "";
+                  const colorVal = editAll ? draft.color : m.color;
+                  const enabledVal = editAll ? draft.enabled : m.enabled;
+                  const isIncome = m.key === "income";
+                  const isEditing = editingKey === m.key;
 
-                    <td className="p-2">
-                      <Input
-                        defaultValue={m.name}
-                        className="font-bold"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            const nv = e.currentTarget.value.trim();
-                            if (nv && nv !== m.name) updateMainCat(m.key, { name: nv });
-                            e.currentTarget.blur();
-                          }
-                        }}
-                        onBlur={(e) => {
-                          const nv = e.target.value.trim();
-                          if (nv && nv !== m.name) updateMainCat(m.key, { name: nv });
-                        }}
-                      />
-                    </td>
+                  return (
+                    <tr key={m.key} className="border-t border-slate-200/10 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                      <td className="px-2 py-3 whitespace-nowrap">
+                        <CategoryBadge color={colorVal} size="lg">
+                          {nameVal.toUpperCase()}
+                        </CategoryBadge>
+                      </td>
 
-                    <td className="p-2">
-                      {editingColor === m.key ? (
+                      {/* Nome (UPPERCASE) */}
+                      <td className="px-2 py-3">
+                        {editAll ? (
+                          <Input
+                            value={nameVal.toUpperCase()}
+                            disabled={isIncome}
+                            onChange={(e)=> setDraftMap(d=>({ ...d, [m.key]: { ...(d[m.key]||{}), name: e.target.value.toUpperCase() } }))}
+                            className={`font-semibold ${isIncome ? "opacity-60 cursor-not-allowed" : ""}`}
+                          />
+                        ) : isEditing ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              autoFocus
+                              value={nameDraft}
+                              onChange={(e)=>setNameDraft(e.target.value.toUpperCase())}
+                              onKeyDown={(e)=>{ if(e.key==="Enter") saveRowEdit(m); if(e.key==="Escape") cancelRowEdit(); }}
+                              className="font-semibold"
+                            />
+                            <Button size="sm" onClick={()=>saveRowEdit(m)} className="inline-flex items-center gap-1">
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={cancelRowEdit}><X className="h-4 w-4"/></Button>
+                          </div>
+                        ) : (
+                          <span
+                            className={`font-semibold ${isIncome ? "" : "cursor-text"}`}
+                            title={isIncome ? "Il nome non è modificabile" : "Doppio clic per rinominare"}
+                            onDoubleClick={()=>enterRowEdit(m)}
+                          >
+                            {nameVal.toUpperCase()}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Colore */}
+                      <td className="px-2 py-3">
                         <div className="flex items-center gap-2">
                           <input
                             type="color"
-                            value={draftColor}
-                            onChange={(e) => setDraftColor(e.target.value)}
-                            className="h-9 w-14 rounded cursor-pointer border border-slate-300 dark:border-slate-700 bg-transparent"
+                            value={colorVal}
+                            onChange={(e)=> changeColor(m, e.target.value)}
+                            className="h-9 w-12 rounded cursor-pointer border border-slate-300 dark:border-slate-700 bg-transparent"
                             title="Scegli colore"
                           />
-                          <Button size="sm" onClick={() => saveEditColor(m)}>
-                            <Check className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={cancelEditColor}>
-                            <X className="h-4 w-4" />
-                          </Button>
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span className="w-6 h-6 rounded border" style={{ backgroundColor: m.color, borderColor: hexToRgba(m.color, .5) }} />
-                          <Button variant="outline" size="sm" onClick={() => startEditColor(m.key, m.color)}>
-                            Modifica
-                          </Button>
-                        </div>
-                      )}
-                    </td>
+                      </td>
 
-                    <td className="p-2">
-                      <Switch
-                        checked={m.enabled}
-                        onCheckedChange={(v) => updateMainCat(m.key, { enabled: v })}
-                      />
-                    </td>
+                      {/* Visibile */}
+                      <td className="px-2 py-3">
+                        {isIncome ? (
+                          <span className="text-slate-400 dark:text-slate-500">—</span>
+                        ) : (
+                          <Switch
+                            checked={!!enabledVal}
+                            onCheckedChange={(v)=>toggleEnabled(m, v)}
+                            style={!enabledVal ? { filter: isDark() ? "" : "grayscale(40%) opacity(.9)" } : {}}
+                          />
+                        )}
+                      </td>
 
-                    <td className="p-2">
-                      {!m.core && (
-                        <Button variant="ghost" size="sm" onClick={() => removeMainCat(m.key)}>
-                          Rimuovi
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      {/* Azioni */}
+                      <td className="px-2 py-3">
+                        <ActionsMenu
+                          onEdit={()=>enterRowEdit(m)}
+                          onRemove={!CORE_KEYS.has(m.key) ? ()=>removeMainCat(m.key) : undefined}
+                          onReset={CORE_KEYS.has(m.key) ? ()=>resetCore(m) : undefined}
+                          disableRemove={CORE_KEYS.has(m.key)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
                 {merged.length === 0 && (
                   <tr><td colSpan={5} className="p-4 text-center text-slate-500">Nessuna categoria</td></tr>
                 )}
@@ -255,7 +476,7 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
   );
 }
 
-/* Tab 2 — Subcategories */
+/* ===================== TAB 2 — Sottocategorie ===================== */
 function TabSubcategories({
   state,
   addSubcat = () => {},
@@ -264,10 +485,8 @@ function TabSubcategories({
 }) {
   const { core, customs } = getMainPalette(state);
 
-  const [main, setMain] = useState('expense');
-  const [customSel, setCustomSel] = useState('');
-  const [editAll, setEditAll] = useState(false);
-  const [editingRow, setEditingRow] = useState(null);
+  const [main, setMain] = useState("expense");
+  const [customSel, setCustomSel] = useState("");
   const [iconModalOpen, setIconModalOpen] = useState(false);
   const [iconModalTarget, setIconModalTarget] = useState(null);
 
@@ -275,159 +494,270 @@ function TabSubcategories({
   const mainColor = mainObj.color;
   const entries = state.subcats?.[main] || [];
 
-  const selectCore = (key) => { setMain(key); setCustomSel(''); };
-  const selectCustom = (key) => { setCustomSel(key); if (key) setMain(key); };
+  // ===== Modifica generale (draft locale) =====
+  const [editAll, setEditAll] = useState(false);
+  const [draftRows, setDraftRows] = useState([]);
+  const [editingRow, setEditingRow] = useState(null);
 
-  const addInlineRow = () => {
-    const newName = `Nuova ${entries.length + 1}`;
-    addSubcat(main, { name: newName, iconKey: 'wallet' }); // deve esistere /public/icons/wallet.svg
-    setEditingRow(newName);
-  };
+  const entriesMemo = useMemo(()=>entries, [entries]);
 
-  const openIconFor = (subName) => { setIconModalTarget({ subName }); setIconModalOpen(true); };
+  function startEditAll(){
+    setDraftRows(entriesMemo.map(r=>({ ...r })));
+    setEditAll(true);
+    setEditingRow(null);
+  }
+  function cancelEditAll(){
+    setEditAll(false);
+    setDraftRows([]);
+  }
+  function saveEditAll(){
+    draftRows.forEach(d => {
+      const orig = d._origName && d._origName !== d.name ? d._origName : d.name;
+      updateSubcat(main, orig, { name: toTitleCase(d.name), iconKey: d.iconKey });
+    });
+    setEditAll(false);
+    setDraftRows([]);
+  }
+
+  function addInlineRow(){
+    const newName = toTitleCase(`nuova ${entries.length + 1}`);
+    if (editAll){
+      setDraftRows(rs=>[...rs, { name:newName, iconKey:"wallet" }]);
+    } else {
+      addSubcat(main, { name:newName, iconKey:"wallet" });
+      setEditingRow(newName);
+    }
+  }
+
+  function openIconFor(subName){
+    setIconModalTarget({ subName });
+    setIconModalOpen(true);
+  }
   const closeIcon = () => { setIconModalOpen(false); setIconModalTarget(null); };
 
+  function setIcon(subName, iconKey){
+    if (editAll){
+      setDraftRows(rs=>rs.map(r=> r.name===subName ? { ...r, iconKey } : r));
+    } else {
+      updateSubcat(main, subName, { iconKey });
+    }
+  }
+
+  function beginRowEdit(sc){
+    if (editAll) return;
+    setEditingRow(sc.name);
+  }
+  function cancelRowEdit(){
+    setEditingRow(null);
+  }
+  function saveRowEdit(oldName, inputEl){
+    const nv = toTitleCase(inputEl.value.trim());
+    if (nv && nv !== oldName) updateSubcat(main, oldName, { name: nv });
+    setEditingRow(null);
+  }
+
+  const rowsView = editAll ? draftRows : entries;
+
   return (
-    <Card>
-      <CardContent>
-        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-          <div className="flex flex-wrap items-center gap-3">
-            {core.map(m => {
-              const selected = m.key === main;
-              return (
-                <button
-                  key={m.key}
-                  type="button"
-                  onClick={() => selectCore(m.key)}
-                  className="rounded-lg transition-transform"
-                  style={{ transform: selected ? 'scale(1.08)' : 'scale(1)' }}
-                >
-                  <CategoryBadge color={m.color} size="lg">{m.name}</CategoryBadge>
-                </button>
-              );
-            })}
-            <CustomMainDropdown customs={customs} value={customSel} onChange={selectCustom} />
-          </div>
+    <div className="space-y-4">
+      <div className="text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
+        In <b>Modifica</b> generale confermi con <b>Salva</b> in alto. In modifica singola: <b>Enter</b> salva, <b>Esc</b> annulla.
+        I nomi vengono sempre in <b>Title Case e grassetto</b>.
+      </div>
 
-          <div className="flex items-center gap-2">
-            <Button variant={editAll ? 'default' : 'outline'} onClick={() => setEditAll(v => !v)}>
-              {editAll ? 'Blocca modifica' : 'Modifica'}
-            </Button>
-            <Button onClick={addInlineRow}>+ Aggiungi sottocategoria</Button>
-          </div>
-        </div>
-
-        <div className="overflow-auto rounded-xl border border-slate-200/20">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-100 dark:bg-slate-800">
-              <tr>
-                <th className="text-left p-2 w-10">Icona</th>
-                <th className="text-left p-2">Nome</th>
-                <th className="text-left p-2">Azioni</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map(sc => {
-                const isEditing = editAll || editingRow === sc.name;
+      <Card>
+        <CardContent>
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <div className="flex flex-wrap items-center gap-3">
+              {core.map(m => {
+                const selected = m.key === main;
                 return (
-                  <tr key={sc.name} className="border-t border-slate-200/10">
-                    <td className="p-2">
-                      <button
-                        type="button"
-                        title="Cambia icona"
-                        className="rounded-lg px-1 py-1 hover:bg-slate-100 dark:hover:bg-slate-800"
-                        onMouseDown={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          openIconFor(sc.name);
-                        }}
-                      >
-                        <SvgIcon name={sc.iconKey} color={mainColor} size={22} />
-                      </button>
-                    </td>
-                    <td className="p-2">
-                      {isEditing ? (
-                        <Input
-                          defaultValue={sc.name}
-                          autoFocus={editingRow === sc.name}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              const nv = e.currentTarget.value.trim();
-                              if (nv && nv !== sc.name) updateSubcat(main, sc.name, { name: nv });
-                              setEditingRow(null);
-                            }
-                            if (e.key === 'Escape') {
-                              setEditingRow(null);
-                              e.currentTarget.blur();
-                            }
-                          }}
-                          onBlur={(e) => {
-                            const nv = e.target.value.trim();
-                            if (nv && nv !== sc.name) updateSubcat(main, sc.name, { name: nv });
-                            setEditingRow(null);
-                          }}
-                          className="font-bold"
-                        />
-                      ) : (
-                        <span className="font-bold">{sc.name}</span>
-                      )}
-                    </td>
-
-                    <td className="p-2">
-                      <div className="flex flex-wrap gap-2">
-                        {!editAll && (
-                          <Button variant="outline" size="sm" onClick={() => setEditingRow(sc.name)}>
-                            Modifica
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="sm" onClick={() => removeSubcat(main, sc.name)}>
-                          Rimuovi
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => { setMain(m.key); setCustomSel(""); }}
+                    className={`rounded-lg transition-transform ${selected ? "" : "hover:opacity-90"}`}
+                    style={{ transform: selected ? "scale(1.06)" : "scale(1)" }}
+                  >
+                    <CategoryBadge color={m.color} size="lg">
+                      {m.name.toUpperCase()}
+                    </CategoryBadge>
+                  </button>
                 );
               })}
-              {entries.length === 0 && (
-                <tr><td className="p-4 text-center text-slate-500" colSpan={3}>Nessuna sottocategoria</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              <CustomMainDropdown customs={customs} value={customSel} onChange={(k)=>{ setCustomSel(k); if(k) setMain(k); }} />
+            </div>
 
-        <IconBrowserModal
-          open={iconModalOpen}
-          onClose={closeIcon}
-          tintColor={mainColor}
-          onPick={(key) => {
-            if (iconModalTarget?.subName) {
-              updateSubcat(main, iconModalTarget.subName, { iconKey: key });
-            }
-          }}
-        />
-      </CardContent>
-    </Card>
+            <div className="flex items-center gap-2">
+              {!editAll ? (
+                <>
+                  <button
+                    onClick={startEditAll}
+                    className="px-3 py-2 rounded-xl text-sm border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    Modifica
+                  </button>
+                  <button
+                    onClick={addInlineRow}
+                    className="px-3 py-2 rounded-xl text-sm bg-gradient-to-tr from-sky-600 to-indigo-600 text-white hover:opacity-90"
+                  >
+                    + Aggiungi sottocategoria
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={cancelEditAll}
+                    className="px-3 py-2 rounded-xl text-sm border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    onClick={saveEditAll}
+                    className="px-3 py-2 rounded-xl text-sm bg-gradient-to-tr from-sky-600 to-indigo-600 text-white hover:opacity-90 inline-flex items-center gap-2"
+                  >
+                    <Save className="h-4 w-4"/><span>Salva</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="overflow-auto rounded-xl border border-slate-200/20">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-100 dark:bg-slate-800">
+                <tr>
+                  <th className="text-left px-2 py-3 w-12">Icona</th>
+                  <th className="text-left px-2 py-3">Nome</th>
+                  <th className="text-left px-2 py-3 w-24">Azioni</th>
+                </tr>
+              </thead>
+              <tbody className="text-[#444] dark:text-slate-200">
+                {rowsView.map(sc => {
+                  const isEditing = !editAll && editingRow === sc.name;
+                  const titleName = toTitleCase(sc.name);
+                  return (
+                    <tr key={sc.name} className="border-t border-slate-200/10 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                      <td className="px-2 py-3">
+                        <button
+                          type="button"
+                          title="Cambia icona"
+                          className="rounded-lg px-1 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
+                          onMouseDown={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openIconFor(sc.name);
+                          }}
+                        >
+                          <SvgIcon name={sc.iconKey} color={mainColor} size={22} />
+                        </button>
+                      </td>
+
+                      <td className="px-2 py-3 align-middle">
+                        {editAll ? (
+                          <Input
+                            value={titleName}
+                            onChange={(e)=>{
+                              const nv = toTitleCase(e.target.value);
+                              setDraftRows(rs=>rs.map(r=>{
+                                if (r.name === sc.name) {
+                                  return { ...r, name: nv, _origName: r._origName || sc.name };
+                                }
+                                return r;
+                              }));
+                            }}
+                            className="font-semibold"
+                          />
+                        ) : isEditing ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              defaultValue={titleName}
+                              autoFocus
+                              onKeyDown={(e)=>{
+                                if (e.key === "Enter") saveRowEdit(sc.name, e.currentTarget);
+                                if (e.key === "Escape") cancelRowEdit();
+                              }}
+                              className="font-semibold"
+                            />
+                            <Button size="sm" onClick={(e)=>saveRowEdit(sc.name, { value: e.currentTarget.parentElement.querySelector('input').value })}><Check className="h-4 w-4"/></Button>
+                            <Button size="sm" variant="ghost" onClick={cancelRowEdit}><X className="h-4 w-4"/></Button>
+                          </div>
+                        ) : (
+                          <span className="font-semibold" onDoubleClick={()=>beginRowEdit(sc)} title="Doppio clic per rinominare">
+                            {titleName}
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="px-2 py-3">
+                        {!editAll ? (
+                          <ActionsMenu
+                            onEdit={()=>beginRowEdit(sc)}
+                            onRemove={()=>removeSubcat(main, sc.name)}
+                          />
+                        ) : (
+                          <span className="text-slate-400 dark:text-slate-500 text-xs"></span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {rowsView.length === 0 && (
+                  <tr><td className="p-4 text-center text-slate-500" colSpan={3}>Nessuna sottocategoria</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <IconBrowserModal
+            open={iconModalOpen}
+            onClose={closeIcon}
+            tintColor={mainColor}
+            onPick={(key) => {
+              if (!iconModalTarget?.subName) return;
+              setIcon(iconModalTarget.subName, key);
+            }}
+          />
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-/* Pagina */
+/* ===================== Pagina ===================== */
 export default function Categories({
   state,
   addSubcat, updateSubcat, removeSubcat,
   updateMainCat, addMainCat, removeMainCat,
 }) {
-  const [tab, setTab] = useState('main');
+  const [tab, setTab] = useState("main");
 
   return (
     <ErrorBoundary>
       <div className="space-y-6">
         <div className="flex gap-2">
-          <Button variant={tab === 'main' ? 'default' : 'outline'} onClick={() => setTab('main')}>Categorie Main</Button>
-          <Button variant={tab === 'subs' ? 'default' : 'outline'} onClick={() => setTab('subs')}>Sottocategorie</Button>
+          <button
+            onClick={() => setTab("main")}
+            className={`px-3 py-2 rounded-xl text-sm transition
+              ${tab==="main"
+                ? "bg-gradient-to-tr from-sky-600 to-indigo-600 text-white"
+                : "border border-slate-300 dark:border-slate-700 hover:bg-white/60 dark:hover:bg-slate-900/60"}`}
+          >
+            Categorie Main
+          </button>
+          <button
+            onClick={() => setTab("subs")}
+            className={`px-3 py-2 rounded-xl text-sm transition
+              ${tab==="subs"
+                ? "bg-gradient-to-tr from-sky-600 to-indigo-600 text-white"
+                : "border border-slate-300 dark:border-slate-700 hover:bg-white/60 dark:hover:bg-slate-900/60"}`}
+          >
+            Sottocategorie
+          </button>
         </div>
 
-        {tab === 'main' ? (
+        {tab === "main" ? (
           <TabMainCategories
             state={state}
             updateMainCat={updateMainCat}

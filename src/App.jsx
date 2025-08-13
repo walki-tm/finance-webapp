@@ -2,7 +2,7 @@
 // App principale: gestisce lo "stato globale" lato client (per ora su localStorage).
 // Entità principali nello stato: User, Theme, Subcats (sottocategorie), Budgets, Transactions, CustomIcons.
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Switch, Badge, Button, NavItem } from './components/ui.jsx';
 import AuthScreens from './pages/Auth.jsx';
 import Dashboard from './pages/Dashboard.jsx';
@@ -67,7 +67,6 @@ const defaultData = () => ({
   transactions: []
 });
 
-
 export default function App() {
   // Stato applicazione (persistito su localStorage)
   const [state, setState] = useState(defaultData());
@@ -97,6 +96,28 @@ export default function App() {
     document.documentElement.classList.toggle('dark', state.theme === 'dark');
     saveState(state);
   }, [state]);
+
+  // ====== Derivata: mains core+custom (con enabled) per la TransactionModal ======
+  const mainsForModal = useMemo(() => {
+    // core con enabled
+    const core = MAIN_CATS.map(m => ({
+      ...m,
+      enabled: state.mainEnabled?.[m.key] !== false,
+    }));
+
+    // custom con enabled (possono anche fare override di core)
+    const custom = (state.customMainCats || []).map(c => ({
+      ...c,
+      enabled: state.mainEnabled?.[c.key] !== false,
+    }));
+
+    // merge per key: i custom/override vincono sui core
+    const byKey = Object.fromEntries(core.map(m => [m.key, m]));
+    for (const c of custom) {
+      byKey[c.key] = { ...(byKey[c.key] || {}), ...c };
+    }
+    return Object.values(byKey);
+  }, [state.mainEnabled, state.customMainCats]);
 
   // ====== Mutations sullo stato (simulate, in futuro chiameranno API) ======
 
@@ -163,7 +184,6 @@ export default function App() {
       return { ...s, mainEnabled: nextEnabled, customMainCats: nextCustom };
     });
 
-
   const addMainCat = (obj) =>
     setState((s) => ({
       ...s,
@@ -182,8 +202,6 @@ export default function App() {
         mainEnabled: restEnabled,
       };
     });
-
-
 
   // Upsert Budget (entità Budget) per anno corrente
   const upsertBudget = (main, sub, value) =>
@@ -418,8 +436,8 @@ export default function App() {
           setTxModalOpen(false);
         }}
         subcats={state.subcats}
+        mains={mainsForModal}   // <<< passiamo core+custom (con enabled) alla modale
         initial={editingTx}
-        MAIN_CATS={MAIN_CATS}
       />
     </div>
   );

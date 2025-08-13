@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 /**
- * Carica /public/icons/<name>.svg, normalizza fill/stroke a currentColor,
+ * Carica /public/icons/<name>.svg, normalizzasa fill/stroke a currentColor,
  * rimuove width/height hardcoded e applica il colore passato.
  * Funziona sia in dev che in build (rispetta import.meta.env.BASE_URL).
  */

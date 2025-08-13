@@ -1,18 +1,10 @@
+// src/components/TransactionModal.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { X, AlertCircle, StickyNote, ChevronDown } from 'lucide-react';
+import { X, AlertCircle, StickyNote, ChevronDown, TrendingUp, ShoppingCart, CreditCard, PiggyBank } from 'lucide-react';
 import { MAIN_CATS } from '../lib/constants.js';
 import SvgIcon from './SvgIcon.jsx';
 
-/** calcola testo leggibile su uno sfondo HEX */
-function contrastText(hex) {
-  const h = (hex || '#94a3b8').replace('#', '');
-  const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
-  const r = parseInt(v.slice(0, 2), 16), g = parseInt(v.slice(2, 4), 16), b = parseInt(v.slice(4, 6), 16);
-  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-  return yiq >= 160 ? '#0b1220' : '#ffffff';
-}
-
-/** HEX -> rgba(...) con alpha */
+/* ===== utils ===== */
 function hexToRgba(hex, a = 1) {
   const h = (hex || '#000000').replace('#', '');
   const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
@@ -21,8 +13,9 @@ function hexToRgba(hex, a = 1) {
   const b = parseInt(v.slice(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
+const isDark = () =>
+  typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
-/** hook dropdown (click fuori / Esc) */
 function useDropdown(onClose) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -47,19 +40,62 @@ function useDropdown(onClose) {
   return { open, setOpen, ref };
 }
 
-/** Selettore Categoria con BADGE colorato */
-function CategorySelect({ value, onChange }) {
-  const selected = MAIN_CATS.find(c => c.key === value) || MAIN_CATS[0];
-  const mainColor = selected.color;
-  const textColor = contrastText(mainColor);
-  const { open, setOpen, ref } = useDropdown();
+/* mappa icone per le 4 core */
+const CORE_MAIN_ICONS = {
+  income: TrendingUp,
+  expense: ShoppingCart,
+  debt: CreditCard,
+  saving: PiggyBank,
+};
 
-  const dark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+/* ===== CategorySelect: mostra anche icone + rispetta 'enabled' ===== */
+function CategorySelect({ value, onChange, mains = [] }) {
+  const dark = isDark();
+
+  // pool = merge passato dal parent, altrimenti MAIN_CATS
+  const POOL = Array.isArray(mains) && mains.length > 0 ? mains : MAIN_CATS;
+  // nascondi main con enabled === false
+  const LIST = POOL.filter(m => m.enabled !== false);
+
+  // selezionata o fallback
+  const selected =
+    LIST.find(c => c.key === value) ||
+    LIST[0] ||
+    { key: 'expense', name: 'SPESE', color: '#5B86E5' };
+
+  const { open, setOpen, ref } = useDropdown();
+  const mainColor = selected.color;
 
   const badgeStyle = {
-    backgroundColor: hexToRgba(mainColor, dark ? 0.28 : 0.18),
-    color: dark ? '#ffffff' : (textColor === '#ffffff' ? '#ffffff' : '#0b1220'),
-    borderColor: mainColor,
+    backgroundColor: hexToRgba(mainColor, dark ? 0.24 : 0.18),
+    color: mainColor,
+    border: `1px solid ${hexToRgba(mainColor, 0.55)}`
+  };
+
+  // se la main corrente sparisce dai visibili, spostati sulla prima disponibile
+  useEffect(() => {
+    if (!LIST.some(c => c.key === value) && LIST[0]) onChange?.(LIST[0].key);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [LIST.map(c => `${c.key}:${c.enabled !== false}`).join('|')]);
+
+  const RenderMainChip = ({ m }) => {
+    const CoreIcon = CORE_MAIN_ICONS[m.key];
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 font-bold uppercase tracking-wide px-2 py-1 rounded-lg"
+        style={{
+          backgroundColor: hexToRgba(m.color, dark ? 0.24 : 0.18),
+          color: m.color,
+          border: `1px solid ${hexToRgba(m.color, 0.55)}`
+        }}
+      >
+        {/* se custom e ha iconKey -> SvgIcon; altrimenti icona core se disponibile */}
+        {m.iconKey
+          ? <SvgIcon name={m.iconKey} size={14} color={m.color} />
+          : (CoreIcon ? <CoreIcon className="h-4 w-4" /> : null)}
+        {m.name}
+      </span>
+    );
   };
 
   return (
@@ -68,44 +104,33 @@ function CategorySelect({ value, onChange }) {
         type="button"
         onClick={() => setOpen(o => !o)}
         className="w-full rounded-xl px-2 py-2 text-sm border focus:outline-none flex items-center justify-between"
-        style={{ borderColor: mainColor, backgroundColor: hexToRgba(mainColor, dark ? 0.20 : 0.12) }}
+        style={{
+          borderColor: hexToRgba(mainColor, 0.55),
+          backgroundColor: hexToRgba(mainColor, dark ? 0.16 : 0.12)
+        }}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span
-          className="inline-flex items-center font-bold uppercase tracking-wide px-2 py-1 rounded-lg"
-          style={badgeStyle}
-        >
-          {selected.name}
-        </span>
-        <ChevronDown className="h-4 w-4" style={{ color: dark ? '#ffffff' : textColor }} />
+        <RenderMainChip m={selected} />
+        <ChevronDown className="h-4 w-4" style={{ color: mainColor }} />
       </button>
 
       {open && (
         <div className="absolute z-50 mt-2 w-full rounded-xl border border-slate-200/20 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
           <ul role="listbox" className="py-1 max-h-64 overflow-auto">
-            {MAIN_CATS.map((c) => {
-              const t = contrastText(c.color);
-              return (
-                <li
-                  key={c.key}
-                  role="option"
-                  onClick={() => { onChange(c.key); setOpen(false); }}
-                  className="px-3 py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
-                >
-                  <span
-                    className="inline-flex items-center font-bold uppercase tracking-wide px-2 py-1 rounded-lg"
-                    style={{
-                      backgroundColor: hexToRgba(c.color, dark ? 0.28 : 0.22),
-                      color: dark ? '#ffffff' : (t === '#ffffff' ? '#ffffff' : '#0b1220'),
-                      border: `1px solid ${c.color}`
-                    }}
-                  >
-                    {c.name}
-                  </span>
-                </li>
-              );
-            })}
+            {LIST.map((c) => (
+              <li
+                key={c.key}
+                role="option"
+                onClick={() => { onChange(c.key); setOpen(false); }}
+                className="px-3 py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <RenderMainChip m={c} />
+              </li>
+            ))}
+            {LIST.length === 0 && (
+              <li className="px-3 py-2 text-sm text-slate-500">Nessuna categoria visibile</li>
+            )}
           </ul>
         </div>
       )}
@@ -113,11 +138,11 @@ function CategorySelect({ value, onChange }) {
   );
 }
 
-/** Selettore Sottocategoria con ICONA tonda + testo colorato */
+/* ===== SubcatSelect: bolla con icona svg e testo tinto dalla main ===== */
 function SubcatSelect({ value, onChange, options = [], color }) {
   const selected = options.find(s => s.name === value) || options[0] || { name: '—' };
   const { open, setOpen, ref } = useDropdown();
-  const dark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  const dark = isDark();
 
   const IconBubble = ({ iconKey }) => (
     <span
@@ -125,7 +150,7 @@ function SubcatSelect({ value, onChange, options = [], color }) {
       style={{
         width: 22, height: 22,
         border: `2px solid ${color}`,
-        color,            // currentColor per SvgIcon
+        color
       }}
     >
       <SvgIcon name={iconKey} size={14} color={color} />
@@ -173,16 +198,19 @@ function SubcatSelect({ value, onChange, options = [], color }) {
   );
 }
 
-/** Modale Aggiungi/Modifica transazione */
+/* ===== Modale Aggiungi/Modifica transazione ===== */
 export default function TransactionModal({
   open,
   onClose,
   onSave,
   subcats,
+  /** mains opzionale: array unito core+custom, con { key, name, color, enabled, iconKey? } */
+  mains = [],
   initial = null,
 }) {
   if (!open) return null;
 
+  // stato form
   const [main, setMain] = useState(initial?.main || 'expense');
   const [sub, setSub] = useState(initial?.sub || '');
   const [date, setDate] = useState(initial?.date || new Date().toISOString().slice(0, 10));
@@ -191,16 +219,19 @@ export default function TransactionModal({
   const [showNote, setShowNote] = useState(Boolean(initial?.note));
   const [error, setError] = useState('');
 
+  // lista sub per la main scelta
   const listForMain = useMemo(() => subcats?.[main] || [], [subcats, main]);
 
+  // quando cambio main, allinea la sub
   useEffect(() => {
     if (!listForMain.find(s => s.name === sub)) setSub(listForMain[0]?.name || '');
   }, [listForMain, sub]);
 
-  const mainColor = useMemo(
-    () => MAIN_CATS.find(m => m.key === main)?.color || '#94a3b8',
-    [main]
-  );
+  // colore main corrente (anche custom)
+  const mainColor = useMemo(() => {
+    const pool = (Array.isArray(mains) && mains.length > 0) ? mains : MAIN_CATS;
+    return pool.find(m => m.key === main)?.color || '#94a3b8';
+  }, [mains, main]);
 
   function submit(e) {
     e?.preventDefault?.();
@@ -216,10 +247,13 @@ export default function TransactionModal({
 
   return (
     <div className="fixed inset-0 z-50">
+      {/* overlay */}
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
+      {/* dialog */}
       <div className="absolute inset-0 grid place-items-center p-4">
         <div className="w-full max-w-xl rounded-2xl border border-slate-200/20 bg-white dark:bg-slate-900 shadow-xl">
+          {/* header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200/10">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
               {initial ? 'Modifica transazione' : 'Aggiungi transazione'}
@@ -233,12 +267,15 @@ export default function TransactionModal({
             </button>
           </div>
 
+          {/* form */}
           <form onSubmit={submit} className="p-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* CATEGORIA (usa mains incluse custom) */}
             <div>
               <label className="block text-sm mb-1 font-semibold">Categoria</label>
-              <CategorySelect value={main} onChange={(v) => setMain(v)} />
+              <CategorySelect value={main} onChange={(v) => setMain(v)} mains={mains} />
             </div>
 
+            {/* SOTTOCATEGORIA */}
             <div>
               <label className="block text-sm mb-1 font-semibold">Sottocategoria</label>
               <SubcatSelect
@@ -249,6 +286,7 @@ export default function TransactionModal({
               />
             </div>
 
+            {/* DATA */}
             <div>
               <label className="block text-sm mb-1 font-semibold">Data</label>
               <input
@@ -260,6 +298,7 @@ export default function TransactionModal({
               />
             </div>
 
+            {/* IMPORTO */}
             <div>
               <label className="block text-sm mb-1 font-semibold">Importo (€)</label>
               <input
@@ -275,6 +314,7 @@ export default function TransactionModal({
               />
             </div>
 
+            {/* NOTA (toggle) */}
             {!showNote && (
               <div className="md:col-span-2">
                 <button
@@ -288,7 +328,6 @@ export default function TransactionModal({
                 </button>
               </div>
             )}
-
             {showNote && (
               <div className="md:col-span-2">
                 <label className="block text-sm mb-1 font-semibold">Nota</label>
@@ -302,6 +341,7 @@ export default function TransactionModal({
               </div>
             )}
 
+            {/* ERRORE */}
             {error && (
               <div className="md:col-span-2 flex items-center gap-2 text-sm text-rose-600 bg-rose-50 dark:bg-rose-900/20 border border-rose-200/60 dark:border-rose-700/40 rounded-xl px-3 py-2">
                 <AlertCircle className="h-4 w-4" />
@@ -309,6 +349,7 @@ export default function TransactionModal({
               </div>
             )}
 
+            {/* AZIONI */}
             <div className="md:col-span-2 flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
