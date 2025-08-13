@@ -3,7 +3,7 @@ import { Button } from './ui.jsx';
 import { Pencil, Trash2, FileText, X } from 'lucide-react';
 import { MAIN_CATS } from '../lib/constants.js';
 import { nice } from '../lib/utils.js';
-import { IconView } from './IconPicker.jsx';
+import SvgIcon from './SvgIcon.jsx';
 
 /* Da HEX a rgba con alpha */
 function hexToRgba(hex, a = 1) {
@@ -57,7 +57,6 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-[#e6e6e6] dark:border-slate-700/40">
       <table className="w-full text-sm">
-        {/* HEADER (più chiaro in light, solido in dark) */}
         <thead className="sticky top-0 bg-[#f7f9fc] dark:bg-slate-800">
           <tr>
             <th className="text-left p-2 whitespace-nowrap">Data</th>
@@ -70,27 +69,23 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
         </thead>
 
         <tbody>
-          {rows.map((t, i) => {
+          {rows.map((t) => {
             const mc = MAIN_CATS.find(m => m.key === t.main);
             const sc = (state.subcats[t.main] || []).find(s => s.name === t.sub);
             const hasNote = Boolean(t.note && t.note.trim());
 
             const badge = typeBadgeStyle(t.main);
 
-            // Importi: pill con testo più saturo (light) e classi dark coerenti
             const amt = Number(t.amount) || 0;
-            let amtClasses =
-              'px-2 py-0.5 rounded inline-block text-right min-w-[80px]'; // allineamento coerente
+            let amtClasses = 'px-2 py-0.5 rounded inline-block text-right min-w-[80px]';
             let amtStyle = {};
 
             if (amt > 0) {
-              amtClasses +=
-                ' bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300';
-              amtStyle.color = POS_TEXT_LIGHT; // light mode
+              amtClasses += ' bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300';
+              amtStyle.color = POS_TEXT_LIGHT;
             } else if (amt < 0) {
-              amtClasses +=
-                ' bg-rose-100 dark:bg-rose-900/40 dark:text-rose-300';
-              amtStyle.color = NEG_TEXT_LIGHT; // light mode
+              amtClasses += ' bg-rose-100 dark:bg-rose-900/40 dark:text-rose-300';
+              amtStyle.color = NEG_TEXT_LIGHT;
             } else {
               amtClasses += ' text-slate-700 dark:text-slate-300';
             }
@@ -98,11 +93,7 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
             return (
               <tr
                 key={t.id}
-                className="
-                  align-top
-                  border-t border-[#e6e6e6] dark:border-slate-700/40
-                  odd:bg-[#f8f9fa] dark:odd:bg-slate-800/40
-                "
+                className="align-top border-t border-[#e6e6e6] dark:border-slate-700/40 odd:bg-[#f8f9fa] dark:odd:bg-slate-800/40"
               >
                 <td className="p-2 whitespace-nowrap">
                   {new Date(t.date).toLocaleDateString('it-IT')}
@@ -116,11 +107,13 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
 
                 <td className="p-2 whitespace-nowrap">
                   <div className="flex items-center gap-2">
-                    <IconView
-                      name={sc?.iconKey}
-                      color={MAIN_COLOR[t.main]}
-                      customIcons={state.customIcons}
-                    />
+                    <span style={{ color: MAIN_COLOR[t.main] }}>
+                      <SvgIcon
+                        name={sc?.iconKey}
+                        color={MAIN_COLOR[t.main]}
+                        size={18}
+                      />
+                    </span>
                     <span>{t.sub}</span>
                   </div>
                 </td>
@@ -132,7 +125,6 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
                 </td>
 
                 <td className="p-2 whitespace-nowrap">
-                  {/* Wrapper per tooltip on-hover */}
                   <span className="relative group inline-flex">
                     <button
                       type="button"
@@ -149,18 +141,9 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
                       <span>Nota</span>
                     </button>
 
-                    {/* Tooltip preview (solo se c'è nota) */}
                     {hasNote && (
                       <div
-                        className="
-                          absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64
-                          rounded-lg border border-slate-200 dark:border-slate-700
-                          bg-white dark:bg-slate-900
-                          text-xs text-slate-700 dark:text-slate-200
-                          px-3 py-2 shadow-lg
-                          opacity-0 group-hover:opacity-100 pointer-events-none
-                          transition
-                        "
+                        className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-200 px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition"
                       >
                         <div className="font-medium mb-1">Anteprima nota</div>
                         <div className="whitespace-pre-wrap break-words">
@@ -222,24 +205,14 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
                 <textarea
                   readOnly
                   value={noteText}
-                  className="
-                    w-full h-40 rounded-xl border px-3 py-2 text-sm
-                    border-[#e6e6e6] dark:border-slate-700/50
-                    bg-white dark:bg-slate-800
-                    text-slate-900 dark:text-slate-100
-                  "
+                  className="w-full h-40 rounded-xl border px-3 py-2 text-sm border-[#e6e6e6] dark:border-slate-700/50 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                 />
               </div>
 
               <div className="px-5 pb-5 flex justify-end">
                 <button
                   onClick={closeNote}
-                  className="
-                    px-3 py-2 rounded-xl text-sm border
-                    border-[#e6e6e6] dark:border-slate-700/50
-                    text-slate-800 dark:text-slate-100
-                    hover:bg-slate-100 dark:hover:bg-slate-800
-                  "
+                  className="px-3 py-2 rounded-xl text-sm border border-[#e6e6e6] dark:border-slate-700/50 text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                   Chiudi
                 </button>

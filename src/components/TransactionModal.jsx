@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, AlertCircle, StickyNote, ChevronDown } from 'lucide-react';
 import { MAIN_CATS } from '../lib/constants.js';
-import { IconView } from './IconPicker.jsx';
+import SvgIcon from './SvgIcon.jsx';
 
 /** calcola testo leggibile su uno sfondo HEX */
 function contrastText(hex) {
@@ -54,7 +54,6 @@ function CategorySelect({ value, onChange }) {
   const textColor = contrastText(mainColor);
   const { open, setOpen, ref } = useDropdown();
 
-  // rileva dark mode per forzare testo bianco
   const dark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
   const badgeStyle = {
@@ -65,7 +64,6 @@ function CategorySelect({ value, onChange }) {
 
   return (
     <div className="relative" ref={ref}>
-      {/* bottone chiuso */}
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
@@ -83,7 +81,6 @@ function CategorySelect({ value, onChange }) {
         <ChevronDown className="h-4 w-4" style={{ color: dark ? '#ffffff' : textColor }} />
       </button>
 
-      {/* menu aperto */}
       {open && (
         <div className="absolute z-50 mt-2 w-full rounded-xl border border-slate-200/20 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
           <ul role="listbox" className="py-1 max-h-64 overflow-auto">
@@ -120,8 +117,6 @@ function CategorySelect({ value, onChange }) {
 function SubcatSelect({ value, onChange, options = [], color }) {
   const selected = options.find(s => s.name === value) || options[0] || { name: '—' };
   const { open, setOpen, ref } = useDropdown();
-
-  // dark mode per testo bianco
   const dark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
   const IconBubble = ({ iconKey }) => (
@@ -130,16 +125,15 @@ function SubcatSelect({ value, onChange, options = [], color }) {
       style={{
         width: 22, height: 22,
         border: `2px solid ${color}`,
-        color,
+        color,            // currentColor per SvgIcon
       }}
     >
-      <IconView name={iconKey} className="h-3.5 w-3.5" />
+      <SvgIcon name={iconKey} size={14} color={color} />
     </span>
   );
 
   return (
     <div className="relative" ref={ref}>
-      {/* bottone chiuso */}
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
@@ -156,7 +150,6 @@ function SubcatSelect({ value, onChange, options = [], color }) {
         <ChevronDown className="h-4 w-4" />
       </button>
 
-      {/* menu aperto */}
       {open && (
         <div className="absolute z-50 mt-2 w-full rounded-xl border border-slate-200/20 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
           <ul role="listbox" className="py-1 max-h-64 overflow-auto">
@@ -190,7 +183,6 @@ export default function TransactionModal({
 }) {
   if (!open) return null;
 
-  // stato form
   const [main, setMain] = useState(initial?.main || 'expense');
   const [sub, setSub] = useState(initial?.sub || '');
   const [date, setDate] = useState(initial?.date || new Date().toISOString().slice(0, 10));
@@ -199,10 +191,8 @@ export default function TransactionModal({
   const [showNote, setShowNote] = useState(Boolean(initial?.note));
   const [error, setError] = useState('');
 
-  // lista sub per la main scelta
   const listForMain = useMemo(() => subcats?.[main] || [], [subcats, main]);
 
-  // se cambio main o la sub non esiste, seleziono la prima
   useEffect(() => {
     if (!listForMain.find(s => s.name === sub)) setSub(listForMain[0]?.name || '');
   }, [listForMain, sub]);
@@ -212,7 +202,6 @@ export default function TransactionModal({
     [main]
   );
 
-  // validazione + normalizzazione segno
   function submit(e) {
     e?.preventDefault?.();
     setError('');
@@ -227,13 +216,10 @@ export default function TransactionModal({
 
   return (
     <div className="fixed inset-0 z-50">
-      {/* overlay */}
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
-      {/* dialog */}
       <div className="absolute inset-0 grid place-items-center p-4">
         <div className="w-full max-w-xl rounded-2xl border border-slate-200/20 bg-white dark:bg-slate-900 shadow-xl">
-          {/* header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200/10">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
               {initial ? 'Modifica transazione' : 'Aggiungi transazione'}
@@ -247,17 +233,14 @@ export default function TransactionModal({
             </button>
           </div>
 
-          {/* form */}
           <form onSubmit={submit} className="p-5 grid grid-cols-1 md:grid-cols-2 gap-3">
-            {/* CATEGORIA */}
             <div>
-              <label className="block text-sm mb-1 text-white font-semibold">Categoria</label>
+              <label className="block text-sm mb-1 font-semibold">Categoria</label>
               <CategorySelect value={main} onChange={(v) => setMain(v)} />
             </div>
 
-            {/* SOTTOCATEGORIA */}
             <div>
-              <label className="block text-sm mb-1 text-white font-semibold">Sottocategoria</label>
+              <label className="block text-sm mb-1 font-semibold">Sottocategoria</label>
               <SubcatSelect
                 value={sub}
                 onChange={(v) => setSub(v)}
@@ -266,9 +249,8 @@ export default function TransactionModal({
               />
             </div>
 
-            {/* DATA */}
             <div>
-              <label className="block text-sm mb-1 text-white font-semibold">Data</label>
+              <label className="block text-sm mb-1 font-semibold">Data</label>
               <input
                 type="date"
                 value={date}
@@ -278,9 +260,8 @@ export default function TransactionModal({
               />
             </div>
 
-            {/* IMPORTO */}
             <div>
-              <label className="block text-sm mb-1 text-white font-semibold">Importo (€)</label>
+              <label className="block text-sm mb-1 font-semibold">Importo (€)</label>
               <input
                 type="number"
                 min="0.01"
@@ -294,7 +275,6 @@ export default function TransactionModal({
               />
             </div>
 
-            {/* NOTA (pulsante che rivela il campo) */}
             {!showNote && (
               <div className="md:col-span-2">
                 <button
@@ -311,7 +291,7 @@ export default function TransactionModal({
 
             {showNote && (
               <div className="md:col-span-2">
-                <label className="block text-sm mb-1 text-white font-semibold">Nota</label>
+                <label className="block text-sm mb-1 font-semibold">Nota</label>
                 <input
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
@@ -322,7 +302,6 @@ export default function TransactionModal({
               </div>
             )}
 
-            {/* ERRORE */}
             {error && (
               <div className="md:col-span-2 flex items-center gap-2 text-sm text-rose-600 bg-rose-50 dark:bg-rose-900/20 border border-rose-200/60 dark:border-rose-700/40 rounded-xl px-3 py-2">
                 <AlertCircle className="h-4 w-4" />
@@ -330,7 +309,6 @@ export default function TransactionModal({
               </div>
             )}
 
-            {/* AZIONI */}
             <div className="md:col-span-2 flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
