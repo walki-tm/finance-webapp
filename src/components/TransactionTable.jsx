@@ -43,9 +43,9 @@ function formatAmountEUR(row) {
   const base = Number(row.amount) || 0;
   const isNegative = row.main === 'expense' || row.main === 'debt';
   const abs = Math.abs(base);
-  const num = nice(abs); // es. 1.234,56
+  const num = nice(abs); // es. 1.234,56 €
   const sign = isNegative ? '-' : '+';
-  return `${sign} € ${num}`;
+  return `${sign} ${num}`;
 }
 
 /* Ricava nome e icona sottocategoria da campi vari (compat backend) */
