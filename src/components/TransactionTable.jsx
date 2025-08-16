@@ -1,3 +1,4 @@
+// src/components/TransactionTable.jsx
 import React, { useState } from 'react';
 import { Button } from './ui.jsx';
 import { Pencil, Trash2, FileText, X } from 'lucide-react';
@@ -37,8 +38,46 @@ function typeBadgeStyle(mainKey) {
 const NEG_TEXT_LIGHT = '#c62828';
 const POS_TEXT_LIGHT = '#2e7d32';
 
+/* Importo formattato con simbolo € e segno in base alla main */
+function formatAmountEUR(row) {
+  const base = Number(row.amount) || 0;
+  const isNegative = row.main === 'expense' || row.main === 'debt';
+  const abs = Math.abs(base);
+  const num = nice(abs); // es. 1.234,56
+  const sign = isNegative ? '-' : '+';
+  return `${sign} € ${num}`;
+}
+
+/* Ricava nome e icona sottocategoria da campi vari (compat backend) */
+function getSubcategoryInfo(t, state) {
+  // 1) backend già fornisce il nome
+  const byDirectName =
+    t.sub ||
+    t.subName ||
+    t.subname ||
+    t.subcategoryName ||
+    t.Subcategory?.name;
+
+  const byDirectIcon =
+    t.subIconKey ||
+    t.subiconkey ||
+    t.Subcategory?.iconKey;
+
+  if (byDirectName) {
+    return { name: byDirectName, iconKey: byDirectIcon || null };
+  }
+
+  // 2) se abbiamo solo l'id, proviamo a cercare nello stato client
+  if (t.subId && state?.subcats?.[t.main]) {
+    const found = (state.subcats[t.main] || []).find(s => s.id === t.subId || s.name === t.subId);
+    if (found) return { name: found.name, iconKey: found.iconKey || null };
+  }
+
+  return { name: '—', iconKey: null };
+}
+
 export default function TransactionTable({ rows, state, onEdit, onDelete }) {
-  // Modale Nota
+  // Modale Nota (visivo)
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [noteMeta, setNoteMeta] = useState(null);
@@ -48,7 +87,7 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
     setNoteMeta({
       date: new Date(t.date).toLocaleDateString('it-IT'),
       main: MAIN_CATS.find(m => m.key === t.main)?.name || t.main,
-      sub: t.sub,
+      sub: getSubcategoryInfo(t, state).name,
     });
     setNoteOpen(true);
   };
@@ -71,24 +110,17 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
         <tbody>
           {rows.map((t) => {
             const mc = MAIN_CATS.find(m => m.key === t.main);
-            const sc = (state.subcats[t.main] || []).find(s => s.name === t.sub);
-            const hasNote = Boolean(t.note && t.note.trim());
-
+            const { name: subName, iconKey } = getSubcategoryInfo(t, state);
             const badge = typeBadgeStyle(t.main);
 
-            const amt = Number(t.amount) || 0;
-            let amtClasses = 'px-2 py-0.5 rounded inline-block text-right min-w-[80px]';
-            let amtStyle = {};
-
-            if (amt > 0) {
-              amtClasses += ' bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300';
-              amtStyle.color = POS_TEXT_LIGHT;
-            } else if (amt < 0) {
-              amtClasses += ' bg-rose-100 dark:bg-rose-900/40 dark:text-rose-300';
-              amtStyle.color = NEG_TEXT_LIGHT;
-            } else {
-              amtClasses += ' text-slate-700 dark:text-slate-300';
-            }
+            const isNeg = t.main === 'expense' || t.main === 'debt';
+            const amtClasses = [
+              'px-2', 'py-0.5', 'rounded', 'inline-block', 'text-right', 'min-w-[110px]',
+              isNeg
+                ? 'bg-rose-100 dark:bg-rose-900/40 dark:text-rose-300'
+                : 'bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300'
+            ].join(' ');
+            const amtStyle = { color: isNeg ? NEG_TEXT_LIGHT : POS_TEXT_LIGHT };
 
             return (
               <tr
@@ -107,20 +139,24 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
 
                 <td className="p-2 whitespace-nowrap">
                   <div className="flex items-center gap-2">
-                    <span style={{ color: MAIN_COLOR[t.main] }}>
-                      <SvgIcon
-                        name={sc?.iconKey}
-                        color={MAIN_COLOR[t.main]}
-                        size={18}
-                      />
-                    </span>
-                    <span>{t.sub}</span>
+                    {iconKey ? (
+                      <span style={{ color: MAIN_COLOR[t.main] }}>
+                        <SvgIcon
+                          name={iconKey}
+                          color={MAIN_CATS.find(m => m.key === t.main)?.color}
+                          size={18}
+                        />
+                      </span>
+                    ) : (
+                      <span className="inline-block w-[18px]" />
+                    )}
+                    <span>{subName}</span>
                   </div>
                 </td>
 
                 <td className="p-2 text-right whitespace-nowrap">
                   <span className={amtClasses} style={amtStyle}>
-                    {nice(t.amount)}
+                    {formatAmountEUR(t)}
                   </span>
                 </td>
 
@@ -128,11 +164,11 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
                   <span className="relative group inline-flex">
                     <button
                       type="button"
-                      onClick={() => hasNote && openNote(t)}
-                      disabled={!hasNote}
-                      title={hasNote ? 'Nota' : 'Nessuna nota'}
+                      onClick={() => (t.note && t.note.trim()) ? openNote(t) : null}
+                      disabled={!(t.note && t.note.trim())}
+                      title={(t.note && t.note.trim()) ? 'Nota' : 'Nessuna nota'}
                       className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition
-                        ${hasNote
+                        ${(t.note && t.note.trim())
                           ? 'text-emerald-600 border-emerald-400/40 hover:bg-emerald-50 dark:text-emerald-300 dark:border-emerald-500/30 dark:hover:bg-emerald-900/20'
                           : 'text-slate-400 border-slate-300/60 dark:border-slate-600/50 opacity-50 cursor-default'
                         }`}
@@ -141,7 +177,7 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
                       <span>Nota</span>
                     </button>
 
-                    {hasNote && (
+                    {(t.note && t.note.trim()) && (
                       <div
                         className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-200 px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition"
                       >
@@ -155,10 +191,15 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
                 </td>
 
                 <td className="p-2 text-right whitespace-nowrap">
-                  <Button size="icon" variant="ghost" className="rounded-xl" onClick={() => onEdit(t)}>
+                  <Button size="icon" variant="ghost" className="rounded-xl" onClick={() => onEdit && onEdit(t)}>
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  <Button size="icon" variant="ghost" className="rounded-xl" onClick={() => onDelete(t)}>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="rounded-xl"
+                    onClick={() => onDelete && onDelete(t)} // <<< niente conferma, chiama e basta
+                  >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </td>

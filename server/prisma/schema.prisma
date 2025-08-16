@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MainCategory {
+  INCOME
+  EXPENSE
+  DEBT
+  SAVINGS
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  categories    Category[]
+  subcategories Subcategory[]
+  transactions  Transaction[]
+}
+
+model Category {
+  id        String       @id @default(cuid())
+  userId    String
+  main      MainCategory
+  name      String
+  iconKey   String?
+  colorHex  String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  User    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subcats Subcategory[]
+
+  @@unique([userId, main, name])
+}
+
+model Subcategory {
+  id         String   @id @default(cuid())
+  userId     String
+  categoryId String
+  name       String
+  iconKey    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  User     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  // ⬇️ LATO OPPOSTO della relazione con Transaction
+  transactions Transaction[]
+
+  @@unique([userId, categoryId, name])
+}
+
+model Transaction {
+  id        String       @id @default(cuid())
+  userId    String
+  date      DateTime
+  amount    Decimal      @db.Decimal(20, 2)
+  main      MainCategory
+  subId     String?
+  note      String?
+  payee     String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  User User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // ⬇️ RELAZIONE (molti Transaction → una Subcategory), opzionale
+  subcategory Subcategory? @relation(fields: [subId], references: [id])
+
+  @@index([userId, date])
+  @@index([userId, main])
+}
