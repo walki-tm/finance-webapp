@@ -1,3 +1,4 @@
+// prisma/seed.js
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
@@ -13,29 +14,8 @@ async function main() {
     create: { email, password },
   })
 
-  // sample categories
-  const income = await prisma.category.create({
-    data: { userId: user.id, main: 'INCOME', name: 'Salary', colorHex: '#48BFA0' }
-  })
-  const expenses = await prisma.category.create({
-    data: { userId: user.id, main: 'EXPENSE', name: 'Groceries', colorHex: '#24B7DB' }
-  })
-
-  const sub1 = await prisma.subcategory.create({
-    data: { userId: user.id, categoryId: expenses.id, name: 'Supermarket' }
-  })
-
-  await prisma.transaction.create({
-    data: {
-      userId: user.id,
-      date: new Date(),
-      amount: 123.45,
-      main: 'EXPENSE',
-      subId: sub1.id,
-      note: 'Sample',
-      payee: 'Coop'
-    }
-  })
+  // crea le 4 main più le sottocategorie come in DEFAULT_CATEGORIES (riuso la stessa lista se vuoi)
+  // ... oppure lascia vuoto: ora il register fa già il seed “vero”.
 }
 
 main().finally(() => prisma.$disconnect())

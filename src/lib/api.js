@@ -11,7 +11,6 @@ async function request(path, method = "GET", token, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  // Se non ok, prova a leggere JSON o testo per messaggio errore
   if (!res.ok) {
     let msg = res.statusText;
     try {
@@ -26,10 +25,8 @@ async function request(path, method = "GET", token, body) {
     throw new Error(msg);
   }
 
-  // DELETE (204) o qualsiasi 204 → niente body
   if (res.status === 204) return null;
 
-  // Alcuni endpoint potrebbero non ritornare JSON
   const ct = res.headers.get("content-type") || "";
   if (!ct.includes("application/json")) {
     const txt = await res.text();
@@ -39,8 +36,8 @@ async function request(path, method = "GET", token, body) {
   return res.json();
 }
 
-// ---- Auth ----
 export const api = {
+  // ---- Auth ----
   register: (email, password) =>
     request("/api/auth/register", "POST", null, { email, password }),
   login: (email, password) =>
@@ -51,8 +48,17 @@ export const api = {
     request("/api/categories", "GET", token),
   addCategory: (token, data) =>
     request("/api/categories", "POST", token, data),
+  updateCategory: (token, id, data) =>
+    request(`/api/categories/${id}`, "PUT", token, data),
+  deleteCategory: (token, id) =>
+    request(`/api/categories/${id}`, "DELETE", token),
+
   addSubCategory: (token, data) =>
     request("/api/categories/sub", "POST", token, data),
+  updateSubCategory: (token, id, data) =>
+    request(`/api/categories/sub/${id}`, "PUT", token, data),
+  deleteSubCategory: (token, id) =>
+    request(`/api/categories/sub/${id}`, "DELETE", token),
 
   // ---- Transactions ----
   listTransactions: (token, year, month) =>

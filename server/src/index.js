@@ -24,8 +24,8 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }))
 app.use('/api/auth', authRoutes)
 
 // protected
-app.use('/api/categories', authOptional, categoryRoutes)
-app.use('/api/transactions', authOptional, transactionRoutes)
+app.use('/api/categories', categoryRoutes)
+app.use('/api/transactions', transactionRoutes)
 
 const port = process.env.PORT || 3001
 app.listen(port, () => {

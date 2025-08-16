@@ -1,4 +1,9 @@
 [
+  "bank.svg",
+  "bus.svg",
+  "car.svg",
+  "college.svg",
+  "creditcard.svg",
   "fi-alert.svg",
   "fi-analytics.svg",
   "fi-archive.svg",
@@ -103,5 +108,20 @@
   "fi-users.svg",
   "fi-wallet.svg",
   "fi-wifi.svg",
-  "fi-x.svg"
+  "fi-x.svg",
+  "gift.svg",
+  "hobby.svg",
+  "home.svg",
+  "money.svg",
+  "money2.svg",
+  "money3.svg",
+  "other.svg",
+  "piggybank.svg",
+  "sheet.svg",
+  "sheet2.svg",
+  "shop.svg",
+  "shop2.svg",
+  "shop3.svg",
+  "shop4.svg",
+  "vacantion.svg"
 ]
