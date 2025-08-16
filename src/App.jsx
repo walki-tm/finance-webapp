@@ -1,7 +1,4 @@
 // src/App.jsx
-// App principale: gestisce lo "stato globale" lato client (per ora su localStorage).
-// Entità principali nello stato: User, Theme, Subcats (sottocategorie), Budgets, Transactions, CustomIcons.
-
 import React, { useEffect, useMemo, useState } from 'react';
 import { Switch, Badge, Button, NavItem } from './components/ui.jsx';
 import AuthScreens from './pages/Auth.jsx';
@@ -9,9 +6,11 @@ import Dashboard from './pages/Dashboard.jsx';
 import Transactions from './pages/Transactions.jsx';
 import Categories from './pages/Categories.jsx';
 import Budgeting from './pages/Budgeting.jsx';
-import TransactionModal from './components/TransactionModal.jsx'; // <-- Modale riutilizzabile
+import TransactionModal from './components/TransactionModal.jsx';
 import { saveState, loadState, uuid } from './lib/utils.js';
 import { MAIN_CATS } from './lib/constants.js';
+import { useAuth } from './context/AuthContext.jsx';
+import { api } from './lib/api';
 
 import {
   Layers3,
@@ -26,21 +25,18 @@ import {
   Plus
 } from 'lucide-react';
 
-// Stato iniziale dell'app (dati mock su client). In futuro saranno sostituiti da API/DB.
+// Stato iniziale mock (resta locale per ora)
 const defaultData = () => ({
   user: null,
   theme: 'light',
   customIcons: {},
-
-  // Nuove proprietà per le categorie main
-  customMainCats: [], // Categorie principali personalizzate dall'utente
-  mainEnabled: {      // Stato di visibilità delle categorie principali (core)
+  customMainCats: [],
+  mainEnabled: {
     income: true,
     expense: true,
     debt: true,
     saving: true
   },
-
   subcats: {
     income: [
       { name: 'Stipendio', iconKey: 'earn' },
@@ -68,66 +64,73 @@ const defaultData = () => ({
 });
 
 export default function App() {
-  // Stato applicazione (persistito su localStorage)
+  const { user, logout, token } = useAuth();
+
   const [state, setState] = useState(defaultData());
-
-  // UI: quale tab è attivo
   const [activeTab, setActiveTab] = useState('dashboard');
-
-  // UI: apertura menu laterale
   const [menuOpen, setMenuOpen] = useState(false);
-
-  // UI: dettaglio dashboard (quale main è selezionata)
   const [dashDetail, setDashDetail] = useState(null);
 
-  // Utility: anno corrente (usato come chiave per i budget)
+  // supporto EDIT
+  const [txModalOpen, setTxModalOpen] = useState(false);
+  const [editingTx, setEditingTx] = useState(null);
+
   const year = String(new Date().getFullYear());
 
-  // All'avvio carico lo stato da localStorage (se presente)
+  // Carica stato locale alla prima render
   useEffect(() => {
     const s = loadState();
     setState(s || defaultData());
   }, []);
 
-  // Ogni volta che cambia lo stato:
-  // - aggiorno la classe "dark" sul <html> in base al tema
-  // - salvo lo stato su localStorage (persistenza client)
+  // Persistenza tema + stato mock
   useEffect(() => {
     document.documentElement.classList.toggle('dark', state.theme === 'dark');
     saveState(state);
   }, [state]);
 
-  // ====== Derivata: mains core+custom (con enabled) per la TransactionModal ======
+  // === CARICA TRANSIZIONI REALI QUANDO LOGGATO ===
+  useEffect(() => {
+    if (!token) return;
+    (async () => {
+      try {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = now.getMonth() + 1; // 1..12
+        const txs = await api.listTransactions(token, y, m);
+
+        const mapDown = { INCOME: 'income', EXPENSE: 'expense', DEBT: 'debt', SAVINGS: 'saving' };
+        const normalized = (txs || []).map(t => ({
+          ...t,
+          main: mapDown[t.main] || 'expense',
+          // porta sempre giù il nome sub per tabella/icone
+          sub: t.subcategory?.name || t.sub || '',
+          subId: t.subId || null,
+        }));
+        setState(s => ({ ...s, transactions: normalized }));
+      } catch (err) {
+        console.error('Errore caricamento transazioni:', err.message);
+      }
+    })();
+  }, [token]);
+
   const mainsForModal = useMemo(() => {
-    // core con enabled
     const core = MAIN_CATS.map(m => ({
       ...m,
       enabled: state.mainEnabled?.[m.key] !== false,
     }));
-
-    // custom con enabled (possono anche fare override di core)
     const custom = (state.customMainCats || []).map(c => ({
       ...c,
       enabled: state.mainEnabled?.[c.key] !== false,
     }));
-
-    // merge per key: i custom/override vincono sui core
     const byKey = Object.fromEntries(core.map(m => [m.key, m]));
-    for (const c of custom) {
-      byKey[c.key] = { ...(byKey[c.key] || {}), ...c };
-    }
+    for (const c of custom) byKey[c.key] = { ...(byKey[c.key] || {}), ...c };
     return Object.values(byKey);
   }, [state.mainEnabled, state.customMainCats]);
 
-  // ====== Mutations sullo stato (simulate, in futuro chiameranno API) ======
-
-  // Tema (light/dark)
+  // Mutations (ancora locali per categorie/budget)
   const setTheme = (t) => setState((s) => ({ ...s, theme: t }));
 
-  // Login/Logout utente
-  const setUser = (u) => setState((s) => ({ ...s, user: u }));
-
-  // CRUD Sottocategorie
   const addSubcat = (main, obj) =>
     setState((s) => ({
       ...s,
@@ -152,34 +155,21 @@ export default function App() {
       }
     }));
 
-  // ====== CRUD Categorie Main ======
   const updateMainCat = (key, patch) =>
     setState((s) => {
-      // 1) capisco se è una "core" (una delle 4 di MAIN_CATS)
-      const isCore = MAIN_CATS.some(m => m.key === key);
-
-      // 2) aggiorno la visibilità se nel patch c'è "enabled"
       const nextEnabled =
         patch.enabled !== undefined
           ? { ...s.mainEnabled, [key]: patch.enabled }
           : s.mainEnabled;
 
-      // 3) preparo a fare upsert (creare o aggiornare) l'override in customMainCats
       const idx = (s.customMainCats || []).findIndex(c => c.key === key);
       let nextCustom = [...(s.customMainCats || [])];
 
-      // 4) se mi hai passato nome/colore, devo salvarli:
       const hasOvProps = ('name' in patch) || ('color' in patch);
       if (hasOvProps) {
-        if (idx >= 0) {
-          // esiste già un override/custom con quella key → aggiorno
-          nextCustom[idx] = { ...nextCustom[idx], ...patch, key };
-        } else {
-          // non esiste ancora → lo creo (vale sia per core-override sia per nuove custom)
-          nextCustom.push({ key, name: patch.name, color: patch.color });
-        }
+        if (idx >= 0) nextCustom[idx] = { ...nextCustom[idx], ...patch, key };
+        else nextCustom.push({ key, name: patch.name, color: patch.color });
       }
-      // se patch non ha name/color (es. solo enabled) → non tocco customMainCats
 
       return { ...s, mainEnabled: nextEnabled, customMainCats: nextCustom };
     });
@@ -193,7 +183,6 @@ export default function App() {
 
   const removeMainCat = (key) =>
     setState((s) => {
-      // rimuovo SOLO se è una custom (le core non si toccano)
       if (MAIN_CATS.some((m) => m.key === key)) return s;
       const { [key]: _omit, ...restEnabled } = s.mainEnabled || {};
       return {
@@ -203,7 +192,6 @@ export default function App() {
       };
     });
 
-  // Upsert Budget (entità Budget) per anno corrente
   const upsertBudget = (main, sub, value) =>
     setState((s) => ({
       ...s,
@@ -213,7 +201,7 @@ export default function App() {
       }
     }));
 
-  // CRUD Transazioni (entità Transaction)
+  // --- Transazioni: add/update locali (per compat), delete via API ---
   const addTx = (tx) =>
     setState((s) => ({ ...s, transactions: [{ id: uuid(), ...tx }, ...s.transactions] }));
   const updateTx = (id, patch) =>
@@ -221,37 +209,39 @@ export default function App() {
       ...s,
       transactions: s.transactions.map((t) => (t.id === id ? { ...t, ...patch } : t))
     }));
-  const delTx = (id) =>
-    setState((s) => ({ ...s, transactions: s.transactions.filter((t) => t.id !== id) }));
 
-  // Icone custom (entità CustomIcons)
+  // delete ottimistico + API
+  const delTxApi = async (id) => {
+    setState(s => ({ ...s, transactions: s.transactions.filter(t => t.id !== id) }));
+    try {
+      if (token) await api.deleteTransaction(token, id);
+    } catch (err) {
+      console.error('Errore cancellazione transazione:', err.message);
+      // eventuale rollback se vuoi
+    }
+  };
+
   const addCustomIcon = (key, emoji) =>
     setState((s) => ({ ...s, customIcons: { ...s.customIcons, [key]: emoji } }));
 
-  // ====== Modale riutilizzabile per Aggiungi/Modifica Transazione ======
-
-  // Stato UI modale transazione
-  const [txModalOpen, setTxModalOpen] = useState(false);  // visibilità modale
-  const [editingTx, setEditingTx] = useState(null);       // se presente, è una edit; se null, aggiunta
-
-  // Apri modale in modalità "aggiungi"
   function openAddTx() {
     setEditingTx(null);
     setTxModalOpen(true);
   }
-
-  // Apri modale in modalità "modifica" passando la transazione selezionata
   function openEditTx(tx) {
     setEditingTx(tx);
     setTxModalOpen(true);
   }
 
+  // Helpers mapping main
+  const mainUp = { income: 'INCOME', expense: 'EXPENSE', debt: 'DEBT', saving: 'SAVINGS' };
+  const mainDown = { INCOME: 'income', EXPENSE: 'expense', DEBT: 'debt', SAVINGS: 'saving' };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-      {/* Topbar con saluto, anno, tema e logout */}
+      {/* Topbar */}
       <div className="sticky top-0 z-40 bg-white/75 dark:bg-slate-900/75 backdrop-blur border-b border-slate-200/20">
         <div className="max-w-7xl mx-auto px-3 md:px-6 py-3 flex items-center justify-between">
-          {/* Sezione sinistra: menu + saluto + anno */}
           <div className="flex items-center gap-3">
             <button
               className="rounded-xl p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -263,7 +253,7 @@ export default function App() {
 
             <h1 className="text-lg md:text-2xl font-semibold">
               Bentornato/a{' '}
-              {state.user ? <span className="text-teal-500">{state.user.name}</span> : 'Utente'}
+              {user ? <span className="text-teal-500">{user.email}</span> : 'Utente'}
             </h1>
 
             <Badge variant="secondary" className="ml-2">
@@ -271,7 +261,6 @@ export default function App() {
             </Badge>
           </div>
 
-          {/* Sezione destra: tema (light/dark) e logout */}
           <div className="flex items-center gap-2">
             <Switch
               checked={state.theme === 'dark'}
@@ -279,10 +268,10 @@ export default function App() {
             />
             {state.theme === 'dark' ? <Moon className="h-4 w-4" /> : <SunMedium className="h-4 w-4" />}
 
-            {state.user && (
+            {user && (
               <button
                 className="border rounded-xl px-3 py-2"
-                onClick={() => setUser(null)}
+                onClick={logout}
                 aria-label="Logout"
               >
                 <LogOut className="h-4 w-4 inline mr-2" />
@@ -295,12 +284,10 @@ export default function App() {
 
       {/* Corpo pagina */}
       <div className="max-w-7xl mx-auto p-3 md:p-6">
-        {!state.user ? (
-          // Schermata di autenticazione (demo client-side)
-          <AuthScreens onLogin={(u) => setUser(u)} />
+        {!user ? (
+          <AuthScreens />
         ) : (
           <>
-            {/* Barra dei tab + bottone "+" a destra per "Nuova transazione" */}
             <div className="flex items-center justify-between flex-wrap gap-2 bg-slate-200/60 dark:bg-slate-800/60 p-1 rounded-2xl">
               <div className="flex flex-wrap gap-2">
                 {['dashboard', 'transactions', 'categories', 'budgeting'].map((k) => (
@@ -324,7 +311,6 @@ export default function App() {
                 ))}
               </div>
 
-              {/* Bottone "+" che apre la modale in modalità "aggiungi" */}
               <button
                 onClick={openAddTx}
                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm bg-gradient-to-tr from-sky-600 to-indigo-600 text-white hover:opacity-90"
@@ -334,7 +320,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Contenuto del tab selezionato */}
             <div className="mt-4">
               {activeTab === 'dashboard' && (
                 <Dashboard
@@ -342,16 +327,15 @@ export default function App() {
                   year={year}
                   onSelectMain={(key) => setDashDetail((prev) => (prev === key ? null : key))}
                   detailMain={dashDetail}
-                  addTx={addTx} // la Dashboard può comunque aggiungere transazioni (quick add locale)
+                  addTx={addTx}
                 />
               )}
 
-              {/* Passo openTxEditor per poter aprire la modale in modalità "modifica" dalla tabella */}
               {activeTab === 'transactions' && (
                 <Transactions
                   state={state}
                   updateTx={updateTx}
-                  delTx={delTx}
+                  delTx={delTxApi}
                   openTxEditor={openEditTx}
                 />
               )}
@@ -377,7 +361,7 @@ export default function App() {
         )}
       </div>
 
-      {/* Menu laterale (drawer) */}
+      {/* Menu laterale */}
       {menuOpen && (
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/30" onClick={() => setMenuOpen(false)} />
@@ -390,34 +374,22 @@ export default function App() {
               <NavItem
                 icon={BarChart3}
                 label="Dashboard"
-                onClick={() => {
-                  setActiveTab('dashboard');
-                  setMenuOpen(false);
-                }}
+                onClick={() => { setActiveTab('dashboard'); setMenuOpen(false); }}
               />
               <NavItem
                 icon={TrendingUp}
                 label="Transazioni"
-                onClick={() => {
-                  setActiveTab('transactions');
-                  setMenuOpen(false);
-                }}
+                onClick={() => { setActiveTab('transactions'); setMenuOpen(false); }}
               />
               <NavItem
                 icon={SettingsIcon}
                 label="Categorie"
-                onClick={() => {
-                  setActiveTab('categories');
-                  setMenuOpen(false);
-                }}
+                onClick={() => { setActiveTab('categories'); setMenuOpen(false); }}
               />
               <NavItem
                 icon={CalendarDays}
                 label="Budgeting"
-                onClick={() => {
-                  setActiveTab('budgeting');
-                  setMenuOpen(false);
-                }}
+                onClick={() => { setActiveTab('budgeting'); setMenuOpen(false); }}
               />
               <NavItem icon={User} label="Impostazioni (coming soon)" onClick={() => setMenuOpen(false)} />
             </div>
@@ -425,19 +397,118 @@ export default function App() {
         </div>
       )}
 
-      {/* Modale centrale per Aggiungi/Modifica Transazione */}
+      {/* Modale transazione */}
       <TransactionModal
         open={txModalOpen}
         onClose={() => setTxModalOpen(false)}
-        onSave={(payload) => {
-          // Se c'è una transazione in editing → update; altrimenti → add
-          if (editingTx) updateTx(editingTx.id, payload);
-          else addTx(payload);
-          setTxModalOpen(false);
-        }}
-        subcats={state.subcats}
-        mains={mainsForModal}   // <<< passiamo core+custom (con enabled) alla modale
         initial={editingTx}
+        subcats={state.subcats}
+        mains={mainsForModal}
+        onSave={async (payload) => {
+          const isEdit = Boolean(editingTx?.id);
+
+          // corpo comune per API
+          const body = {
+            date: payload.date || new Date().toISOString(),
+            amount: Number(payload.amount || 0),
+            main: mainUp[payload.main] || 'EXPENSE',
+            note: payload.note || '',
+            payee: payload.payee || '',
+            // Se hai la risoluzione client di subId, valorizzala qui; altrimenti resta null.
+            subId: payload.subId || null
+          };
+
+          try {
+            if (!token) {
+              // solo locale (demo)
+              if (isEdit) {
+                updateTx(editingTx.id, {
+                  main: payload.main,
+                  sub: payload.sub,
+                  date: payload.date,
+                  amount: payload.amount,
+                  note: payload.note
+                });
+              } else {
+                addTx(payload);
+              }
+              return;
+            }
+
+            if (isEdit) {
+              // 1) Se esiste updateTransaction nel client API, usala
+              if (typeof api.updateTransaction === 'function') {
+                const updated = await api.updateTransaction(token, editingTx.id, body);
+                const normalized = {
+                  ...updated,
+                  main: mainDown[updated.main] || 'expense',
+                  sub: payload.sub || updated.subcategory?.name || '' // garantisco sub in UI
+                };
+                setState(s => ({
+                  ...s,
+                  transactions: s.transactions.map(t => t.id === editingTx.id ? normalized : t)
+                }));
+              } else {
+                // 2) fallback: DELETE + POST (mantengo UI coerente sostituendo il record)
+                const oldId = editingTx.id;
+                // Ottimista: aggiorno subito i campi visibili
+                setState(s => ({
+                  ...s,
+                  transactions: s.transactions.map(t =>
+                    t.id === oldId
+                      ? { ...t, main: payload.main, sub: payload.sub, date: payload.date, amount: payload.amount, note: payload.note }
+                      : t
+                  )
+                }));
+
+                try {
+                  await api.deleteTransaction(token, oldId);
+                } catch (e) {
+                  console.error('Delete in fallback edit fallita:', e.message);
+                }
+
+                const created = await api.addTransaction(token, body);
+                const normalized = {
+                  ...created,
+                  main: mainDown[created.main] || 'expense',
+                  sub: payload.sub || '' // mostro subito il nome scelto
+                };
+
+                // sostituisco l'item (stessa posizione) scambiando l'id
+                setState(s => ({
+                  ...s,
+                  transactions: s.transactions.map(t => (t.id === oldId ? normalized : t))
+                }));
+              }
+            } else {
+              // ADD
+              const created = await api.addTransaction(token, body);
+              const normalized = {
+                ...created,
+                main: mainDown[created.main] || 'expense',
+                sub: payload.sub || created.subcategory?.name || '' // assicuro il nome in UI
+              };
+              setState(s => ({ ...s, transactions: [normalized, ...(s.transactions || [])] }));
+            }
+          } catch (err) {
+            console.error('Errore salvataggio transazione:', err.message);
+            // fallback locale per non perdere il dato in UI
+            if (isEdit) {
+              updateTx(editingTx.id, {
+                main: payload.main,
+                sub: payload.sub,
+                date: payload.date,
+                amount: payload.amount,
+                note: payload.note
+              });
+            } else {
+              addTx(payload);
+            }
+          } finally {
+            setTxModalOpen(false);
+            setEditingTx(null);
+          }
+        }}
       />
     </div>
   );
