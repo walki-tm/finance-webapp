@@ -1,8 +1,16 @@
 // routes/categories.js
 import { Router } from 'express'
-import { prisma } from '../lib/prisma.js'
 import { authRequired } from '../middleware/auth.js'
 import { z } from 'zod'
+import {
+  getCategories,
+  createCategory,
+  updateCategory,
+  createSubcategory,
+  updateSubcategory,
+  deleteCategory,
+  deleteSubcategory,
+} from '../services/categoryService.js'
 
 const router = Router()
 router.use(authRequired)
@@ -38,137 +46,68 @@ const subPatchSchema = z.object({
 // ===== Endpoints =====
 
 // GET tutte le categorie + sottocategorie
-router.get('/', async (req, res) => {
-  const userId = req.user.id
-  const categories = await prisma.category.findMany({
-    where: { userId },
-    include: { subcats: true },
-    orderBy: [{ main: 'asc' }, { name: 'asc' }]
-  })
-  res.json(categories)
+router.get('/', async (req, res, next) => {
+  try {
+    const categories = await getCategories(req.user.id)
+    res.json(categories)
+  } catch (e) { next(e) }
 })
 
 // POST nuova categoria
 router.post('/', async (req, res, next) => {
   const parsed = categorySchema.safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ error: 'Invalid body' })
-  const userId = req.user.id
-
   try {
-    const created = await prisma.category.create({ data: { userId, ...parsed.data } })
-    return res.status(201).json(created)
-  } catch (e) {
-    if (e.code === 'P2002') return res.status(409).json({ error: 'Category already exists' })
-    return next(e)
-  }
+    const created = await createCategory(req.user.id, parsed.data)
+    res.status(201).json(created)
+  } catch (e) { next(e) }
 })
 
 // PUT update categoria
-router.put('/:id', async (req, res) => {
-  const userId = req.user.id
-  const id = req.params.id
+router.put('/:id', async (req, res, next) => {
   const parsed = categoryPatchSchema.safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ error: 'Invalid body' })
-
-  const cat = await prisma.category.findFirst({ where: { id, userId } })
-  if (!cat) return res.status(404).json({ error: 'Not found' })
-
-  const updated = await prisma.category.update({
-    where: { id },
-    data: parsed.data
-  })
-  res.json(updated)
+  try {
+    const updated = await updateCategory(req.user.id, req.params.id, parsed.data)
+    res.json(updated)
+  } catch (e) { next(e) }
 })
 
 // POST nuova sottocategoria
-router.post('/sub', async (req, res) => {
+router.post('/sub', async (req, res, next) => {
   const parsed = subSchema.safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ error: 'Invalid body' })
-  const userId = req.user.id
-  const { categoryId, ...rest } = parsed.data
-
-  const cat = await prisma.category.findFirst({ where: { id: categoryId, userId } })
-  if (!cat) return res.status(404).json({ error: 'Category not found' })
-
-  const created = await prisma.subcategory.create({ data: { userId, categoryId, ...rest } })
-  res.status(201).json(created)
+  try {
+    const { categoryId, ...rest } = parsed.data
+    const created = await createSubcategory(req.user.id, categoryId, rest)
+    res.status(201).json(created)
+  } catch (e) { next(e) }
 })
 
 // PUT update sottocategoria
-router.put('/sub/:id', async (req, res) => {
-  const userId = req.user.id
-  const id = req.params.id
+router.put('/sub/:id', async (req, res, next) => {
   const parsed = subPatchSchema.safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ error: 'Invalid body' })
-
-  const sub = await prisma.subcategory.findFirst({ where: { id, userId } })
-  if (!sub) return res.status(404).json({ error: 'Not found' })
-
-  const updated = await prisma.subcategory.update({
-    where: { id },
-    data: parsed.data
-  })
-  res.json(updated)
+  try {
+    const updated = await updateSubcategory(req.user.id, req.params.id, parsed.data)
+    res.json(updated)
+  } catch (e) { next(e) }
 })
 
 // DELETE categoria (cascade sulle sub + setNull transazioni collegate)
 router.delete('/:id', async (req, res, next) => {
-  const userId = req.user.id
-  const id = req.params.id
-
-  const cat = await prisma.category.findFirst({
-    where: { id, userId },
-    include: { subcats: { select: { id: true } } }
-  })
-  if (!cat) return res.status(404).json({ error: 'Not found' })
-
-  const subIds = cat.subcats.map(s => s.id)
-
   try {
-    await prisma.$transaction(async (tx) => {
-      if (subIds.length) {
-        // azzera subId nelle transazioni dell’utente collegate alle sub che stiamo togliendo
-        await tx.transaction.updateMany({
-          where: { userId, subId: { in: subIds } },
-          data: { subId: null }
-        })
-        // elimina le sub dell’utente per quella categoria
-        await tx.subcategory.deleteMany({
-          where: { userId, id: { in: subIds } }
-        })
-      }
-      // elimina la categoria
-      await tx.category.delete({ where: { id } })
-    })
-
-    return res.status(204).end()
-  } catch (e) {
-    return next(e)
-  }
+    await deleteCategory(req.user.id, req.params.id)
+    res.status(204).end()
+  } catch (e) { next(e) }
 })
 
 // DELETE sottocategoria (setNull transazioni collegate)
 router.delete('/sub/:id', async (req, res, next) => {
-  const userId = req.user.id
-  const id = req.params.id
-
-  const sub = await prisma.subcategory.findFirst({ where: { id, userId } })
-  if (!sub) return res.status(404).json({ error: 'Not found' })
-
   try {
-    await prisma.$transaction(async (tx) => {
-      // prima nullo nelle transazioni dell’utente
-      await tx.transaction.updateMany({
-        where: { userId, subId: id },
-        data: { subId: null }
-      })
-      // poi elimina la sub
-      await tx.subcategory.delete({ where: { id } })
-    })
-    return res.status(204).end()
-  } catch (e) {
-    return next(e)
-  }
+    await deleteSubcategory(req.user.id, req.params.id)
+    res.status(204).end()
+  } catch (e) { next(e) }
 })
 
 export default router

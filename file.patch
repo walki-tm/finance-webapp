@@ -1,127 +1,173 @@
-diff --git a/src/pages/Categories.jsx b/src/pages/Categories.jsx
-index 48160c2191a623d07ed999945f4a0b0beafceba0..2f7f61c97d6145200fc916425516030c2b9fd661 100644
---- a/src/pages/Categories.jsx
-+++ b/src/pages/Categories.jsx
-@@ -482,56 +482,54 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat })
-                           paletteKey={m.key}
-                         />
-                       </td>
+diff --git a/server/src/routes/transactions.js b/server/src/routes/transactions.js
+index 6d805086009ce6ab37f1e5aadedfa5755769c0c8..365a0f75a7e82719479a4131ca7f6dad15d8ad79 100644
+--- a/server/src/routes/transactions.js
++++ b/server/src/routes/transactions.js
+@@ -1,141 +1,67 @@
+ import { Router } from 'express'
+-import { prisma } from '../lib/prisma.js'
+ import { authRequired } from '../middleware/auth.js'
+ import { z } from 'zod'
++import {
++  listTransactions,
++  createTransaction,
++  updateTransaction,
++  deleteTransaction,
++} from '../services/transactionService.js'
  
-                       {/* Visibile */}
-                       <td className="px-2 py-3">
-                         {isIncome ? (
-                           <span className="text-slate-400 dark:text-slate-500">—</span>
-                         ) : (
-                           <Switch
-                             checked={!!enabledVal}
-                             onCheckedChange={(v) => toggleEnabled(m, v)}
-                             style={!enabledVal ? { filter: isDark() ? "" : "grayscale(40%) opacity(.9)" } : {}}
-                           />
-                         )}
-                       </td>
+ const router = Router()
+ router.use(authRequired)
  
-                       {/* Azioni */}
-                       <td className="px-2 py-3">
-                         {isIncome ? (
-                           <span className="text-slate-400 dark:text-slate-500">—</span>
-                         ) : (
-                           <ActionsMenu
-                             onEdit={() => enterRowEdit(m)}
-                             onRemove={!CORE_KEYS.has(m.key) ? async () => {
--                              const ok = await removeMainCat(m.key);
--                              if (ok) { 
--                                // niente toast rumoroso se vuoi, altrimenti:
--                                // toast.success("Categoria rimossa");
--                              } else {
--                                toast.error("Impossibile rimuovere la categoria");
-+                              try {
-+                                await removeMainCat(m.key);
-+                              } catch (err) {
-+                                toast.error(err.message || "Impossibile rimuovere la categoria");
-                               }
-                             } : undefined}
-                             onReset={CORE_KEYS.has(m.key) ? () => resetCore(m) : undefined}
-                             disableRemove={CORE_KEYS.has(m.key)}
-                           />
-                         )}
-                       </td>
-                     </tr>
-                   );
-                 })}
-                 {merged.length === 0 && (
-                   <tr><td colSpan={5} className="p-4 text-center text-slate-500">Nessuna categoria</td></tr>
-                 )}
-               </tbody>
-             </table>
-           </div>
-         </CardContent>
-       </Card>
-     </div>
-   );
- }
+ const txSchema = z.object({
+   date: z.coerce.date(),
+   amount: z.coerce.number(),
+   main: z.string().min(1).max(32).transform(s => s.toUpperCase()),
+   subId: z.string().optional().nullable(),
+   note: z.string().optional().nullable(),
+   payee: z.string().optional().nullable(),
+ })
  
- /* ===================== TAB 2 — Sottocategorie ===================== */
- function TabSubcategories({
-   state,
-diff --git a/src/pages/Categories.jsx b/src/pages/Categories.jsx
-index 48160c2191a623d07ed999945f4a0b0beafceba0..2f7f61c97d6145200fc916425516030c2b9fd661 100644
---- a/src/pages/Categories.jsx
-+++ b/src/pages/Categories.jsx
-@@ -757,52 +755,55 @@ function TabSubcategories({
-                         ) : isEditing ? (
-                           <div className="flex items-center gap-2">
-                             <Input
-                               defaultValue={titleName}
-                               autoFocus
-                               onKeyDown={(e) => {
-                                 if (e.key === "Enter") saveRowEdit(sc.id, e.currentTarget);
-                                 if (e.key === "Escape") cancelRowEdit();
-                               }}
-                               className="font-semibold"
-                             />
-                             <Button size="sm" onClick={(e) => saveRowEdit(sc.id, { value: e.currentTarget.parentElement.querySelector('input').value })}><Check className="h-4 w-4" /></Button>
-                             <Button size="sm" variant="ghost" onClick={cancelRowEdit}><X className="h-4 w-4" /></Button>
-                           </div>
-                         ) : (
-                           <span className="font-semibold" onDoubleClick={() => beginRowEdit(sc)} title="Doppio clic per rinominare">
-                             {titleName}
-                           </span>
-                         )}
-                       </td>
+ // PATCH/PUT schema: tutti opzionali
+ const txPatchSchema = z.object({
+   date: z.string().optional(),
+   amount: z.number().optional(),
+   // main dinamica: accetta qualsiasi stringa e normalizza in UPPERCASE
+   main: z.string().min(1).max(32).transform(s => s.toUpperCase()).optional(),
+   subId: z.string().nullable().optional(),
+   subName: z.string().nullable().optional(),
+   note: z.string().nullable().optional(),
+-  payee: z.string().nullable().optional()
++  payee: z.string().nullable().optional(),
+ })
  
-                       <td className="px-2 py-3">
-                         <ActionsMenu
-                           onEdit={() => beginRowEdit(sc)}
-                           onRemove={async () => {
--                            const ok = await removeSubcat(main, sc.id);
--                            if (!ok) toast.error("Impossibile rimuovere la sottocategoria");
-+                            try {
-+                              await removeSubcat(main, sc.id);
-+                            } catch (err) {
-+                              toast.error(err.message || "Impossibile rimuovere la sottocategoria");
-+                            }
-                           }}
-                         />
-                       </td>
-                     </tr>
-                   );
-                 })}
-                 {rowsSorted.length === 0 && (
-                   <tr><td className="p-4 text-center text-slate-500" colSpan={3}>Nessuna sottocategoria</td></tr>
-                 )}
-               </tbody>
-             </table>
-           </div>
+-router.get('/', async (req, res) => {
+-  const userId = req.user.id
+-  const { year, month, limit = 200 } = req.query
+-
+-  const where = { userId }
+-  if (year && month) {
+-    const y = Number(year), m = Number(month) - 1
+-    const from = new Date(Date.UTC(y, m, 1))
+-    const to = new Date(Date.UTC(y, m + 1, 1))
+-    where.date = { gte: from, lt: to }
+-  }
+-
+-  const data = await prisma.transaction.findMany({
+-    where,
+-    orderBy: { date: 'desc' },
+-    take: Number(limit),
+-    include: { subcategory: true }
+-  })
+-
+-  res.json(data)
++router.get('/', async (req, res, next) => {
++  try {
++    const data = await listTransactions(req.user.id, req.query)
++    res.json(data)
++  } catch (e) { next(e) }
+ })
  
-           <IconBrowserModal
-             open={iconModalOpen}
-             onClose={closeIcon}
-             tintColor={mainColor}
-             onPick={(key) => {
-               if (!iconModalTarget?.subId) return;
-               setIcon(iconModalTarget.subId, key);
-             }}
-           />
-         </CardContent>
-       </Card>
-     </div>
+-router.post('/', async (req, res) => {
+-  const userId = req.user.id
++router.post('/', async (req, res, next) => {
+   const parsed = txSchema.safeParse(req.body)
+   if (!parsed.success) return res.status(400).json({ error: 'Invalid body' })
+-
+-  let { date, amount, main, subId, subName, note, payee } = parsed.data
+-
+-  // Risolvi subId da nome se serve
+-  if (!subId && subName) {
+-    const found = await prisma.subcategory.findFirst({
+-      where: { userId, name: { equals: subName, mode: 'insensitive' } },
+-      select: { id: true }
+-    })
+-    if (found) subId = found.id
+-  }
+-
+-  // Valida eventuale subId
+-  if (subId) {
+-    const ok = await prisma.subcategory.findFirst({ where: { id: subId, userId } })
+-    if (!ok) return res.status(400).json({ error: 'Invalid subId' })
+-  }
+-
+-  const created = await prisma.transaction.create({
+-    data: {
+-      userId,
+-      date: new Date(date),
+-      amount,
+-      main,
+-      subId: subId || null,
+-      note: note || null,
+-      payee: payee || null
+-    },
+-    include: { subcategory: true }
+-  })
+-  res.status(201).json(created)
++  try {
++    const created = await createTransaction(req.user.id, parsed.data)
++    res.status(201).json(created)
++  } catch (e) { next(e) }
+ })
+ 
+-router.put('/:id', async (req, res) => {
+-  const userId = req.user.id
+-  const id = req.params.id
+-
+-  const exists = await prisma.transaction.findFirst({ where: { id, userId } })
+-  if (!exists) return res.status(404).json({ error: 'Not found' })
+-
++router.put('/:id', async (req, res, next) => {
+   const parsed = txPatchSchema.safeParse(req.body)
+   if (!parsed.success) return res.status(400).json({ error: 'Invalid body' })
+-
+-  let { date, amount, main, subId, subName, note, payee } = parsed.data
+-
+-  // Risolvi subId da nome se serve
+-  if (!subId && subName) {
+-    const found = await prisma.subcategory.findFirst({
+-      where: { userId, name: { equals: subName, mode: 'insensitive' } },
+-      select: { id: true }
+-    })
+-    if (found) subId = found.id
+-    else subId = null // se nome non trovato, azzero il link
+-  }
+-
+-  // Valida eventuale subId
+-  if (subId) {
+-    const ok = await prisma.subcategory.findFirst({ where: { id: subId, userId } })
+-    if (!ok) return res.status(400).json({ error: 'Invalid subId' })
+-  }
+-
+-  const updated = await prisma.transaction.update({
+-    where: { id },
+-    data: {
+-      ...(date ? { date: new Date(date) } : {}),
+-      ...(typeof amount === 'number' ? { amount } : {}),
+-      ...(main ? { main } : {}),
+-      ...(subId !== undefined ? { subId } : {}),
+-      ...(note !== undefined ? { note } : {}),
+-      ...(payee !== undefined ? { payee } : {}),
+-    },
+-    include: { subcategory: true }
+-  })
+-  res.json(updated)
++  try {
++    const updated = await updateTransaction(req.user.id, req.params.id, parsed.data)
++    res.json(updated)
++  } catch (e) { next(e) }
+ })
+ 
+-router.delete('/:id', async (req, res) => {
+-  const userId = req.user.id
+-  const id = req.params.id
+-  const tx = await prisma.transaction.findFirst({ where: { id, userId } })
+-  if (!tx) return res.status(404).json({ error: 'Not found' })
+-  await prisma.transaction.delete({ where: { id } })
+-  res.status(204).end()
++router.delete('/:id', async (req, res, next) => {
++  try {
++    await deleteTransaction(req.user.id, req.params.id)
++    res.status(204).end()
++  } catch (e) { next(e) }
+ })
+ 
+ export default router

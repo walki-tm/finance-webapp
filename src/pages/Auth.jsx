@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Card, CardContent, Label, Input, Button } from '../components/ui.jsx'
+import { Card, CardContent, Label, Input, Button } from '../components/ui'
 import { LogIn } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 

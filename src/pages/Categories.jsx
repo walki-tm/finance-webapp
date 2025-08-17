@@ -1,7 +1,7 @@
 // src/pages/Categories.jsx
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Card, CardContent, Input, Button, Switch } from "../components/ui.jsx";
+import { Card, CardContent, Input, Button, Switch } from "../components/ui";
 import { MAIN_CATS } from "../lib/constants.js";
 import { Check, X, MoreHorizontal, Save, ChevronDown } from "lucide-react";
 import SvgIcon from "../components/SvgIcon.jsx";
@@ -139,7 +139,7 @@ function getMainPalette(state) {
 /* -------- Menu Azioni (⋮) con portal + position:fixed -------- */
 function ActionsMenu({ onEdit, onRemove, onReset, disableRemove = false }) {
   const btnRef = useRef(null);
-  const menuRef = useRef(null); // <---- NEW
+  const menuRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
 
@@ -152,7 +152,6 @@ function ActionsMenu({ onEdit, onRemove, onReset, disableRemove = false }) {
     if (open) {
       place();
       const close = (e) => {
-        // NON chiudere se il click è sul bottone o dentro al menu
         const t = e.target;
         if (btnRef.current?.contains(t)) return;
         if (menuRef.current?.contains(t)) return;
@@ -196,17 +195,14 @@ function ActionsMenu({ onEdit, onRemove, onReset, disableRemove = false }) {
           ref={menuRef}
           className="fixed z-[9999] w-44 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl"
           style={{ top: pos.top, left: pos.left }}
-          // Blocca la propagazione così il listener su document NON chiude prima del click
           onMouseDown={(e) => e.stopPropagation()}
         >
           {onEdit && (
-            // usa onMouseDown per garantire l’esecuzione prima di unmount
             <button
               type="button"
               className={item}
               onMouseDown={() => {
                 setOpen(false);
-                // esegui dopo il close per evitare race
                 setTimeout(() => onEdit(), 0);
               }}
             >
@@ -310,9 +306,12 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
       if (!draft) return;
       const patch = {};
       const upName = (draft.name || "").toUpperCase();
-      if (upName !== m.name && m.key !== "income") patch.name = upName;
+      if (upName !== m.name) patch.name = upName;
       if (draft.color !== m.color) patch.color = draft.color;
-      if (draft.enabled !== m.enabled && m.key !== "income") patch.visible = draft.enabled;
+      // visibilità SOLO per custom (le core non hanno switch)
+      const isCore = CORE_KEYS.has(m.key);
+      if (!isCore && draft.enabled !== m.enabled) patch.visible = draft.enabled;
+
       if (Object.keys(patch).length) {
         updateMainCat(m.key, patch).catch(e => {
           toast.error("Errore salvataggio categoria", { description: String(e.message || e) });
@@ -329,7 +328,6 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
 
   function enterRowEdit(m) {
     if (editAll) return;
-    if (m.key === "income") return; // nome non modificabile
     setEditingKey(m.key);
     setNameDraft(m.name);
   }
@@ -360,7 +358,8 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
     }
   }
   function toggleEnabled(m, v) {
-    if (m.key === "income") return;
+    // per le 4 core non esiste lo switch
+    if (CORE_KEYS.has(m.key)) return;
     if (editAll) {
       setDraftMap(d => ({ ...d, [m.key]: { ...(d[m.key] || { name: m.name, color: m.color }), enabled: v } }));
     } else {
@@ -459,7 +458,7 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
                   const nameVal = (editAll ? draft.name : m.name) || "";
                   const colorVal = (editAll ? draft.color : m.color) || '#5B86E5';
                   const enabledVal = editAll ? draft.enabled : m.enabled;
-                  const isIncome = m.key === "income";
+                  const isCore = CORE_KEYS.has(m.key);
                   const isEditing = editingKey === m.key;
 
                   return (
@@ -475,9 +474,8 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
                         {editAll ? (
                           <Input
                             value={nameVal.toUpperCase()}
-                            disabled={isIncome}
                             onChange={(e) => setDraftMap(d => ({ ...d, [m.key]: { ...(d[m.key] || {}), name: e.target.value.toUpperCase() } }))}
-                            className={`font-semibold ${isIncome ? "opacity-60 cursor-not-allowed" : ""}`}
+                            className="font-semibold"
                           />
                         ) : isEditing ? (
                           <div className="flex items-center gap-2">
@@ -495,8 +493,8 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
                           </div>
                         ) : (
                           <span
-                            className={`font-semibold ${isIncome ? "" : "cursor-text"}`}
-                            title={isIncome ? "Il nome non è modificabile" : "Doppio clic per rinominare"}
+                            className="font-semibold cursor-text"
+                            title="Doppio clic per rinominare"
                             onDoubleClick={() => enterRowEdit(m)}
                           >
                             {nameVal.toUpperCase()}
@@ -515,7 +513,7 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
 
                       {/* Visibile */}
                       <td className="px-2 py-3">
-                        {isIncome ? (
+                        {isCore ? (
                           <span className="text-slate-400 dark:text-slate-500">—</span>
                         ) : (
                           <Switch
@@ -528,24 +526,17 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
 
                       {/* Azioni */}
                       <td className="px-2 py-3">
-                        {isIncome ? (
-                          <span className="text-slate-400 dark:text-slate-500">—</span>
-                        ) : (
-                          <ActionsMenu
-                            onEdit={() => enterRowEdit(m)}
-                            onRemove={!CORE_KEYS.has(m.key) ? async () => {
-                              const ok = await removeMainCat(m.key);
-                              if (ok) { 
-                                // niente toast rumoroso se vuoi, altrimenti:
-                                // toast.success("Categoria rimossa");
-                              } else {
-                                toast.error("Impossibile rimuovere la categoria");
-                              }
-                            } : undefined}
-                            onReset={CORE_KEYS.has(m.key) ? () => resetCore(m) : undefined}
-                            disableRemove={CORE_KEYS.has(m.key)}
-                          />
-                        )}
+                        <ActionsMenu
+                          onEdit={() => enterRowEdit(m)}
+                          onRemove={!isCore ? async () => {
+                            const ok = await removeMainCat(m.key);
+                            if (!ok) {
+                              toast.error("Impossibile rimuovere la categoria");
+                            }
+                          } : undefined}
+                          onReset={isCore ? () => resetCore(m) : undefined}
+                          disableRemove={isCore}
+                        />
                       </td>
                     </tr>
                   );

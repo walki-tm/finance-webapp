@@ -1,6 +1,6 @@
 // src/pages/Dashboard.jsx
 import React, { useMemo, useState, useEffect } from 'react';
-import { Card, CardContent, Badge, NativeSelect, Button } from '../components/ui.jsx';
+import { Card, CardContent, Badge, NativeSelect, Button } from '../components/ui';
 import { months, MAIN_CATS } from '../lib/constants.js';
 import { nice, alpha } from '../lib/utils.js';
 import {

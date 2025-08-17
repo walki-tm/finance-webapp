@@ -1,6 +1,6 @@
 // src/components/TransactionTable.jsx
 import React, { useState } from 'react';
-import { Button } from './ui.jsx';
+import { Button } from './ui';
 import { Pencil, Trash2, FileText, X } from 'lucide-react';
 import { MAIN_CATS } from '../lib/constants.js';
 import { nice } from '../lib/utils.js';

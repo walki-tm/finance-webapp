@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Card, CardContent, NativeSelect } from '../components/ui.jsx';
+import { Card, CardContent, NativeSelect } from '../components/ui';
 import TransactionTable from '../components/TransactionTable.jsx';
 import { MAIN_CATS, months } from '../lib/constants.js';
 import { ChevronLeft, ChevronRight } from 'lucide-react';

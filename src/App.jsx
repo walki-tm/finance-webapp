@@ -1,19 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { ToastProvider } from './components/Toast.jsx'
-import { Switch, Badge, NavItem } from './components/ui.jsx'
+import { Switch, Badge, NavItem } from './components/ui'
 import AuthScreens from './pages/Auth.jsx'
-import Dashboard from './pages/Dashboard.jsx'
-import Transactions from './pages/Transactions.jsx'
-import Categories from './pages/Categories.jsx'
-import Budgeting from './pages/Budgeting.jsx'
 import TransactionModal from './components/TransactionModal.jsx'
 import { MAIN_CATS } from './lib/constants.js'
 import { useAuth } from './context/AuthContext.jsx'
 import { api } from './lib/api'
+import { tabs } from './lib/tabs.js'
 
 import {
-  Layers3, LogOut, SunMedium, Moon, BarChart3, TrendingUp,
-  Settings as SettingsIcon, CalendarDays, User, Plus
+  Layers3, LogOut, SunMedium, Moon, User, Plus
 } from 'lucide-react'
 
 // Stato iniziale (dinamico)
@@ -287,6 +283,34 @@ export default function App() {
     return Object.values(byKey)
   }, [state.customMainCats, state.mainEnabled])
 
+  const tabProps = useMemo(() => ({
+    dashboard: {
+      state,
+      year,
+      onSelectMain: (key) => setDashDetail(prev => prev === key ? null : key),
+      detailMain: dashDetail,
+    },
+    transactions: {
+      state,
+      delTx: delTxApi,
+      openTxEditor: openEditTx,
+    },
+    categories: {
+      state,
+      addSubcat,
+      updateSubcat,
+      removeSubcat,
+      updateMainCat,
+      addMainCat,
+      removeMainCat,
+    },
+    budgeting: {
+      state,
+      year,
+      upsertBudget,
+    },
+  }), [state, year, dashDetail, setDashDetail, delTxApi, openEditTx, addSubcat, updateSubcat, removeSubcat, updateMainCat, addMainCat, removeMainCat, upsertBudget])
+
   return (
     <ToastProvider>
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
@@ -322,16 +346,17 @@ export default function App() {
               {/* Tabs */}
               <div className="flex items-center justify-between flex-wrap gap-2 bg-slate-200/60 dark:bg-slate-800/60 p-1 rounded-2xl">
                 <div className="flex flex-wrap gap-2">
-                  {['dashboard', 'transactions', 'categories', 'budgeting'].map((k) => (
+                  {tabs.map(({ key, label }) => (
                     <button
-                      key={k}
-                      onClick={() => setActiveTab(k)}
+                      key={key}
+                      onClick={() => setActiveTab(key)}
                       className={
                         'px-3 py-2 rounded-xl text-sm transition ' +
-                        (activeTab === k ? 'bg-white dark:bg-slate-900 shadow border border-slate-200/40'
+                        (activeTab === key
+                          ? 'bg-white dark:bg-slate-900 shadow border border-slate-200/40'
                           : 'hover:bg-white/40 dark:hover:bg-slate-900/40')
                       }>
-                      {{ dashboard: 'Dashboard', transactions: 'Transazioni', categories: 'Categorie', budgeting: 'Budgeting' }[k]}
+                      {label}
                     </button>
                   ))}
                 </div>
@@ -342,36 +367,11 @@ export default function App() {
               </div>
 
               <div className="mt-4">
-                {activeTab === 'dashboard' && (
-                  <Dashboard
-                    state={state}
-                    year={year}
-                    onSelectMain={(key) => setDashDetail(prev => prev === key ? null : key)}
-                    detailMain={dashDetail}
-                  />
-                )}
-
-                {activeTab === 'transactions' && (
-                  <Transactions
-                    state={state}
-                    delTx={delTxApi}
-                    openTxEditor={openEditTx}
-                  />
-                )}
-
-                {activeTab === 'categories' && (
-                  <Categories
-                    state={state}
-                    addSubcat={addSubcat}
-                    updateSubcat={updateSubcat}
-                    removeSubcat={removeSubcat}
-                    updateMainCat={updateMainCat}
-                    addMainCat={addMainCat}
-                    removeMainCat={removeMainCat}
-                  />
-                )}
-
                 {activeTab === 'budgeting' && <Budgeting state={state} year={year} upsertBudget={upsertBudget} />}
+                {tabs.map(({ key, component: Component }) => {
+                  if (activeTab !== key) return null;
+                  return <Component key={key} {...tabProps[key]} />;
+                })}
               </div>
             </>
           )}
@@ -386,10 +386,14 @@ export default function App() {
                 <Layers3 className="h-5 w-5" /> Menu
               </div>
               <div className="space-y-3">
-                <NavItem icon={BarChart3} label="Dashboard" onClick={() => { setActiveTab('dashboard'); setMenuOpen(false) }} />
-                <NavItem icon={TrendingUp} label="Transazioni" onClick={() => { setActiveTab('transactions'); setMenuOpen(false) }} />
-                <NavItem icon={SettingsIcon} label="Categorie" onClick={() => { setActiveTab('categories'); setMenuOpen(false) }} />
-                <NavItem icon={CalendarDays} label="Budgeting" onClick={() => { setActiveTab('budgeting'); setMenuOpen(false) }} />
+                {tabs.map(({ key, label, icon: Icon }) => (
+                  <NavItem
+                    key={key}
+                    icon={Icon}
+                    label={label}
+                    onClick={() => { setActiveTab(key); setMenuOpen(false) }}
+                  />
+                ))}
                 <NavItem icon={User} label="Impostazioni (coming soon)" onClick={() => setMenuOpen(false)} />
               </div>
             </div>

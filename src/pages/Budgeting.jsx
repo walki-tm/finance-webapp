@@ -1,6 +1,6 @@
 // src/pages/Budgeting.jsx
 import React, { useMemo, useState } from 'react';
-import { Card, CardContent, Label, Input, NativeSelect } from '../components/ui.jsx';
+import { Card, CardContent, Label, Input, NativeSelect } from '../components/ui';
 import { MAIN_CATS } from '../lib/constants.js';
 import { nice } from '../lib/utils.js';
 import SvgIcon from '../components/SvgIcon.jsx';

@@ -1,7 +1,7 @@
 // src/components/IconBrowserModal.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Input } from "./ui.jsx";
+import { Input } from "./ui";
 import SvgIcon from "./SvgIcon.jsx";
 
 function hexToRgba(hex, a = 1) {
