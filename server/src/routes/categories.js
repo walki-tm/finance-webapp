@@ -17,7 +17,7 @@ const categorySchema = z.object({
 })
 
 const categoryPatchSchema = z.object({
-  // NB: NON permettiamo di cambiare la MAIN con una PATCH (opzionale: abilitalo se ti serve)
+  // NB: non permettiamo di cambiare la MAIN con una PATCH
   name: z.string().min(1).max(80).optional(),
   iconKey: z.string().nullable().optional(),
   colorHex: z.string().nullable().optional(),
@@ -49,17 +49,17 @@ router.get('/', async (req, res) => {
 })
 
 // POST nuova categoria
-router.post('/', async (req, res) => {
+router.post('/', async (req, res, next) => {
   const parsed = categorySchema.safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ error: 'Invalid body' })
   const userId = req.user.id
 
   try {
     const created = await prisma.category.create({ data: { userId, ...parsed.data } })
-    res.status(201).json(created)
+    return res.status(201).json(created)
   } catch (e) {
     if (e.code === 'P2002') return res.status(409).json({ error: 'Category already exists' })
-    throw e
+    return next(e)
   }
 })
 
@@ -111,24 +111,64 @@ router.put('/sub/:id', async (req, res) => {
   res.json(updated)
 })
 
-// DELETE categoria
-router.delete('/:id', async (req, res) => {
+// DELETE categoria (cascade sulle sub + setNull transazioni collegate)
+router.delete('/:id', async (req, res, next) => {
   const userId = req.user.id
   const id = req.params.id
-  const cat = await prisma.category.findFirst({ where: { id, userId } })
+
+  const cat = await prisma.category.findFirst({
+    where: { id, userId },
+    include: { subcats: { select: { id: true } } }
+  })
   if (!cat) return res.status(404).json({ error: 'Not found' })
-  await prisma.category.delete({ where: { id } })
-  res.status(204).end()
+
+  const subIds = cat.subcats.map(s => s.id)
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (subIds.length) {
+        // azzera subId nelle transazioni dell’utente collegate alle sub che stiamo togliendo
+        await tx.transaction.updateMany({
+          where: { userId, subId: { in: subIds } },
+          data: { subId: null }
+        })
+        // elimina le sub dell’utente per quella categoria
+        await tx.subcategory.deleteMany({
+          where: { userId, id: { in: subIds } }
+        })
+      }
+      // elimina la categoria
+      await tx.category.delete({ where: { id } })
+    })
+
+    return res.status(204).end()
+  } catch (e) {
+    return next(e)
+  }
 })
 
-// DELETE sottocategoria
-router.delete('/sub/:id', async (req, res) => {
+// DELETE sottocategoria (setNull transazioni collegate)
+router.delete('/sub/:id', async (req, res, next) => {
   const userId = req.user.id
   const id = req.params.id
+
   const sub = await prisma.subcategory.findFirst({ where: { id, userId } })
   if (!sub) return res.status(404).json({ error: 'Not found' })
-  await prisma.subcategory.delete({ where: { id } })
-  res.status(204).end()
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      // prima nullo nelle transazioni dell’utente
+      await tx.transaction.updateMany({
+        where: { userId, subId: id },
+        data: { subId: null }
+      })
+      // poi elimina la sub
+      await tx.subcategory.delete({ where: { id } })
+    })
+    return res.status(204).end()
+  } catch (e) {
+    return next(e)
+  }
 })
 
 export default router

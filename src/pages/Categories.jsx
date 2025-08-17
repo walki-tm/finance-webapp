@@ -139,6 +139,7 @@ function getMainPalette(state) {
 /* -------- Menu Azioni (⋮) con portal + position:fixed -------- */
 function ActionsMenu({ onEdit, onRemove, onReset, disableRemove = false }) {
   const btnRef = useRef(null);
+  const menuRef = useRef(null); // <---- NEW
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
 
@@ -150,8 +151,15 @@ function ActionsMenu({ onEdit, onRemove, onReset, disableRemove = false }) {
     }
     if (open) {
       place();
-      const close = (e) => { if (!(btnRef.current && btnRef.current.contains(e.target))) setOpen(false); };
+      const close = (e) => {
+        // NON chiudere se il click è sul bottone o dentro al menu
+        const t = e.target;
+        if (btnRef.current?.contains(t)) return;
+        if (menuRef.current?.contains(t)) return;
+        setOpen(false);
+      };
       const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+
       window.addEventListener("resize", place);
       window.addEventListener("scroll", place, true);
       document.addEventListener("mousedown", close);
@@ -185,18 +193,35 @@ function ActionsMenu({ onEdit, onRemove, onReset, disableRemove = false }) {
 
       {open && createPortal(
         <div
+          ref={menuRef}
           className="fixed z-[9999] w-44 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl"
           style={{ top: pos.top, left: pos.left }}
+          // Blocca la propagazione così il listener su document NON chiude prima del click
+          onMouseDown={(e) => e.stopPropagation()}
         >
           {onEdit && (
-            <button type="button" className={item}
-              onClick={() => { setOpen(false); setTimeout(() => onEdit(), 0); }}>
+            // usa onMouseDown per garantire l’esecuzione prima di unmount
+            <button
+              type="button"
+              className={item}
+              onMouseDown={() => {
+                setOpen(false);
+                // esegui dopo il close per evitare race
+                setTimeout(() => onEdit(), 0);
+              }}
+            >
               Modifica
             </button>
           )}
           {onReset && (
-            <button type="button" className={item}
-              onClick={() => { setOpen(false); setTimeout(() => onReset(), 0); }}>
+            <button
+              type="button"
+              className={item}
+              onMouseDown={() => {
+                setOpen(false);
+                setTimeout(() => onReset(), 0);
+              }}
+            >
               Ripristina
             </button>
           )}
@@ -205,7 +230,11 @@ function ActionsMenu({ onEdit, onRemove, onReset, disableRemove = false }) {
               type="button"
               disabled={disableRemove}
               className={`${removeItem} ${disableRemove ? "opacity-40 cursor-not-allowed" : ""}`}
-              onClick={() => { if (disableRemove) return; setOpen(false); setTimeout(() => onRemove(), 0); }}
+              onMouseDown={() => {
+                if (disableRemove) return;
+                setOpen(false);
+                setTimeout(() => onRemove(), 0);
+              }}
             >
               Rimuovi
             </button>
@@ -216,6 +245,7 @@ function ActionsMenu({ onEdit, onRemove, onReset, disableRemove = false }) {
     </>
   );
 }
+
 
 /* ===================== TAB 1 — Categorie Main ===================== */
 function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) {

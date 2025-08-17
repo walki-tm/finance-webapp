@@ -68,8 +68,11 @@ model Transaction {
 
   User User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  subcategory Subcategory? @relation(fields: [subId], references: [id])
+  // quando una Subcategory viene cancellata, vogliamo mantenere la Transaction
+  // e semplicemente azzerare il riferimento
+  subcategory Subcategory? @relation(fields: [subId], references: [id], onDelete: SetNull)
 
   @@index([userId, date])
   @@index([userId, main])
+  @@index([subId])
 }

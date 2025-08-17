@@ -2,12 +2,17 @@
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 async function request(path, method = "GET", token, body) {
+  const headers = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  // Imposta il Content-Type SOLO se invii un body
+  if (body !== undefined && body !== null) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const res = await fetch(`${API_URL}${path}`, {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
 
