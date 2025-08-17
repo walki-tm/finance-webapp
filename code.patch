@@ -1,0 +1,253 @@
+diff --git a/src/pages/Categories.jsx b/src/pages/Categories.jsx
+index 5bd624c21047e28a525b5f29f6821531705deec9..e56aca1667109e95016fc58bc8e5596ec736a904 100644
+--- a/src/pages/Categories.jsx
++++ b/src/pages/Categories.jsx
+@@ -490,91 +490,90 @@ function TabSubcategories({
+   const [iconModalOpen, setIconModalOpen] = useState(false);
+   const [iconModalTarget, setIconModalTarget] = useState(null);
+ 
+   const mainObj = [...core, ...customs].find(m => m.key === main) || core[0];
+   const mainColor = mainObj.color;
+   const entries = state.subcats?.[main] || [];
+ 
+   // ===== Modifica generale (draft locale) =====
+   const [editAll, setEditAll] = useState(false);
+   const [draftRows, setDraftRows] = useState([]);
+   const [editingRow, setEditingRow] = useState(null);
+ 
+   const entriesMemo = useMemo(()=>entries, [entries]);
+ 
+   function startEditAll(){
+     setDraftRows(entriesMemo.map(r=>({ ...r })));
+     setEditAll(true);
+     setEditingRow(null);
+   }
+   function cancelEditAll(){
+     setEditAll(false);
+     setDraftRows([]);
+   }
+   function saveEditAll(){
+     draftRows.forEach(d => {
+-      const orig = d._origName && d._origName !== d.name ? d._origName : d.name;
+-      updateSubcat(main, orig, { name: toTitleCase(d.name), iconKey: d.iconKey });
++      updateSubcat(main, d.id, { name: toTitleCase(d.name), iconKey: d.iconKey });
+     });
+     setEditAll(false);
+     setDraftRows([]);
+   }
+ 
+   function addInlineRow(){
+     const newName = toTitleCase(`nuova ${entries.length + 1}`);
+     if (editAll){
+       setDraftRows(rs=>[...rs, { name:newName, iconKey:"wallet" }]);
+     } else {
+       addSubcat(main, { name:newName, iconKey:"wallet" });
+       setEditingRow(newName);
+     }
+   }
+ 
+-  function openIconFor(subName){
+-    setIconModalTarget({ subName });
++  function openIconFor(subId){
++    setIconModalTarget({ subId });
+     setIconModalOpen(true);
+   }
+   const closeIcon = () => { setIconModalOpen(false); setIconModalTarget(null); };
+ 
+-  function setIcon(subName, iconKey){
++  function setIcon(subId, iconKey){
+     if (editAll){
+-      setDraftRows(rs=>rs.map(r=> r.name===subName ? { ...r, iconKey } : r));
++      setDraftRows(rs=>rs.map(r=> r.id===subId ? { ...r, iconKey } : r));
+     } else {
+-      updateSubcat(main, subName, { iconKey });
++      updateSubcat(main, subId, { iconKey });
+     }
+   }
+ 
+   function beginRowEdit(sc){
+     if (editAll) return;
+-    setEditingRow(sc.name);
++    setEditingRow(sc.id);
+   }
+   function cancelRowEdit(){
+     setEditingRow(null);
+   }
+-  function saveRowEdit(oldName, inputEl){
++  function saveRowEdit(id, inputEl){
+     const nv = toTitleCase(inputEl.value.trim());
+-    if (nv && nv !== oldName) updateSubcat(main, oldName, { name: nv });
++    if (nv) updateSubcat(main, id, { name: nv });
+     setEditingRow(null);
+   }
+ 
+   const rowsView = editAll ? draftRows : entries;
+ 
+   return (
+     <div className="space-y-4">
+       <div className="text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
+         In <b>Modifica</b> generale confermi con <b>Salva</b> in alto. In modifica singola: <b>Enter</b> salva, <b>Esc</b> annulla.
+         I nomi vengono sempre in <b>Title Case e grassetto</b>.
+       </div>
+ 
+       <Card>
+         <CardContent>
+           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+             <div className="flex flex-wrap items-center gap-3">
+               {core.map(m => {
+                 const selected = m.key === main;
+                 return (
+                   <button
+                     key={m.key}
+                     type="button"
+                     onClick={() => { setMain(m.key); setCustomSel(""); }}
+                     className={`rounded-lg transition-transform ${selected ? "" : "hover:opacity-90"}`}
+                     style={{ transform: selected ? "scale(1.06)" : "scale(1)" }}
+diff --git a/src/pages/Categories.jsx b/src/pages/Categories.jsx
+index 5bd624c21047e28a525b5f29f6821531705deec9..e56aca1667109e95016fc58bc8e5596ec736a904 100644
+--- a/src/pages/Categories.jsx
++++ b/src/pages/Categories.jsx
+@@ -612,133 +611,133 @@ function TabSubcategories({
+                   >
+                     Annulla
+                   </button>
+                   <button
+                     onClick={saveEditAll}
+                     className="px-3 py-2 rounded-xl text-sm bg-gradient-to-tr from-sky-600 to-indigo-600 text-white hover:opacity-90 inline-flex items-center gap-2"
+                   >
+                     <Save className="h-4 w-4"/><span>Salva</span>
+                   </button>
+                 </>
+               )}
+             </div>
+           </div>
+ 
+           <div className="overflow-auto rounded-xl border border-slate-200/20">
+             <table className="w-full text-sm">
+               <thead className="bg-slate-100 dark:bg-slate-800">
+                 <tr>
+                   <th className="text-left px-2 py-3 w-12">Icona</th>
+                   <th className="text-left px-2 py-3">Nome</th>
+                   <th className="text-left px-2 py-3 w-24">Azioni</th>
+                 </tr>
+               </thead>
+               <tbody className="text-[#444] dark:text-slate-200">
+                 {rowsView.map(sc => {
+-                  const isEditing = !editAll && editingRow === sc.name;
++                  const isEditing = !editAll && (editingRow === sc.id || editingRow === sc.name);
+                   const titleName = toTitleCase(sc.name);
+                   return (
+-                    <tr key={sc.name} className="border-t border-slate-200/10 hover:bg-slate-50 dark:hover:bg-slate-800/40">
++                    <tr key={sc.id} className="border-t border-slate-200/10 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                       <td className="px-2 py-3">
+                         <button
+                           type="button"
+                           title="Cambia icona"
+                           className="rounded-lg px-1 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
+                           onMouseDown={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
+                           onClick={(e) => {
+                             e.preventDefault();
+                             e.stopPropagation();
+-                            openIconFor(sc.name);
++                            openIconFor(sc.id);
+                           }}
+                         >
+                           <SvgIcon name={sc.iconKey} color={mainColor} size={22} />
+                         </button>
+                       </td>
+ 
+                       <td className="px-2 py-3 align-middle">
+                         {editAll ? (
+                           <Input
+                             value={titleName}
+                             onChange={(e)=>{
+                               const nv = toTitleCase(e.target.value);
+                               setDraftRows(rs=>rs.map(r=>{
+-                                if (r.name === sc.name) {
+-                                  return { ...r, name: nv, _origName: r._origName || sc.name };
++                                if (r.id === sc.id) {
++                                  return { ...r, name: nv };
+                                 }
+                                 return r;
+                               }));
+                             }}
+                             className="font-semibold"
+                           />
+                         ) : isEditing ? (
+                           <div className="flex items-center gap-2">
+                             <Input
+                               defaultValue={titleName}
+                               autoFocus
+                               onKeyDown={(e)=>{
+-                                if (e.key === "Enter") saveRowEdit(sc.name, e.currentTarget);
++                                if (e.key === "Enter") saveRowEdit(sc.id, e.currentTarget);
+                                 if (e.key === "Escape") cancelRowEdit();
+                               }}
+                               className="font-semibold"
+                             />
+-                            <Button size="sm" onClick={(e)=>saveRowEdit(sc.name, { value: e.currentTarget.parentElement.querySelector('input').value })}><Check className="h-4 w-4"/></Button>
++                            <Button size="sm" onClick={(e)=>saveRowEdit(sc.id, { value: e.currentTarget.parentElement.querySelector('input').value })}><Check className="h-4 w-4"/></Button>
+                             <Button size="sm" variant="ghost" onClick={cancelRowEdit}><X className="h-4 w-4"/></Button>
+                           </div>
+                         ) : (
+                           <span className="font-semibold" onDoubleClick={()=>beginRowEdit(sc)} title="Doppio clic per rinominare">
+                             {titleName}
+                           </span>
+                         )}
+                       </td>
+ 
+                       <td className="px-2 py-3">
+                         {!editAll ? (
+                           <ActionsMenu
+                             onEdit={()=>beginRowEdit(sc)}
+-                            onRemove={()=>removeSubcat(main, sc.name)}
++                            onRemove={()=>removeSubcat(main, sc.id)}
+                           />
+                         ) : (
+                           <span className="text-slate-400 dark:text-slate-500 text-xs"></span>
+                         )}
+                       </td>
+                     </tr>
+                   );
+                 })}
+                 {rowsView.length === 0 && (
+                   <tr><td className="p-4 text-center text-slate-500" colSpan={3}>Nessuna sottocategoria</td></tr>
+                 )}
+               </tbody>
+             </table>
+           </div>
+ 
+           <IconBrowserModal
+             open={iconModalOpen}
+             onClose={closeIcon}
+             tintColor={mainColor}
+             onPick={(key) => {
+-              if (!iconModalTarget?.subName) return;
+-              setIcon(iconModalTarget.subName, key);
++              if (!iconModalTarget?.subId) return;
++              setIcon(iconModalTarget.subId, key);
+             }}
+           />
+         </CardContent>
+       </Card>
+     </div>
+   );
+ }
+ 
+ /* ===================== Pagina ===================== */
+ export default function Categories({
+   state,
+   addSubcat, updateSubcat, removeSubcat,
+   updateMainCat, addMainCat, removeMainCat,
+ }) {
+   const [tab, setTab] = useState("main");
+ 
+   return (
+     <ErrorBoundary>
+       <div className="space-y-6">
+         <div className="flex gap-2">
+           <button
+             onClick={() => setTab("main")}
+             className={`px-3 py-2 rounded-xl text-sm transition
+               ${tab==="main"
+                 ? "bg-gradient-to-tr from-sky-600 to-indigo-600 text-white"

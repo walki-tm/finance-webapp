@@ -1,0 +1,34 @@
+# QUANDO QUALCUNO TI MANDA UN FILE .patch (DI SOLITO CONTIENE DIFFERENZE GIT)
+# PUOI APPLICARLO ALLA TUA REPO LOCALE
+
+# 1) VERIFICA IL CONTENUTO DELLA PATCH (NON MODIFICA NULLA)
+git apply --stat file.patch
+
+# 2) CONTROLLA SE SI APPLICA PULITA (SIMULAZIONE)
+git apply --check file.patch
+
+# 3) APPLICA LA PATCH (LOCALE, NON ANCORA COMMITTATA)
+git apply file.patch
+
+# ORA I FILE SONO MODIFICATI -> VEDI CON 'git status'
+# SE TUTTO OK, FAI COMMIT COME SEMPRE
+git add .
+git commit -m "applica patch: fix XYZ"
+git push
+
+# ------------------------
+
+# SE LA PATCH È STATA CREATA CON 'git format-patch' (INCLUDE METADATI DEL COMMIT)
+# PUOI USARE 'git am' (CREA AUTOMATICAMENTE I COMMIT)
+git am file.patch
+
+# ------------------------
+
+# PER GENERARE UNA PATCH DA UN TUO COMMIT (DA INVIARE A QUALCUNO)
+git format-patch -1 <ID_COMMIT>
+
+# PER PIÙ COMMITS
+git format-patch <ID_INIZIALE>..<ID_FINALE>
+
+# PER GENERARE PATCH DALLE MODIFICHE NON COMMITTATE
+git diff > file.patch
