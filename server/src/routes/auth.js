@@ -8,6 +8,7 @@ import { z } from 'zod'
 const router = Router()
 
 const credsSchema = z.object({
+  name: z.string().min(3).max(16), 
   email: z.string().email(),
   password: z.string().min(6).max(100),
 })
@@ -30,7 +31,7 @@ const DEFAULT_CATEGORIES = [
   {
     main: 'EXPENSE',
     name: 'Spese',
-    colorHex: '#ED4870',
+    colorHex: '#24B7DB',
     iconKey: 'shop2',
     subcats: [
       { name: 'Abitazione',   iconKey: 'home'  },
@@ -56,7 +57,7 @@ const DEFAULT_CATEGORIES = [
   {
     main: 'DEBT',
     name: 'Debiti',
-    colorHex: '#24B7DB',
+    colorHex: '#ED4870',
     iconKey: 'creditcard',
     subcats: [
       { name: 'Mutuo',             iconKey: 'home'       },
@@ -72,17 +73,20 @@ router.post('/register', async (req, res) => {
   try {
     const parsed = credsSchema.safeParse(req.body)
     if (!parsed.success) return res.status(400).json({ error: 'Invalid body' })
-    const email = parsed.data.email.trim().toLowerCase()
-    const password = parsed.data.password
 
+    const { name, email: rawEmail, password } = parsed.data
+    const email = rawEmail.trim().toLowerCase()
+
+    // opzionale: controlla duplicati email (e name se @unique)
     const existing = await prisma.user.findUnique({ where: { email } })
     if (existing) return res.status(409).json({ error: 'Email already registered' })
 
     const hash = await bcrypt.hash(password, 10)
 
-    // transazione atomica: crea user + categorie + sottocategorie
     const user = await prisma.$transaction(async (tx) => {
-      const u = await tx.user.create({ data: { email, password: hash } })
+      const u = await tx.user.create({
+        data: { email, password: hash, name },   // <- PASSA name
+      })
 
       for (const cat of DEFAULT_CATEGORIES) {
         await tx.category.create({
@@ -112,8 +116,14 @@ router.post('/register', async (req, res) => {
       { expiresIn: '7d' }
     )
 
-    res.status(201).json({ token, user: { id: user.id, email: user.email } })
+    // includi name nella risposta se ti serve lato FE
+    res.status(201).json({ token, user: { id: user.id, email: user.email, name: user.name } })
   } catch (err) {
+    // mappa violazioni unique (email o name se @unique)
+    if (err?.code === 'P2002') {
+      const target = Array.isArray(err.meta?.target) ? err.meta.target.join(',') : 'unique'
+      return res.status(409).json({ error: `Duplicate ${target}` })
+    }
     console.error('Register error:', err)
     res.status(500).json({ error: 'Unable to register user' })
   }
@@ -122,7 +132,7 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const parsed = credsSchema.safeParse(req.body)
-    if (!parsed.success) return res.status(400).json({ error: 'Invalid body' })
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid credentials' })
     const email = parsed.data.email.trim().toLowerCase()
     const password = parsed.data.password
 

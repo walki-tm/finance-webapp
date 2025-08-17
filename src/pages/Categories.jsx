@@ -6,13 +6,15 @@ import { MAIN_CATS } from "../lib/constants.js";
 import { Check, X, MoreHorizontal, Save, ChevronDown } from "lucide-react";
 import SvgIcon from "../components/SvgIcon.jsx";
 import IconBrowserModal from "../components/IconBrowserModal.jsx";
+import ColorPicker from "../components/ColorPicker.jsx";
+import { useToast } from "../components/Toast.jsx";
 
 /* ---------------- Error boundary ---------------- */
 class ErrorBoundary extends React.Component {
-  constructor(props){ super(props); this.state = { hasError:false, error:null }; }
-  static getDerivedStateFromError(error){ return { hasError:true, error }; }
-  render(){
-    if(this.state.hasError){
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  render() {
+    if (this.state.hasError) {
       return (
         <div className="p-4 m-4 rounded-xl border border-red-300 bg-red-50 text-red-800">
           <div className="font-bold mb-1">Qualcosa è andato storto in Categories.</div>
@@ -36,7 +38,7 @@ function hexToRgba(hex, a = 1) {
   const b = parseInt(v.slice(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
-function toTitleCase(s=""){
+function toTitleCase(s = "") {
   return s
     .toLowerCase()
     .split(" ")
@@ -44,16 +46,16 @@ function toTitleCase(s=""){
     .map(w => w[0]?.toUpperCase() + w.slice(1))
     .join(" ");
 }
-const CORE_KEYS = new Set(MAIN_CATS.map(m=>m.key));
-const CORE_DEFAULT = Object.fromEntries(MAIN_CATS.map(m=>[m.key, {name:m.name, color:m.color}]));
+const CORE_KEYS = new Set(MAIN_CATS.map(m => m.key));
+const CORE_DEFAULT = Object.fromEntries(MAIN_CATS.map(m => [m.key, { name: m.name, color: m.color }]));
 
 /* Badge categoria (main) */
 function CategoryBadge({ color, children, size = "md" }) {
   const dark = isDark();
   const pad =
     size === "sm" ? "px-2 py-[7px] text-xs"
-    : size === "lg" ? "px-3 py-2 text-base"
-    : "px-2.5 py-1.5 text-sm";
+      : size === "lg" ? "px-3 py-2 text-base"
+        : "px-2.5 py-1.5 text-sm";
   return (
     <span
       className={`inline-flex items-center font-bold uppercase tracking-wide rounded-lg ${pad}`}
@@ -78,11 +80,11 @@ function CustomMainDropdown({ customs = [], value, onChange }) {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="rounded-xl px-3 py-2 min-w-[220px] flex items-center justify-center border-2 transition hover:bg-slate-50 dark:hover:bg-slate-800/60"
-        style={{
-          borderColor: sel ? sel.color : "rgba(100,116,139,.65)",
-          backgroundColor: sel ? hexToRgba(sel.color, 0.14) : (isDark() ? "rgba(148,163,184,.08)" : "#fff")
-        }}
+        className={`rounded-xl px-3 py-2 min-w-[220px] flex items-center justify-center border-2 transition
+              bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800
+              ${sel ? '' : 'border-slate-400/70'}
+  `}
+        style={sel ? { borderColor: sel.color, backgroundColor: hexToRgba(sel.color, isDark() ? 0.14 : 0.1) } : {}}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -134,8 +136,8 @@ function getMainPalette(state) {
   return { core, customs, all: [...core, ...customs] };
 }
 
-/* -------- Menu Azioni (⋮) con portal + position:fixed (niente clipping) -------- */
-function ActionsMenu({ onEdit, onRemove, onReset, disableRemove=false }) {
+/* -------- Menu Azioni (⋮) con portal + position:fixed -------- */
+function ActionsMenu({ onEdit, onRemove, onReset, disableRemove = false }) {
   const btnRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
@@ -144,7 +146,6 @@ function ActionsMenu({ onEdit, onRemove, onReset, disableRemove=false }) {
     function place() {
       if (!btnRef.current) return;
       const r = btnRef.current.getBoundingClientRect();
-      // menu largo 176px circa → allineo a destra del bottone
       setPos({ top: r.bottom + 6, left: Math.max(8, r.right - 176) });
     }
     if (open) {
@@ -164,13 +165,17 @@ function ActionsMenu({ onEdit, onRemove, onReset, disableRemove=false }) {
     }
   }, [open]);
 
+  const baseItem = "w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800";
+  const item = baseItem + " text-slate-700 dark:text-slate-100";
+  const removeItem = baseItem + " text-rose-600 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-500/10";
+
   return (
     <>
       <button
         type="button"
         ref={btnRef}
         className="rounded-xl px-2 py-2 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
-        onClick={() => setOpen(o=>!o)}
+        onClick={() => setOpen(o => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
         title="Azioni"
@@ -184,20 +189,14 @@ function ActionsMenu({ onEdit, onRemove, onReset, disableRemove=false }) {
           style={{ top: pos.top, left: pos.left }}
         >
           {onEdit && (
-            <button
-              type="button"
-              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
-              onClick={()=>{ setOpen(false); onEdit(); }}
-            >
+            <button type="button" className={item}
+              onClick={() => { setOpen(false); setTimeout(() => onEdit(), 0); }}>
               Modifica
             </button>
           )}
           {onReset && (
-            <button
-              type="button"
-              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
-              onClick={()=>{ setOpen(false); onReset(); }}
-            >
+            <button type="button" className={item}
+              onClick={() => { setOpen(false); setTimeout(() => onReset(), 0); }}>
               Ripristina
             </button>
           )}
@@ -205,8 +204,8 @@ function ActionsMenu({ onEdit, onRemove, onReset, disableRemove=false }) {
             <button
               type="button"
               disabled={disableRemove}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 ${disableRemove ? "opacity-40 cursor-not-allowed" : "text-rose-600 dark:text-rose-400"}`}
-              onClick={()=>{ if(disableRemove) return; setOpen(false); onRemove(); }}
+              className={`${removeItem} ${disableRemove ? "opacity-40 cursor-not-allowed" : ""}`}
+              onClick={() => { if (disableRemove) return; setOpen(false); setTimeout(() => onRemove(), 0); }}
             >
               Rimuovi
             </button>
@@ -220,6 +219,7 @@ function ActionsMenu({ onEdit, onRemove, onReset, disableRemove=false }) {
 
 /* ===================== TAB 1 — Categorie Main ===================== */
 function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) {
+  const toast = useToast();
   const core = MAIN_CATS.map(m => ({ ...m, core: true }));
   const overridesMap = Object.fromEntries((state.customMainCats || []).map(c => [c.key, c]));
   const effectiveCore = core.map(m => ({ ...m, ...(overridesMap[m.key] || {}) }));
@@ -232,13 +232,26 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
     enabled: state.mainEnabled?.[m.key] !== false,
   }));
 
+  // Helpers duplicati + nome unico
+  function mainNameExists(UPPER_NAME, exceptKey = null) {
+    const u = (UPPER_NAME || "").trim().toUpperCase();
+    return merged.some(m => m.key !== exceptKey && (m.name || "").trim().toUpperCase() === u);
+  }
+  function uniqueMainName(base = "NUOVA CATEGORIA") {
+    const baseUp = (base || "").trim().toUpperCase();
+    if (!mainNameExists(baseUp)) return baseUp;
+    let n = 2;
+    while (mainNameExists(`${baseUp} (${n})`)) n++;
+    return `${baseUp} (${n})`;
+  }
+
   // ===== Modifica generale (draft locale) =====
   const [editAll, setEditAll] = useState(false);
   const [draftMap, setDraftMap] = useState({});
   const [editingKey, setEditingKey] = useState(null); // inline row (singola)
 
-  function startEditAll(){
-    const init = Object.fromEntries(merged.map(m=>[
+  function startEditAll() {
+    const init = Object.fromEntries(merged.map(m => [
       m.key,
       { name: m.name, color: m.color, enabled: m.enabled }
     ]));
@@ -246,66 +259,95 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
     setEditAll(true);
     setEditingKey(null);
   }
-  function cancelEditAll(){
+  function cancelEditAll() {
     setEditAll(false);
     setDraftMap({});
   }
-  function saveEditAll(){
-    merged.forEach(m=>{
+  function saveEditAll() {
+    // validazione duplicati
+    const seen = new Set();
+    for (const k of Object.keys(draftMap)) {
+      const n = (draftMap[k]?.name || "").trim().toUpperCase();
+      if (!n) continue;
+      if (seen.has(n) || mainNameExists(n, k)) {
+        toast.error("Nome categoria duplicato", { description: `La categoria "${n}" esiste già.` });
+        return;
+      }
+      seen.add(n);
+    }
+    merged.forEach(m => {
       const draft = draftMap[m.key];
       if (!draft) return;
       const patch = {};
-      // nome in maiuscolo
       const upName = (draft.name || "").toUpperCase();
       if (upName !== m.name && m.key !== "income") patch.name = upName;
       if (draft.color !== m.color) patch.color = draft.color;
-      if (draft.enabled !== m.enabled && m.key !== "income") patch.enabled = draft.enabled;
-      if (Object.keys(patch).length) updateMainCat(m.key, patch);
+      if (draft.enabled !== m.enabled && m.key !== "income") patch.visible = draft.enabled;
+      if (Object.keys(patch).length) {
+        updateMainCat(m.key, patch).catch(e => {
+          toast.error("Errore salvataggio categoria", { description: String(e.message || e) });
+        });
+      }
     });
     setEditAll(false);
     setDraftMap({});
+    toast.success("Categorie aggiornate");
   }
 
   // ===== Modifica singola (inline) =====
   const [nameDraft, setNameDraft] = useState("");
 
-  function enterRowEdit(m){
+  function enterRowEdit(m) {
     if (editAll) return;
     if (m.key === "income") return; // nome non modificabile
     setEditingKey(m.key);
     setNameDraft(m.name);
   }
-  function cancelRowEdit(){
+  function cancelRowEdit() {
     setEditingKey(null);
   }
-  function saveRowEdit(m){
+  function saveRowEdit(m) {
     const nv = nameDraft.trim().toUpperCase();
-    if (nv && nv !== m.name) updateMainCat(m.key, { name: nv });
+    if (!nv || nv === m.name) { setEditingKey(null); return; }
+    if (mainNameExists(nv, m.key)) {
+      toast.error("Nome categoria duplicato", { description: `"${nv}" esiste già.` });
+      return;
+    }
+    updateMainCat(m.key, { name: nv })
+      .then(() => toast.success("Categoria aggiornata"))
+      .catch(e => toast.error("Errore aggiornamento", { description: String(e.message || e) }));
     setEditingKey(null);
   }
 
-  function changeColor(m, val){
-    if (editAll){
-      setDraftMap(d=>({ ...d, [m.key]: { ...(d[m.key]||{ name:m.name, enabled:m.enabled }), color: val } }));
+  function changeColor(m, val) {
+    if (editAll) {
+      setDraftMap(d => ({ ...d, [m.key]: { ...(d[m.key] || { name: m.name, enabled: m.enabled }), color: val } }));
     } else {
-      if (val && val !== m.color) updateMainCat(m.key, { color: val });
+      if (val && val !== m.color) {
+        updateMainCat(m.key, { color: val })
+          .catch(e => toast.error("Errore colore", { description: String(e.message || e) }));
+      }
     }
   }
-  function toggleEnabled(m, v){
+  function toggleEnabled(m, v) {
     if (m.key === "income") return;
-    if (editAll){
-      setDraftMap(d=>({ ...d, [m.key]: { ...(d[m.key]||{ name:m.name, color:m.color }), enabled: v } }));
+    if (editAll) {
+      setDraftMap(d => ({ ...d, [m.key]: { ...(d[m.key] || { name: m.name, color: m.color }), enabled: v } }));
     } else {
-      updateMainCat(m.key, { enabled: v });
+      updateMainCat(m.key, { visible: v })
+        .catch(e => toast.error("Errore visibilità", { description: String(e.message || e) }));
     }
   }
-  function resetCore(m){
+  function resetCore(m) {
     const def = CORE_DEFAULT[m.key];
     if (!def) return;
-    if (editAll){
-      setDraftMap(d=>({ ...d, [m.key]: { ...(d[m.key]||{}), name: def.name.toUpperCase(), color: def.color } }));
+    const payload = { name: def.name.toUpperCase(), color: def.color, visible: true };
+    if (editAll) {
+      setDraftMap(d => ({ ...d, [m.key]: { ...(d[m.key] || {}), ...payload } }));
     } else {
-      updateMainCat(m.key, { name: def.name.toUpperCase(), color: def.color });
+      updateMainCat(m.key, payload)
+        .then(() => toast.success("Ripristinata ai valori di default"))
+        .catch(e => toast.error("Errore ripristino", { description: String(e.message || e) }));
     }
   }
 
@@ -320,11 +362,17 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
             Modifica
           </button>
           <button
-            onClick={()=>{
-              const tmpKey = `custom_${Date.now().toString(36)}`;
-              addMainCat({ key: tmpKey, name: "NUOVA CATEGORIA", color: "#5B86E5" });
-              setEditingKey(tmpKey);
-              setNameDraft("NUOVA CATEGORIA");
+            onClick={async () => {
+              const key = `custom_${Date.now().toString(36)}`;
+              const name = uniqueMainName("NUOVA CATEGORIA");
+              try {
+                await addMainCat({ key, name, color: "#5B86E5" });
+                setEditingKey(key);
+                setNameDraft(name);
+                toast.success("Categoria creata");
+              } catch (e) {
+                toast.error("Errore creazione categoria", { description: String(e.message || e) });
+              }
             }}
             className="px-3 py-2 rounded-xl text-sm bg-gradient-to-tr from-sky-600 to-indigo-600 text-white hover:opacity-90"
           >
@@ -343,7 +391,7 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
             onClick={saveEditAll}
             className="px-3 py-2 rounded-xl text-sm bg-gradient-to-tr from-sky-600 to-indigo-600 text-white hover:opacity-90 inline-flex items-center gap-2"
           >
-            <Save className="h-4 w-4"/><span>Salva</span>
+            <Save className="h-4 w-4" /><span>Salva</span>
           </button>
         </>
       )}
@@ -377,9 +425,9 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
               </thead>
               <tbody className="text-[#444] dark:text-slate-200">
                 {merged.map(m => {
-                  const draft = editAll ? (draftMap[m.key] || { name:m.name, color:m.color, enabled:m.enabled }) : null;
+                  const draft = editAll ? (draftMap[m.key] || { name: m.name, color: m.color, enabled: m.enabled }) : null;
                   const nameVal = (editAll ? draft.name : m.name) || "";
-                  const colorVal = editAll ? draft.color : m.color;
+                  const colorVal = (editAll ? draft.color : m.color) || '#5B86E5';
                   const enabledVal = editAll ? draft.enabled : m.enabled;
                   const isIncome = m.key === "income";
                   const isEditing = editingKey === m.key;
@@ -398,7 +446,7 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
                           <Input
                             value={nameVal.toUpperCase()}
                             disabled={isIncome}
-                            onChange={(e)=> setDraftMap(d=>({ ...d, [m.key]: { ...(d[m.key]||{}), name: e.target.value.toUpperCase() } }))}
+                            onChange={(e) => setDraftMap(d => ({ ...d, [m.key]: { ...(d[m.key] || {}), name: e.target.value.toUpperCase() } }))}
                             className={`font-semibold ${isIncome ? "opacity-60 cursor-not-allowed" : ""}`}
                           />
                         ) : isEditing ? (
@@ -406,20 +454,20 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
                             <Input
                               autoFocus
                               value={nameDraft}
-                              onChange={(e)=>setNameDraft(e.target.value.toUpperCase())}
-                              onKeyDown={(e)=>{ if(e.key==="Enter") saveRowEdit(m); if(e.key==="Escape") cancelRowEdit(); }}
+                              onChange={(e) => setNameDraft(e.target.value.toUpperCase())}
+                              onKeyDown={(e) => { if (e.key === "Enter") saveRowEdit(m); if (e.key === "Escape") cancelRowEdit(); }}
                               className="font-semibold"
                             />
-                            <Button size="sm" onClick={()=>saveRowEdit(m)} className="inline-flex items-center gap-1">
+                            <Button size="sm" onClick={() => saveRowEdit(m)} className="inline-flex items-center gap-1">
                               <Check className="h-4 w-4" />
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={cancelRowEdit}><X className="h-4 w-4"/></Button>
+                            <Button size="sm" variant="ghost" onClick={cancelRowEdit}><X className="h-4 w-4" /></Button>
                           </div>
                         ) : (
                           <span
                             className={`font-semibold ${isIncome ? "" : "cursor-text"}`}
                             title={isIncome ? "Il nome non è modificabile" : "Doppio clic per rinominare"}
-                            onDoubleClick={()=>enterRowEdit(m)}
+                            onDoubleClick={() => enterRowEdit(m)}
                           >
                             {nameVal.toUpperCase()}
                           </span>
@@ -428,15 +476,11 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
 
                       {/* Colore */}
                       <td className="px-2 py-3">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={colorVal}
-                            onChange={(e)=> changeColor(m, e.target.value)}
-                            className="h-9 w-12 rounded cursor-pointer border border-slate-300 dark:border-slate-700 bg-transparent"
-                            title="Scegli colore"
-                          />
-                        </div>
+                        <ColorPicker
+                          value={colorVal}
+                          onChange={(c) => changeColor(m, c)}
+                          paletteKey={m.key}
+                        />
                       </td>
 
                       {/* Visibile */}
@@ -446,7 +490,7 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
                         ) : (
                           <Switch
                             checked={!!enabledVal}
-                            onCheckedChange={(v)=>toggleEnabled(m, v)}
+                            onCheckedChange={(v) => toggleEnabled(m, v)}
                             style={!enabledVal ? { filter: isDark() ? "" : "grayscale(40%) opacity(.9)" } : {}}
                           />
                         )}
@@ -454,12 +498,24 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
 
                       {/* Azioni */}
                       <td className="px-2 py-3">
-                        <ActionsMenu
-                          onEdit={()=>enterRowEdit(m)}
-                          onRemove={!CORE_KEYS.has(m.key) ? ()=>removeMainCat(m.key) : undefined}
-                          onReset={CORE_KEYS.has(m.key) ? ()=>resetCore(m) : undefined}
-                          disableRemove={CORE_KEYS.has(m.key)}
-                        />
+                        {isIncome ? (
+                          <span className="text-slate-400 dark:text-slate-500">—</span>
+                        ) : (
+                          <ActionsMenu
+                            onEdit={() => enterRowEdit(m)}
+                            onRemove={!CORE_KEYS.has(m.key) ? async () => {
+                              const ok = await removeMainCat(m.key);
+                              if (ok) { 
+                                // niente toast rumoroso se vuoi, altrimenti:
+                                // toast.success("Categoria rimossa");
+                              } else {
+                                toast.error("Impossibile rimuovere la categoria");
+                              }
+                            } : undefined}
+                            onReset={CORE_KEYS.has(m.key) ? () => resetCore(m) : undefined}
+                            disableRemove={CORE_KEYS.has(m.key)}
+                          />
+                        )}
                       </td>
                     </tr>
                   );
@@ -479,10 +535,11 @@ function TabMainCategories({ state, updateMainCat, addMainCat, removeMainCat }) 
 /* ===================== TAB 2 — Sottocategorie ===================== */
 function TabSubcategories({
   state,
-  addSubcat = () => {},
-  updateSubcat = () => {},
-  removeSubcat = () => {},
+  addSubcat = () => { },
+  updateSubcat = () => { },
+  removeSubcat = () => { },
 }) {
+  const toast = useToast();
   const { core, customs } = getMainPalette(state);
 
   const [main, setMain] = useState("expense");
@@ -494,69 +551,97 @@ function TabSubcategories({
   const mainColor = mainObj.color;
   const entries = state.subcats?.[main] || [];
 
+  // Validatore duplicati
+  function subNameExists(name, exceptId = null) {
+    const u = (name || "").trim().toLowerCase();
+    return entries.some(sc => sc.id !== exceptId && (sc.name || "").trim().toLowerCase() === u);
+  }
+
   // ===== Modifica generale (draft locale) =====
   const [editAll, setEditAll] = useState(false);
   const [draftRows, setDraftRows] = useState([]);
-  const [editingRow, setEditingRow] = useState(null);
+  const [editingRowId, setEditingRowId] = useState(null);
 
-  const entriesMemo = useMemo(()=>entries, [entries]);
+  const entriesMemo = useMemo(() => entries, [entries]);
 
-  function startEditAll(){
-    setDraftRows(entriesMemo.map(r=>({ ...r })));
+  function startEditAll() {
+    setDraftRows(entriesMemo.map(r => ({ ...r })));
     setEditAll(true);
-    setEditingRow(null);
+    setEditingRowId(null);
   }
-  function cancelEditAll(){
+  function cancelEditAll() {
     setEditAll(false);
     setDraftRows([]);
   }
-  function saveEditAll(){
+  function saveEditAll() {
+    // Validazione duplicati nelle bozze
+    const names = new Set();
+    for (const d of draftRows) {
+      const nm = (d.name || "").trim().toUpperCase();
+      if (names.has(nm)) { toast.error("Sottocategorie duplicate nelle modifiche."); return; }
+      names.add(nm);
+    }
     draftRows.forEach(d => {
-      const orig = d._origName && d._origName !== d.name ? d._origName : d.name;
-      updateSubcat(main, orig, { name: toTitleCase(d.name), iconKey: d.iconKey });
+      if (!d.id) return;
+      updateSubcat(main, d.id, { name: toTitleCase(d.name), iconKey: d.iconKey });
     });
     setEditAll(false);
     setDraftRows([]);
   }
 
-  function addInlineRow(){
-    const newName = toTitleCase(`nuova ${entries.length + 1}`);
-    if (editAll){
-      setDraftRows(rs=>[...rs, { name:newName, iconKey:"wallet" }]);
+  function addInlineRow() {
+    let base = `Nuova ${entries.length + 1}`;
+    let candidate = toTitleCase(base);
+    let i = 2;
+    while (subNameExists(candidate)) { candidate = toTitleCase(`${base} (${i++})`); }
+    if (editAll) {
+      setDraftRows(rs => [...rs, { name: candidate, iconKey: "wallet" }]);
     } else {
-      addSubcat(main, { name:newName, iconKey:"wallet" });
-      setEditingRow(newName);
+      addSubcat(main, { name: candidate, iconKey: "wallet" })
+        .then((created) => {
+          if (created?.id) setEditingRowId(created.id);
+          toast.success("Sottocategoria creata");
+        })
+        .catch(e => toast.error("Errore creazione sottocategoria", { description: String(e.message || e) }));
     }
   }
 
-  function openIconFor(subName){
-    setIconModalTarget({ subName });
+  function openIconFor(subId) {
+    setIconModalTarget({ subId });
     setIconModalOpen(true);
   }
   const closeIcon = () => { setIconModalOpen(false); setIconModalTarget(null); };
 
-  function setIcon(subName, iconKey){
-    if (editAll){
-      setDraftRows(rs=>rs.map(r=> r.name===subName ? { ...r, iconKey } : r));
+  function setIcon(subId, iconKey) {
+    if (editAll) {
+      setDraftRows(rs => rs.map(r => r.id === subId ? { ...r, iconKey } : r));
     } else {
-      updateSubcat(main, subName, { iconKey });
+      updateSubcat(main, subId, { iconKey });
     }
   }
 
-  function beginRowEdit(sc){
+  function beginRowEdit(sc) {
     if (editAll) return;
-    setEditingRow(sc.name);
+    setEditingRowId(sc.id);
   }
-  function cancelRowEdit(){
-    setEditingRow(null);
+  function cancelRowEdit() {
+    setEditingRowId(null);
   }
-  function saveRowEdit(oldName, inputEl){
-    const nv = toTitleCase(inputEl.value.trim());
-    if (nv && nv !== oldName) updateSubcat(main, oldName, { name: nv });
-    setEditingRow(null);
+  function saveRowEdit(subId, inputEl) {
+    const nv = toTitleCase((inputEl.value || "").trim());
+    if (!nv) { setEditingRowId(null); return; }
+    if (subNameExists(nv, subId)) {
+      toast.error("Nome sottocategoria duplicato", { description: `"${nv}" esiste già.` });
+      return;
+    }
+    updateSubcat(main, subId, { name: nv })
+      .then(() => toast.success("Sottocategoria aggiornata"))
+      .catch(e => toast.error("Errore aggiornamento", { description: String(e.message || e) }));
+    setEditingRowId(null);
   }
 
   const rowsView = editAll ? draftRows : entries;
+  const rowsSorted = [...rowsView].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
   return (
     <div className="space-y-4">
@@ -585,7 +670,7 @@ function TabSubcategories({
                   </button>
                 );
               })}
-              <CustomMainDropdown customs={customs} value={customSel} onChange={(k)=>{ setCustomSel(k); if(k) setMain(k); }} />
+              <CustomMainDropdown customs={customs} value={customSel} onChange={(k) => { setCustomSel(k); if (k) setMain(k); }} />
             </div>
 
             <div className="flex items-center gap-2">
@@ -616,7 +701,7 @@ function TabSubcategories({
                     onClick={saveEditAll}
                     className="px-3 py-2 rounded-xl text-sm bg-gradient-to-tr from-sky-600 to-indigo-600 text-white hover:opacity-90 inline-flex items-center gap-2"
                   >
-                    <Save className="h-4 w-4"/><span>Salva</span>
+                    <Save className="h-4 w-4" /><span>Salva</span>
                   </button>
                 </>
               )}
@@ -633,21 +718,21 @@ function TabSubcategories({
                 </tr>
               </thead>
               <tbody className="text-[#444] dark:text-slate-200">
-                {rowsView.map(sc => {
-                  const isEditing = !editAll && editingRow === sc.name;
+                {rowsSorted.map(sc => {
+                  const isEditing = !editAll && editingRowId === sc.id;
                   const titleName = toTitleCase(sc.name);
                   return (
-                    <tr key={sc.name} className="border-t border-slate-200/10 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <tr key={sc.id || sc.name} className="border-t border-slate-200/10 hover:bg-slate-50 dark:hover:bg-slate-800/40">
                       <td className="px-2 py-3">
                         <button
                           type="button"
                           title="Cambia icona"
                           className="rounded-lg px-1 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
-                          onMouseDown={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
+                          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            openIconFor(sc.name);
+                            openIconFor(sc.id);
                           }}
                         >
                           <SvgIcon name={sc.iconKey} color={mainColor} size={22} />
@@ -658,11 +743,11 @@ function TabSubcategories({
                         {editAll ? (
                           <Input
                             value={titleName}
-                            onChange={(e)=>{
+                            onChange={(e) => {
                               const nv = toTitleCase(e.target.value);
-                              setDraftRows(rs=>rs.map(r=>{
-                                if (r.name === sc.name) {
-                                  return { ...r, name: nv, _origName: r._origName || sc.name };
+                              setDraftRows(rs => rs.map(r => {
+                                if (r.id === sc.id) {
+                                  return { ...r, name: nv };
                                 }
                                 return r;
                               }));
@@ -674,36 +759,35 @@ function TabSubcategories({
                             <Input
                               defaultValue={titleName}
                               autoFocus
-                              onKeyDown={(e)=>{
-                                if (e.key === "Enter") saveRowEdit(sc.name, e.currentTarget);
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") saveRowEdit(sc.id, e.currentTarget);
                                 if (e.key === "Escape") cancelRowEdit();
                               }}
                               className="font-semibold"
                             />
-                            <Button size="sm" onClick={(e)=>saveRowEdit(sc.name, { value: e.currentTarget.parentElement.querySelector('input').value })}><Check className="h-4 w-4"/></Button>
-                            <Button size="sm" variant="ghost" onClick={cancelRowEdit}><X className="h-4 w-4"/></Button>
+                            <Button size="sm" onClick={(e) => saveRowEdit(sc.id, { value: e.currentTarget.parentElement.querySelector('input').value })}><Check className="h-4 w-4" /></Button>
+                            <Button size="sm" variant="ghost" onClick={cancelRowEdit}><X className="h-4 w-4" /></Button>
                           </div>
                         ) : (
-                          <span className="font-semibold" onDoubleClick={()=>beginRowEdit(sc)} title="Doppio clic per rinominare">
+                          <span className="font-semibold" onDoubleClick={() => beginRowEdit(sc)} title="Doppio clic per rinominare">
                             {titleName}
                           </span>
                         )}
                       </td>
 
                       <td className="px-2 py-3">
-                        {!editAll ? (
-                          <ActionsMenu
-                            onEdit={()=>beginRowEdit(sc)}
-                            onRemove={()=>removeSubcat(main, sc.name)}
-                          />
-                        ) : (
-                          <span className="text-slate-400 dark:text-slate-500 text-xs"></span>
-                        )}
+                        <ActionsMenu
+                          onEdit={() => beginRowEdit(sc)}
+                          onRemove={async () => {
+                            const ok = await removeSubcat(main, sc.id);
+                            if (!ok) toast.error("Impossibile rimuovere la sottocategoria");
+                          }}
+                        />
                       </td>
                     </tr>
                   );
                 })}
-                {rowsView.length === 0 && (
+                {rowsSorted.length === 0 && (
                   <tr><td className="p-4 text-center text-slate-500" colSpan={3}>Nessuna sottocategoria</td></tr>
                 )}
               </tbody>
@@ -715,8 +799,8 @@ function TabSubcategories({
             onClose={closeIcon}
             tintColor={mainColor}
             onPick={(key) => {
-              if (!iconModalTarget?.subName) return;
-              setIcon(iconModalTarget.subName, key);
+              if (!iconModalTarget?.subId) return;
+              setIcon(iconModalTarget.subId, key);
             }}
           />
         </CardContent>
@@ -740,7 +824,7 @@ export default function Categories({
           <button
             onClick={() => setTab("main")}
             className={`px-3 py-2 rounded-xl text-sm transition
-              ${tab==="main"
+              ${tab === "main"
                 ? "bg-gradient-to-tr from-sky-600 to-indigo-600 text-white"
                 : "border border-slate-300 dark:border-slate-700 hover:bg-white/60 dark:hover:bg-slate-900/60"}`}
           >
@@ -749,7 +833,7 @@ export default function Categories({
           <button
             onClick={() => setTab("subs")}
             className={`px-3 py-2 rounded-xl text-sm transition
-              ${tab==="subs"
+              ${tab === "subs"
                 ? "bg-gradient-to-tr from-sky-600 to-indigo-600 text-white"
                 : "border border-slate-300 dark:border-slate-700 hover:bg-white/60 dark:hover:bg-slate-900/60"}`}
           >

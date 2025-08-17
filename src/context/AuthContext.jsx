@@ -27,11 +27,13 @@ export function AuthProvider({ children }) {
     setUser(r.user)
   }
 
-  async function register(email, password) {
-    const r = await api.register(email, password) // { token, user }
+// ...
+  async function register(name, email, password) {
+    const r = await api.register(name, email, password) // { token, user }
     setToken(r.token)
     setUser(r.user)
   }
+
 
   function logout() {
     setToken("")

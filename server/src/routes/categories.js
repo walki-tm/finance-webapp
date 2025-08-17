@@ -9,18 +9,19 @@ router.use(authRequired)
 
 // ===== Schemi =====
 const categorySchema = z.object({
-  main: z.enum(['INCOME', 'EXPENSE', 'DEBT', 'SAVINGS']),
+  main: z.string().min(1).max(32).transform(s => s.toUpperCase()),
   name: z.string().min(1).max(80),
   iconKey: z.string().optional().nullable(),
   colorHex: z.string().optional().nullable(),
-  visible: z.boolean().optional(),   // 👈 aggiunto
+  visible: z.boolean().optional(),
 })
 
 const categoryPatchSchema = z.object({
+  // NB: NON permettiamo di cambiare la MAIN con una PATCH (opzionale: abilitalo se ti serve)
   name: z.string().min(1).max(80).optional(),
   iconKey: z.string().nullable().optional(),
   colorHex: z.string().nullable().optional(),
-  visible: z.boolean().optional(),   // 👈 aggiunto
+  visible: z.boolean().optional(),
 })
 
 const subSchema = z.object({

@@ -7,20 +7,20 @@ const router = Router()
 router.use(authRequired)
 
 const txSchema = z.object({
-  date: z.string(), // ISO string o 'YYYY-MM-DD'
-  amount: z.number(),
-  main: z.enum(['INCOME', 'EXPENSE', 'DEBT', 'SAVINGS']),
+  date: z.coerce.date(),
+  amount: z.coerce.number(),
+  main: z.string().min(1).max(32).transform(s => s.toUpperCase()),
   subId: z.string().optional().nullable(),
-  subName: z.string().optional().nullable(),
   note: z.string().optional().nullable(),
-  payee: z.string().optional().nullable()
+  payee: z.string().optional().nullable(),
 })
 
 // PATCH/PUT schema: tutti opzionali
 const txPatchSchema = z.object({
   date: z.string().optional(),
   amount: z.number().optional(),
-  main: z.enum(['INCOME', 'EXPENSE', 'DEBT', 'SAVINGS']).optional(),
+  // main dinamica: accetta qualsiasi stringa e normalizza in UPPERCASE
+  main: z.string().min(1).max(32).transform(s => s.toUpperCase()).optional(),
   subId: z.string().nullable().optional(),
   subName: z.string().nullable().optional(),
   note: z.string().nullable().optional(),

@@ -21,9 +21,8 @@ export default function AuthScreens() {
       if (mode === 'login') {
         await login(email, password)
       } else {
-        await register(email, password) // auto-login
+        await register(name, email, password) // auto-login
       }
-      // "name" per ora è solo UI; se lo vuoi in DB aggiungeremo un campo profilo
     } catch (e) {
       setError(e?.message || 'Errore')
     } finally {
@@ -42,7 +41,7 @@ export default function AuthScreens() {
           {mode === 'register' && (
             <div>
               <Label>Nome</Label>
-              <Input value={name} onChange={(e)=>setName(e.target.value)} placeholder="Michele"/>
+              <Input value={name} onChange={(e)=>setName(e.target.value)} placeholder="Name"/>
             </div>
           )}
 
