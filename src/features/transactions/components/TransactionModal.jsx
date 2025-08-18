@@ -1,8 +1,8 @@
-// src/components/TransactionModal.jsx
+// src/features/transactions/components/TransactionModal.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, AlertCircle, StickyNote, ChevronDown, TrendingUp, ShoppingCart, CreditCard, PiggyBank } from 'lucide-react';
-import { MAIN_CATS } from '../lib/constants.js';
-import SvgIcon from './SvgIcon.jsx';
+import { MAIN_CATS } from '../../../lib/constants.js';
+import SvgIcon from '../../icons/components/SvgIcon.jsx';
 
 /* ===== utils ===== */
 function hexToRgba(hex, a = 1) {

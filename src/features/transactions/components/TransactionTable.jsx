@@ -1,10 +1,10 @@
-// src/components/TransactionTable.jsx
+// src/features/transactions/components/TransactionTable.jsx
 import React, { useState } from 'react';
-import { Button } from './ui';
+import { Button } from '../../ui';
 import { Pencil, Trash2, FileText, X } from 'lucide-react';
-import { MAIN_CATS } from '../lib/constants.js';
-import { nice } from '../lib/utils.js';
-import SvgIcon from './SvgIcon.jsx';
+import { MAIN_CATS } from '../../../lib/constants.js';
+import { nice } from '../../../lib/utils.js';
+import SvgIcon from '../../icons/components/SvgIcon.jsx';
 
 /* Da HEX a rgba con alpha */
 function hexToRgba(hex, a = 1) {

@@ -1,7 +1,7 @@
-import Dashboard from '../pages/Dashboard.jsx';
-import Transactions from '../pages/Transactions.jsx';
-import Categories from '../pages/Categories.jsx';
-import Budgeting from '../pages/Budgeting.jsx';
+import Dashboard from '../features/dashboard/pages/Dashboard.jsx';
+import Transactions from '../features/transactions/pages/Transactions.jsx';
+import Categories from '../features/categories/pages/Categories.jsx';
+import Budgeting from '../features/budgeting/pages/Budgeting.jsx';
 import { BarChart3, TrendingUp, Settings as SettingsIcon, CalendarDays } from 'lucide-react';
 
 export const tabs = [

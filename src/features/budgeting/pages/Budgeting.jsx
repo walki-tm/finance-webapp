@@ -1,9 +1,9 @@
-// src/pages/Budgeting.jsx
+// src/features/budgeting/pages/Budgeting.jsx
 import React, { useMemo, useState } from 'react';
-import { Card, CardContent, Label, Input, NativeSelect } from '../components/ui';
-import { MAIN_CATS } from '../lib/constants.js';
-import { nice } from '../lib/utils.js';
-import SvgIcon from '../components/SvgIcon.jsx';
+import { Card, CardContent, Label, Input, NativeSelect } from '../../ui';
+import { MAIN_CATS } from '../../../lib/constants.js';
+import { nice } from '../../../lib/utils.js';
+import SvgIcon from '../../icons/components/SvgIcon.jsx';
 
 export default function Budgeting({ state, year, upsertBudget }) {
   const [selMain, setSelMain] = useState('expense');

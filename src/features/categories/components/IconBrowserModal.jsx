@@ -1,8 +1,8 @@
-// src/components/IconBrowserModal.jsx
+// src/features/categories/components/IconBrowserModal.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Input } from "./ui";
-import SvgIcon from "./SvgIcon.jsx";
+import { Input } from "../../ui";
+import SvgIcon from "../../icons/components/SvgIcon.jsx";
 
 function hexToRgba(hex, a = 1) {
   const h = (hex || "#000000").replace("#", "");

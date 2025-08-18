@@ -1,4 +1,4 @@
-// src/components/SvgIcon.jsx
+// src/features/icons/components/SvgIcon.jsx
 import React, { useEffect, useRef, useState } from "react";
 
 /**

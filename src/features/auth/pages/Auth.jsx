@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
-import { Card, CardContent, Label, Input, Button } from '../components/ui'
+import { Card, CardContent, Label, Input, Button } from '../../ui'
 import { LogIn } from 'lucide-react'
-import { useAuth } from '../context/AuthContext.jsx'
+import { useAuth } from '../../../context/AuthContext.jsx'
 
 export default function AuthScreens() {
   const { login, register } = useAuth()

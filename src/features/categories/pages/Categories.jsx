@@ -1,13 +1,13 @@
-// src/pages/Categories.jsx
+// src/features/categories/pages/Categories.jsx
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Card, CardContent, Input, Button, Switch } from "../components/ui";
-import { MAIN_CATS } from "../lib/constants.js";
+import { Card, CardContent, Input, Button, Switch } from "../../ui";
+import { MAIN_CATS } from "../../../lib/constants.js";
 import { Check, X, MoreHorizontal, Save, ChevronDown } from "lucide-react";
-import SvgIcon from "../components/SvgIcon.jsx";
+import SvgIcon from "../../icons/components/SvgIcon.jsx";
 import IconBrowserModal from "../components/IconBrowserModal.jsx";
 import ColorPicker from "../components/ColorPicker.jsx";
-import { useToast } from "../components/Toast.jsx";
+import { useToast } from "../../toast";
 
 /* ---------------- Error boundary ---------------- */
 class ErrorBoundary extends React.Component {

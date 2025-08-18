@@ -1,4 +1,4 @@
-// src/components/Toast.jsx
+// src/features/toast/components/Toast.jsx
 import React, {
   createContext,
   useCallback,
