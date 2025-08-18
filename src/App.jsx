@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { ToastProvider } from './features/toast';
 import { Switch, Badge, NavItem } from './features/ui';
 import AuthScreens from './features/auth/pages/Auth.jsx';
@@ -8,15 +8,17 @@ import { tabs } from './lib/tabs.js';
 import useCategories from './features/categories/useCategories.js';
 import useTransactions from './features/transactions/useTransactions.js';
 import { Layers3, LogOut, SunMedium, Moon, User, Plus } from 'lucide-react';
+import useTheme from './features/app/useTheme.js';
+import useBudgets from './features/app/useBudgets.js';
+import useTabState from './features/app/useTabState.js';
 
 export default function App() {
   const { user, logout, token } = useAuth();
 
-  const [theme, setTheme] = useState('light');
-  const [budgets, setBudgets] = useState({});
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [dashDetail, setDashDetail] = useState(null);
+  const { theme, toggleTheme } = useTheme();
+  const year = String(new Date().getFullYear());
+  const { budgets, upsertBudget } = useBudgets(year);
+  const { activeTab, setActiveTab, menuOpen, setMenuOpen, dashDetail, setDashDetail } = useTabState();
 
   const {
     customMainCats,
@@ -42,17 +44,7 @@ export default function App() {
     saveTx,
   } = useTransactions(token);
 
-  const year = String(new Date().getFullYear());
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-  }, [theme]);
-
-  const upsertBudget = (main, sub, value) =>
-    setBudgets(b => ({
-      ...b,
-      [year]: { ...(b[year] || {}), [main + ':' + sub]: value }
-    }));
+  
 
   const state = useMemo(() => ({
     theme,
@@ -107,8 +99,8 @@ export default function App() {
               <Badge variant="secondary" className="ml-2">Anno: {year}</Badge>
             </div>
             <div className="flex items-center gap-2">
-              <Switch checked={state.theme === 'dark'} onCheckedChange={() => setTheme(state.theme === 'dark' ? 'light' : 'dark')} />
-              {state.theme === 'dark' ? <Moon className="h-4 w-4" /> : <SunMedium className="h-4 w-4" />}
+              <Switch checked={theme === 'dark'} onCheckedChange={toggleTheme} />
+              {theme === 'dark' ? <Moon className="h-4 w-4" /> : <SunMedium className="h-4 w-4" />}
               {user && (
                 <button className="border rounded-xl px-3 py-2" onClick={logout}>
                   <LogOut className="h-4 w-4 inline mr-2" /> Logout

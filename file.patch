@@ -1,77 +1,153 @@
-diff --git a/server/src/routes/transactions.js b/server/src/routes/transactions.js
-index 365a0f75a7e82719479a4131ca7f6dad15d8ad79..c609e66b6be97096b8803aa17415d967d5d74014 100644
---- a/server/src/routes/transactions.js
-+++ b/server/src/routes/transactions.js
-@@ -1,67 +1,18 @@
- import { Router } from 'express'
- import { authRequired } from '../middleware/auth.js'
--import { z } from 'zod'
- import {
-   listTransactions,
-   createTransaction,
-   updateTransaction,
-   deleteTransaction,
--} from '../services/transactionService.js'
-+} from '../controllers/transactionsController.js'
+diff --git a/src/App.jsx b/src/App.jsx
+index 3693b59c2b4ba09d29642966fb66cccefb0f8acd..f3cdc55b962077441ad1506559bea877eb6776d9 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -1,80 +1,72 @@
+-import React, { useEffect, useMemo, useState } from 'react';
++import React, { useMemo } from 'react';
+ import { ToastProvider } from './features/toast';
+ import { Switch, Badge, NavItem } from './features/ui';
+ import AuthScreens from './features/auth/pages/Auth.jsx';
+ import TransactionModal from './features/transactions/components/TransactionModal.jsx';
+ import { useAuth } from './context/AuthContext.jsx';
+ import { tabs } from './lib/tabs.js';
+ import useCategories from './features/categories/useCategories.js';
+ import useTransactions from './features/transactions/useTransactions.js';
+ import { Layers3, LogOut, SunMedium, Moon, User, Plus } from 'lucide-react';
++import useTheme from './features/app/useTheme.js';
++import useBudgets from './features/app/useBudgets.js';
++import useTabState from './features/app/useTabState.js';
  
- const router = Router()
- router.use(authRequired)
+ export default function App() {
+   const { user, logout, token } = useAuth();
  
--const txSchema = z.object({
--  date: z.coerce.date(),
--  amount: z.coerce.number(),
--  main: z.string().min(1).max(32).transform(s => s.toUpperCase()),
--  subId: z.string().optional().nullable(),
--  note: z.string().optional().nullable(),
--  payee: z.string().optional().nullable(),
--})
--
--// PATCH/PUT schema: tutti opzionali
--const txPatchSchema = z.object({
--  date: z.string().optional(),
--  amount: z.number().optional(),
--  // main dinamica: accetta qualsiasi stringa e normalizza in UPPERCASE
--  main: z.string().min(1).max(32).transform(s => s.toUpperCase()).optional(),
--  subId: z.string().nullable().optional(),
--  subName: z.string().nullable().optional(),
--  note: z.string().nullable().optional(),
--  payee: z.string().nullable().optional(),
--})
--
--router.get('/', async (req, res, next) => {
--  try {
--    const data = await listTransactions(req.user.id, req.query)
--    res.json(data)
--  } catch (e) { next(e) }
--})
--
--router.post('/', async (req, res, next) => {
--  const parsed = txSchema.safeParse(req.body)
--  if (!parsed.success) return res.status(400).json({ error: 'Invalid body' })
--  try {
--    const created = await createTransaction(req.user.id, parsed.data)
--    res.status(201).json(created)
--  } catch (e) { next(e) }
--})
--
--router.put('/:id', async (req, res, next) => {
--  const parsed = txPatchSchema.safeParse(req.body)
--  if (!parsed.success) return res.status(400).json({ error: 'Invalid body' })
--  try {
--    const updated = await updateTransaction(req.user.id, req.params.id, parsed.data)
--    res.json(updated)
--  } catch (e) { next(e) }
--})
--
--router.delete('/:id', async (req, res, next) => {
--  try {
--    await deleteTransaction(req.user.id, req.params.id)
--    res.status(204).end()
--  } catch (e) { next(e) }
--})
-+router.get('/', listTransactions)
-+router.post('/', createTransaction)
-+router.put('/:id', updateTransaction)
-+router.delete('/:id', deleteTransaction)
+-  const [theme, setTheme] = useState('light');
+-  const [budgets, setBudgets] = useState({});
+-  const [activeTab, setActiveTab] = useState('dashboard');
+-  const [menuOpen, setMenuOpen] = useState(false);
+-  const [dashDetail, setDashDetail] = useState(null);
++  const { theme, toggleTheme } = useTheme();
++  const year = String(new Date().getFullYear());
++  const { budgets, upsertBudget } = useBudgets(year);
++  const { activeTab, setActiveTab, menuOpen, setMenuOpen, dashDetail, setDashDetail } = useTabState();
  
- export default router
+   const {
+     customMainCats,
+     subcats,
+     mainEnabled,
+     mainsForModal,
+     addMainCat,
+     updateMainCat,
+     removeMainCat,
+     addSubcat,
+     updateSubcat,
+     removeSubcat,
+   } = useCategories(token);
+ 
+   const {
+     transactions,
+     txModalOpen,
+     editingTx,
+     openAddTx,
+     openEditTx,
+     closeTxModal,
+     delTx,
+     saveTx,
+   } = useTransactions(token);
+ 
+-  const year = String(new Date().getFullYear());
+-
+-  useEffect(() => {
+-    document.documentElement.classList.toggle('dark', theme === 'dark');
+-  }, [theme]);
+-
+-  const upsertBudget = (main, sub, value) =>
+-    setBudgets(b => ({
+-      ...b,
+-      [year]: { ...(b[year] || {}), [main + ':' + sub]: value }
+-    }));
++  
+ 
+   const state = useMemo(() => ({
+     theme,
+     customMainCats,
+     mainEnabled,
+     subcats,
+     budgets,
+     transactions,
+   }), [theme, customMainCats, mainEnabled, subcats, budgets, transactions]);
+ 
+   const tabProps = useMemo(() => ({
+     dashboard: {
+       state,
+       year,
+       onSelectMain: (key) => setDashDetail(prev => prev === key ? null : key),
+       detailMain: dashDetail,
+     },
+     transactions: {
+       state,
+       delTx,
+       openTxEditor: openEditTx,
+     },
+     categories: {
+       state,
+       addSubcat,
+diff --git a/src/App.jsx b/src/App.jsx
+index 3693b59c2b4ba09d29642966fb66cccefb0f8acd..f3cdc55b962077441ad1506559bea877eb6776d9 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -85,52 +77,52 @@ export default function App() {
+       removeMainCat,
+     },
+     budgeting: {
+       state,
+       year,
+       upsertBudget,
+     },
+   }), [state, year, dashDetail, delTx, openEditTx, addSubcat, updateSubcat, removeSubcat, updateMainCat, addMainCat, removeMainCat, upsertBudget]);
+ 
+   return (
+     <ToastProvider>
+       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+         {/* Topbar */}
+         <div className="sticky top-0 z-40 bg-white/75 dark:bg-slate-900/75 backdrop-blur border-b border-slate-200/20">
+           <div className="max-w-7xl mx-auto px-3 md:px-6 py-3 flex items-center justify-between">
+             <div className="flex items-center gap-3">
+               <button className="rounded-xl p-2 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setMenuOpen(true)}>
+                 <Layers3 />
+               </button>
+               <h1 className="text-lg md:text-2xl font-semibold">
+                 Bentornato/a {user ? <span className="text-teal-500">{user.name}</span> : 'Utente'}
+               </h1>
+               <Badge variant="secondary" className="ml-2">Anno: {year}</Badge>
+             </div>
+             <div className="flex items-center gap-2">
+-              <Switch checked={state.theme === 'dark'} onCheckedChange={() => setTheme(state.theme === 'dark' ? 'light' : 'dark')} />
+-              {state.theme === 'dark' ? <Moon className="h-4 w-4" /> : <SunMedium className="h-4 w-4" />}
++              <Switch checked={theme === 'dark'} onCheckedChange={toggleTheme} />
++              {theme === 'dark' ? <Moon className="h-4 w-4" /> : <SunMedium className="h-4 w-4" />}
+               {user && (
+                 <button className="border rounded-xl px-3 py-2" onClick={logout}>
+                   <LogOut className="h-4 w-4 inline mr-2" /> Logout
+                 </button>
+               )}
+             </div>
+           </div>
+         </div>
+ 
+         <div className="max-w-7xl mx-auto p-3 md:p-6">
+           {!user ? (
+             <AuthScreens />
+           ) : (
+             <>
+               {/* Tabs */}
+               <div className="flex items-center justify-between flex-wrap gap-2 bg-slate-200/60 dark:bg-slate-800/60 p-1 rounded-2xl">
+                 <div className="flex flex-wrap gap-2">
+                   {tabs.map(({ key, label }) => (
+                     <button
+                       key={key}
+                       onClick={() => setActiveTab(key)}
+                       className={
+                         'px-3 py-2 rounded-xl text-sm transition ' +
+                         (activeTab === key
+                           ? 'bg-white dark:bg-slate-900 shadow border border-slate-200/40'
