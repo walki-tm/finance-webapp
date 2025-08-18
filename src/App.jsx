@@ -1,287 +1,67 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { ToastProvider } from './features/toast'
-import { Switch, Badge, NavItem } from './features/ui'
-import AuthScreens from './features/auth/pages/Auth.jsx'
-import TransactionModal from './features/transactions/components/TransactionModal.jsx'
-import { MAIN_CATS } from './lib/constants.js'
-import { useAuth } from './context/AuthContext.jsx'
-import { api } from './lib/api'
-import { tabs } from './lib/tabs.js'
-
-import {
-  Layers3, LogOut, SunMedium, Moon, User, Plus
-} from 'lucide-react'
-
-// Stato iniziale (dinamico)
-const defaultData = () => ({
-  theme: 'light',
-  customMainCats: [],      // tutte le MAIN (core + custom) come override dal DB
-  mainEnabled: {},         // { [mainKeyLower]: boolean }
-  subcats: {},             // { [mainKeyLower]: Subcategory[] }
-  budgets: {},
-  transactions: []
-})
-
-// Normalizzazione main → key UI
-const normalizeMainKey = (main) => {
-  const u = String(main || 'EXPENSE').toUpperCase()
-  const map = { INCOME: 'income', EXPENSE: 'expense', DEBT: 'debt', SAVINGS: 'saving', SAVING: 'saving' }
-  return map[u] || u.toLowerCase()
-}
-
-// UI → backend enum
-const mainUp = { income: 'INCOME', expense: 'EXPENSE', debt: 'DEBT', saving: 'SAVINGS' }
+import React, { useEffect, useMemo, useState } from 'react';
+import { ToastProvider } from './features/toast';
+import { Switch, Badge, NavItem } from './features/ui';
+import AuthScreens from './features/auth/pages/Auth.jsx';
+import TransactionModal from './features/transactions/components/TransactionModal.jsx';
+import { useAuth } from './context/AuthContext.jsx';
+import { tabs } from './lib/tabs.js';
+import useCategories from './features/categories/useCategories.js';
+import useTransactions from './features/transactions/useTransactions.js';
+import { Layers3, LogOut, SunMedium, Moon, User, Plus } from 'lucide-react';
 
 export default function App() {
-  const { user, logout, token } = useAuth()
+  const { user, logout, token } = useAuth();
 
-  const [state, setState] = useState(defaultData())
-  const [activeTab, setActiveTab] = useState('dashboard')
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [dashDetail, setDashDetail] = useState(null)
+  const [theme, setTheme] = useState('light');
+  const [budgets, setBudgets] = useState({});
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [dashDetail, setDashDetail] = useState(null);
 
-  const [txModalOpen, setTxModalOpen] = useState(false)
-  const [editingTx, setEditingTx] = useState(null)
+  const {
+    customMainCats,
+    subcats,
+    mainEnabled,
+    mainsForModal,
+    addMainCat,
+    updateMainCat,
+    removeMainCat,
+    addSubcat,
+    updateSubcat,
+    removeSubcat,
+  } = useCategories(token);
 
-  const year = String(new Date().getFullYear())
+  const {
+    transactions,
+    txModalOpen,
+    editingTx,
+    openAddTx,
+    openEditTx,
+    closeTxModal,
+    delTx,
+    saveTx,
+  } = useTransactions(token);
 
-  /* === THEME === */
+  const year = String(new Date().getFullYear());
+
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', state.theme === 'dark')
-  }, [state.theme])
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }, [theme]);
 
-  // helper in App.jsx (mettile vicino a normalizeMainKey)
-  const CORE_UP = new Set(['INCOME', 'EXPENSE', 'DEBT', 'SAVING', 'SAVINGS']);
-  const toUp = (s) => String(s || '').toUpperCase();
-
-  // === CARICA CATEGORIE ===
-  useEffect(() => {
-    if (!token) return;
-    (async () => {
-      try {
-        const cats = await api.listCategories(token);
-
-        const byCore = {};          // { 'EXPENSE': categoryRow }
-        const customs = [];         // array categorie custom
-        const subByMain = {};       // { [mainKeyLower]: Sub[] }
-        const mainEnabled = {};     // { [mainKeyLower]: boolean }
-
-        // split core/custom
-        for (const c of cats) {
-          const up = toUp(c.main);
-          if (CORE_UP.has(up)) byCore[up] = c; else customs.push(c);
-        }
-
-        const customMainCats = [];
-
-        // core (override dei 4 default)
-        for (const up of CORE_UP) {
-          const c = byCore[up];
-          if (!c) continue;
-          const key = normalizeMainKey(up); // 'income' | 'expense' | ...
-          customMainCats.push({
-            key,
-            id: c.id,
-            name: c.name,
-            color: c.colorHex || MAIN_CATS.find(m => m.key === key)?.color,
-            iconKey: c.iconKey || undefined
-          });
-          if (typeof c.visible === 'boolean') mainEnabled[key] = c.visible;
-          subByMain[key] = (c.subcats || []).map(sc => ({
-            id: sc.id,
-            name: sc.name,
-            iconKey: sc.iconKey || null
-          }));
-        }
-
-        // custom main (mantieni la loro main come key)
-        for (const c of customs) {
-          const key = String(c.main || '').toLowerCase(); // es: 'custom_abcd'
-          customMainCats.push({
-            key,
-            id: c.id,
-            name: c.name,
-            color: c.colorHex || '#5B86E5',
-            iconKey: c.iconKey || undefined
-          });
-          if (typeof c.visible === 'boolean') mainEnabled[key] = c.visible;
-          const arr = (c.subcats || []).map(sc => ({ id: sc.id, name: sc.name, iconKey: sc.iconKey || null }));
-          subByMain[key] = (subByMain[key] || []).concat(arr);
-        }
-
-        setState(s => ({
-          ...s,
-          customMainCats,
-          subcats: subByMain,
-          mainEnabled: { income: true, expense: true, debt: true, saving: true, ...mainEnabled }
-        }));
-      } catch (err) {
-        console.error('Errore caricamento categorie:', err);
-      }
-    })();
-  }, [token]);
-
-  // === FUNZIONI CATEGORIE MAIN ===
-  const addMainCat = async (obj) => {
-    // obj: { key: 'custom_xxx', name, color, iconKey? }
-    try {
-      const created = await api.addCategory(token, {
-        main: String(obj.key).toUpperCase(),   // <-- fondamentale: la custom resta separata
-        name: obj.name,
-        colorHex: obj.color,
-        iconKey: obj.iconKey || null
-      });
-      setState(s => ({
-        ...s,
-        customMainCats: [...s.customMainCats, { ...obj, id: created.id }]
-      }));
-      return created;
-    } catch (err) {
-      console.error('Errore addMainCat:', err);
-      throw err;
-    }
-  };
-
-  const updateMainCat = async (key, patch) => {
-    const cat = state.customMainCats.find(c => c.key === key);
-    if (!cat) return;
-    try {
-      const payload = {
-        ...(patch.name ? { name: patch.name } : {}),
-        ...(patch.color ? { colorHex: patch.color } : {}),
-        ...(patch.iconKey ? { iconKey: patch.iconKey } : {}),
-        ...(typeof patch.visible === 'boolean' ? { visible: patch.visible } : {}),
-      };
-      const updated = await api.updateCategory(token, cat.id, payload);
-      setState(s => ({
-        ...s,
-        customMainCats: s.customMainCats.map(c =>
-          c.key === key ? { ...c, ...updated, color: updated.colorHex ?? c.color } : c
-        ),
-        // aggiorna realtime lo switch
-        mainEnabled: (typeof updated.visible === 'boolean')
-          ? { ...s.mainEnabled, [key]: updated.visible }
-          : s.mainEnabled
-      }));
-      return updated;
-    } catch (err) {
-      console.error('Errore updateMainCat:', err);
-      throw err;
-    }
-  };
-
-  const removeMainCat = async (key) => {
-    const cat = state.customMainCats.find(c => c.key === key);
-    if (!cat) return false;
-    try {
-      console.log('[removeMainCat] DELETE /categories/' + cat.id);
-      await api.deleteCategory(token, cat.id);
-      setState(s => {
-        const next = {
-          ...s,
-          customMainCats: s.customMainCats.filter(c => c.key !== key),
-          subcats: { ...s.subcats }
-        };
-        delete next.subcats[key]; // pulizia sottocategorie legate a quella main
-        const { [key]: _drop, ...restEnabled } = s.mainEnabled || {};
-        next.mainEnabled = restEnabled;
-        return next;
-      });
-      return true;
-    } catch (err) {
-      console.error('Errore removeMainCat:', err);
-      return false;
-    }
-  };
-
-  // === FUNZIONI SUBCATS ===
-  const addSubcat = async (main, obj) => {
-    const cat = state.customMainCats.find(c => c.key === main);
-    if (!cat) return;
-    try {
-      const created = await api.addSubCategory(token, {
-        categoryId: cat.id,
-        name: obj.name,
-        iconKey: obj.iconKey || null
-      });
-      setState(s => ({
-        ...s,
-        subcats: { ...s.subcats, [main]: [...(s.subcats[main] || []), created] }
-      }));
-      return created;
-    } catch (err) {
-      console.error('Errore addSubcat:', err);
-      throw err;
-    }
-  };
-
-  const updateSubcat = async (main, id, patch) => {
-    try {
-      const updated = await api.updateSubCategory(token, id, patch);
-      setState(s => ({
-        ...s,
-        subcats: {
-          ...s.subcats,
-          [main]: (s.subcats[main] || []).map(sc => sc.id === id ? { ...sc, ...updated } : sc)
-        }
-      }));
-      return updated;
-    } catch (err) {
-      console.error('Errore updateSubcat:', err);
-      throw err;
-    }
-  };
-
-  const removeSubcat = async (main, id) => {
-    try {
-      console.log('[removeSubcat] DELETE /categories/sub/' + id);
-      await api.deleteSubCategory(token, id);
-      setState(s => ({
-        ...s,
-        subcats: { ...s.subcats, [main]: (s.subcats[main] || []).filter(sc => sc.id !== id) }
-      }));
-      return true;
-    } catch (err) {
-      console.error('Errore removeSubcat:', err);
-      return false;
-    }
-  };
-
-
-  /* === BUDGET === */
   const upsertBudget = (main, sub, value) =>
-    setState(s => ({
-      ...s,
-      budgets: { ...s.budgets, [year]: { ...(s.budgets[year] || {}), [main + ':' + sub]: value } }
-    }))
+    setBudgets(b => ({
+      ...b,
+      [year]: { ...(b[year] || {}), [main + ':' + sub]: value }
+    }));
 
-  /* === THEME === */
-  const setTheme = (t) => setState(s => ({ ...s, theme: t }))
-
-  /* === TRANSACTIONS === */
-  const openAddTx = () => { setEditingTx(null); setTxModalOpen(true) }
-  const openEditTx = (tx) => { setEditingTx(tx); setTxModalOpen(true) }
-
-  const delTxApi = async (id) => {
-    setState(s => ({ ...s, transactions: s.transactions.filter(t => t.id !== id) }))
-    try { await api.deleteTransaction(token, id) } catch (err) {
-      console.error('Errore delete tx:', err.message)
-    }
-  }
-
-  const mainsForModal = useMemo(() => {
-    const base = MAIN_CATS.map(m => ({
-      ...m,
-      enabled: state.mainEnabled[m.key] !== false
-    }))
-    const custom = state.customMainCats.map(c => ({
-      ...c,
-      enabled: state.mainEnabled[c.key] !== false
-    }))
-    const byKey = Object.fromEntries(base.map(m => [m.key, m]))
-    for (const c of custom) byKey[c.key] = { ...(byKey[c.key] || {}), ...c }
-    return Object.values(byKey)
-  }, [state.customMainCats, state.mainEnabled])
+  const state = useMemo(() => ({
+    theme,
+    customMainCats,
+    mainEnabled,
+    subcats,
+    budgets,
+    transactions,
+  }), [theme, customMainCats, mainEnabled, subcats, budgets, transactions]);
 
   const tabProps = useMemo(() => ({
     dashboard: {
@@ -292,7 +72,7 @@ export default function App() {
     },
     transactions: {
       state,
-      delTx: delTxApi,
+      delTx,
       openTxEditor: openEditTx,
     },
     categories: {
@@ -309,7 +89,7 @@ export default function App() {
       year,
       upsertBudget,
     },
-  }), [state, year, dashDetail, setDashDetail, delTxApi, openEditTx, addSubcat, updateSubcat, removeSubcat, updateMainCat, addMainCat, removeMainCat, upsertBudget])
+  }), [state, year, dashDetail, delTx, openEditTx, addSubcat, updateSubcat, removeSubcat, updateMainCat, addMainCat, removeMainCat, upsertBudget]);
 
   return (
     <ToastProvider>
@@ -391,7 +171,7 @@ export default function App() {
                     key={key}
                     icon={Icon}
                     label={label}
-                    onClick={() => { setActiveTab(key); setMenuOpen(false) }}
+                    onClick={() => { setActiveTab(key); setMenuOpen(false); }}
                   />
                 ))}
                 <NavItem icon={User} label="Impostazioni (coming soon)" onClick={() => setMenuOpen(false)} />
@@ -403,43 +183,13 @@ export default function App() {
         {/* Modale transazione */}
         <TransactionModal
           open={txModalOpen}
-          onClose={() => { setTxModalOpen(false); setEditingTx(null) }}
+          onClose={closeTxModal}
           initial={editingTx}
-          subcats={state.subcats}
+          subcats={subcats}
           mains={mainsForModal}
-          onSave={async (payload) => {
-            const isEdit = Boolean(editingTx?.id)
-            const body = {
-              date: payload.date || new Date().toISOString(),
-              amount: Number(payload.amount || 0),
-              main: String(payload.main || 'EXPENSE').toUpperCase(),
-              note: payload.note || '',
-              payee: payload.payee || '',
-              subId: payload.subId || null,
-              subName: payload.sub || null
-            }
-
-            try {
-              if (isEdit) {
-                const updated = await api.updateTransaction(token, editingTx.id, body)
-                const normalizedMain = normalizeMainKey(updated.main)
-                const normalized = { ...updated, main: normalizedMain, sub: payload.sub || updated.subcategory?.name || '' }
-                setState(s => ({ ...s, transactions: s.transactions.map(t => t.id === editingTx.id ? normalized : t) }))
-              } else {
-                const created = await api.addTransaction(token, body)
-                const normalizedMain = normalizeMainKey(created.main)
-                const normalized = { ...created, main: normalizedMain, sub: payload.sub || created.subcategory?.name || '' }
-                setState(s => ({ ...s, transactions: [normalized, ...s.transactions] }))
-              }
-            } catch (err) {
-              console.error('Errore save tx:', err.message)
-            } finally {
-              setTxModalOpen(false)
-              setEditingTx(null)
-            }
-          }}
+          onSave={saveTx}
         />
       </div>
     </ToastProvider>
-  )
+  );
 }

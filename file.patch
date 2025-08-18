@@ -1,15 +1,80 @@
-diff --git a//dev/null b/src/features/ui/index.js
-index 0000000000000000000000000000000000000000..5eaafe9295205519d0bfb7897898e9c3a35e36fb 100644
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a//dev/null b/src/features/transactions/useTransactions.js
+index 0000000000000000000000000000000000000000..3e720801038ffb504f89936bb91b54af7e66d1c3 100644
 --- a//dev/null
-+++ b/src/features/ui/index.js
-@@ -0,0 +1,10 @@
-+export { cx } from './components/cx.js';
-+export { Card } from './components/Card.jsx';
-+export { CardContent } from './components/CardContent.jsx';
-+export { Button } from './components/Button.jsx';
-+export { Input } from './components/Input.jsx';
-+export { Label } from './components/Label.jsx';
-+export { Badge } from './components/Badge.jsx';
-+export { Switch } from './components/Switch.jsx';
-+export { NativeSelect } from './components/NativeSelect.jsx';
-+export { NavItem } from './components/NavItem.jsx';
++++ b/src/features/transactions/useTransactions.js
+@@ -0,0 +1,71 @@
++import { useState } from 'react';
++import { api } from '../../lib/api.js';
++
++const normalizeMainKey = (main) => {
++  const u = String(main || 'EXPENSE').toUpperCase();
++  const map = { INCOME: 'income', EXPENSE: 'expense', DEBT: 'debt', SAVINGS: 'saving', SAVING: 'saving' };
++  return map[u] || u.toLowerCase();
++};
++
++export function useTransactions(token) {
++  const [transactions, setTransactions] = useState([]);
++  const [txModalOpen, setTxModalOpen] = useState(false);
++  const [editingTx, setEditingTx] = useState(null);
++
++  const openAddTx = () => { setEditingTx(null); setTxModalOpen(true); };
++  const openEditTx = (tx) => { setEditingTx(tx); setTxModalOpen(true); };
++  const closeTxModal = () => { setTxModalOpen(false); setEditingTx(null); };
++
++  const delTx = async (id) => {
++    setTransactions(s => s.filter(t => t.id !== id));
++    try {
++      await api.deleteTransaction(token, id);
++    } catch (err) {
++      console.error('Errore delete tx:', err.message);
++    }
++  };
++
++  const saveTx = async (payload) => {
++    const isEdit = Boolean(editingTx?.id);
++    const body = {
++      date: payload.date || new Date().toISOString(),
++      amount: Number(payload.amount || 0),
++      main: String(payload.main || 'EXPENSE').toUpperCase(),
++      note: payload.note || '',
++      payee: payload.payee || '',
++      subId: payload.subId || null,
++      subName: payload.sub || null,
++    };
++
++    try {
++      if (isEdit) {
++        const updated = await api.updateTransaction(token, editingTx.id, body);
++        const normalizedMain = normalizeMainKey(updated.main);
++        const normalized = { ...updated, main: normalizedMain, sub: payload.sub || updated.subcategory?.name || '' };
++        setTransactions(s => s.map(t => (t.id === editingTx.id ? normalized : t)));
++      } else {
++        const created = await api.addTransaction(token, body);
++        const normalizedMain = normalizeMainKey(created.main);
++        const normalized = { ...created, main: normalizedMain, sub: payload.sub || created.subcategory?.name || '' };
++        setTransactions(s => [normalized, ...s]);
++      }
++    } catch (err) {
++      console.error('Errore save tx:', err.message);
++    } finally {
++      closeTxModal();
++    }
++  };
++
++  return {
++    transactions,
++    txModalOpen,
++    editingTx,
++    openAddTx,
++    openEditTx,
++    closeTxModal,
++    delTx,
++    saveTx,
++  };
++}
++
++export default useTransactions;
+ 
+EOF
+)
