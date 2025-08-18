@@ -26,3 +26,10 @@ feature, ad esempio:
 
 Questa convenzione mantiene separati i domini applicativi e facilita la
 scalabilità del progetto.
+
+## API layer
+
+Il modulo `src/lib/api.js` centralizza le chiamate verso il backend.
+Ogni metodo è documentato con JSDoc per parametri, risposta e possibili
+errori. Configura la variabile d'ambiente `VITE_API_URL` per definire la
+base delle richieste.
