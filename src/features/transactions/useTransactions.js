@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 
 const normalizeMainKey = (main) => {
@@ -11,6 +11,31 @@ export function useTransactions(token) {
   const [transactions, setTransactions] = useState([]);
   const [txModalOpen, setTxModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState(null);
+
+  // Caricamento iniziale: mese corrente (API richiede year+month)
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      if (!token) { setTransactions([]); return; }
+      try {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1; // 1-12
+        const list = await api.listTransactions(token, year, month);
+        const normalized = list.map(t => ({
+          ...t,
+          main: normalizeMainKey(t.main),
+          sub: t.subcategory?.name || t.sub || '',
+        }));
+        if (active) setTransactions(normalized);
+      } catch (err) {
+        console.error('Errore list tx:', err.message);
+        if (active) setTransactions([]);
+      }
+    }
+    load();
+    return () => { active = false; };
+  }, [token]);
 
   const openAddTx = () => { setEditingTx(null); setTxModalOpen(true); };
   const openEditTx = (tx) => { setEditingTx(tx); setTxModalOpen(true); };
