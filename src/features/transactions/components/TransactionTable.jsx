@@ -56,6 +56,7 @@ function getSubcategoryInfo(t, state) {
     t.subName ||
     t.subname ||
     t.subcategoryName ||
+    t.subcategory?.name ||
     t.Subcategory?.name;
 
   const byDirectIcon =
