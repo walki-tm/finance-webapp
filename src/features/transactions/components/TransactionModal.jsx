@@ -79,7 +79,7 @@ function CategorySelect({ value, onChange, mains = [] }) {
   }, [LIST.map(c => `${c.key}:${c.enabled !== false}`).join('|')]);
 
   const RenderMainChip = ({ m }) => {
-    const CoreIcon = CORE_MAIN_ICONS[m.key];
+    // Niente icone per le categorie main: solo testo con stile
     return (
       <span
         className="inline-flex items-center gap-1.5 font-bold uppercase tracking-wide px-2 py-1 rounded-lg"
@@ -89,10 +89,6 @@ function CategorySelect({ value, onChange, mains = [] }) {
           border: `1px solid ${hexToRgba(m.color, 0.55)}`
         }}
       >
-        {/* se custom e ha iconKey -> SvgIcon; altrimenti icona core se disponibile */}
-        {m.iconKey
-          ? <SvgIcon name={m.iconKey} size={14} color={m.color} />
-          : (CoreIcon ? <CoreIcon className="h-4 w-4" /> : null)}
         {m.name}
       </span>
     );

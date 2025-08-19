@@ -4,8 +4,9 @@ import { createPortal } from "react-dom";
 
 // Palette fisse per main + custom
 const PALETTES = {
-    income: ['#92e4b3ff', '#56e2c6', '#3D9B68', '#34aa6bff', '#7fecc8ff', '#9be953ff', '#aaec40ff', '#06a568ff'],
-    expense: ['#6fb5eeff', '#63c4ff', '#1E88E5', '#57b8f0ff', '#499fcaff', '#18b4c9ff', '#537fc2ff', '#717de6ff'],
+    // Tutti i colori in formato #RRGGBB (niente alpha) per compatibilità backend
+    income: ['#92e4b3', '#56e2c6', '#3D9B68', '#34aa6b', '#7fecc8', '#9be953', '#aaec40', '#06a568'],
+    expense: ['#6fb5ee', '#63c4ff', '#1E88E5', '#57b8f0', '#499fca', '#18b4c9', '#537fc2', '#717de6'],
     debt: ['#FF8BA3', '#F06282', '#ED4870', '#A53048', '#F36C6C', '#E53935', '#C62828', '#8E2424'],
     saving: ['#FFFF2A', '#FFEC22', '#F5C51C', '#D4A017', '#FFD54F', '#FFB300', '#FFA726', '#FF8F00'],
     custom: ['#AB47BC', '#8E24AA', '#EC407A', '#D81B60', '#FF7043', '#FF5722', '#00ACC1', '#00838F', '#5C6BC0', '#3949AB', '#C0CA33', '#9E9D24'],
