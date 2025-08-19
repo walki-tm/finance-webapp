@@ -67,9 +67,11 @@ function getSubcategoryInfo(t, state) {
     return { name: byDirectName, iconKey: byDirectIcon || null };
   }
 
-  // 2) se abbiamo solo l'id, proviamo a cercare nello stato client
-  if (t.subId && state?.subcats?.[t.main]) {
-    const found = (state.subcats[t.main] || []).find(s => s.id === t.subId || s.name === t.subId);
+  // 2) se abbiamo solo id o solo nome, proviamo a cercare nello stato client
+  if (state?.subcats?.[t.main]) {
+    const needleId = t.subId || null;
+    const needleName = t.sub || t.subName || t.subname || null;
+    const found = (state.subcats[t.main] || []).find(s => (needleId && s.id === needleId) || (needleName && s.name === needleName));
     if (found) return { name: found.name, iconKey: found.iconKey || null };
   }
 
