@@ -9,7 +9,6 @@
 2. **Consulta** `page-map.md` per la struttura completa
 3. **Non modificare** funzionalità esistenti senza esplicita richiesta
 4. **Mantieni** la struttura e l'architettura attuali
-
 ---
 
 ## 🏗️ Architettura del Progetto
