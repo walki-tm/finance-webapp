@@ -1,25 +1,70 @@
-import React, { useMemo } from 'react';
-import { ToastProvider } from './features/toast';
-import { Switch, Badge, NavItem } from './features/ui';
-import AuthScreens from './features/auth/pages/Auth.jsx';
-import TransactionModal from './features/transactions/components/TransactionModal.jsx';
-import { useAuth } from './context/AuthContext.jsx';
-import { tabs } from './lib/tabs.js';
-import useCategories from './features/categories/useCategories.js';
-import useTransactions from './features/transactions/useTransactions.js';
-import { Layers3, LogOut, SunMedium, Moon, User, Plus } from 'lucide-react';
-import useTheme from './features/app/useTheme.js';
-import useBudgets from './features/app/useBudgets.js';
-import useTabState from './features/app/useTabState.js';
+/**
+ * 📄 APP PRINCIPALE: Finance WebApp - Componente Root
+ * 
+ * 🎯 Scopo: Componente principale dell'applicazione che gestisce:
+ * - Autenticazione utente
+ * - Layout e navigazione
+ * - State management globale
+ * - Routing tra le diverse sezioni
+ * 
+ * 🔧 Dipendenze principali:
+ * - React per UI e state management
+ * - Lucide React per icone
+ * - Context API per auth state
+ * - Custom hooks per business logic
+ * 
+ * 📝 Note:
+ * - Supporta tema dark/light
+ * - Layout responsive con drawer menu
+ * - State centralizzato per performance
+ * - Lazy loading dei componenti tabs
+ * 
+ * @author Finance WebApp Team
+ * @modified 19 Gennaio 2025 - Aggiunta documentazione e migliorata struttura
+ */
 
+// 🔸 Import core React
+import React, { useMemo } from 'react'
+
+// 🔸 Import providers e context
+import { ToastProvider } from './features/toast'
+import { useAuth } from './context/AuthContext.jsx'
+
+// 🔸 Import componenti UI
+import { Switch, Badge, NavItem } from './components/ui'
+import AuthScreens from './features/auth/pages/Auth.jsx'
+import TransactionModal from './features/transactions/components/TransactionModal.jsx'
+
+// 🔸 Import utilities e configurazioni
+import { tabs } from './lib/tabs.js'
+
+// 🔸 Import custom hooks per business logic
+import useCategories from './features/categories/useCategories.js'
+import useTransactions from './features/transactions/useTransactions.js'
+import useTheme from './features/app/useTheme.js'
+import useBudgets from './features/app/useBudgets.js'
+import useTabState from './features/app/useTabState.js'
+
+// 🔸 Import icone
+import { Layers3, LogOut, SunMedium, Moon, User, Plus } from 'lucide-react'
+
+/**
+ * 🎯 COMPONENTE: App Principale
+ * 
+ * Gestisce tutto lo state globale dell'applicazione e orchestra
+ * l'interazione tra i diversi moduli/feature.
+ */
 export default function App() {
-  const { user, logout, token } = useAuth();
+  // 🔸 Hook per autenticazione
+  const { user, logout, token } = useAuth()
 
-  const { theme, toggleTheme } = useTheme();
-  const year = String(new Date().getFullYear());
-  const { budgets, upsertBudget } = useBudgets(year);
-  const { activeTab, setActiveTab, menuOpen, setMenuOpen, dashDetail, setDashDetail } = useTabState();
+  // 🔸 Hook per UI e navigazione
+  const { theme, toggleTheme } = useTheme()
+  const year = String(new Date().getFullYear())
+  const { budgets, upsertBudget } = useBudgets(year)
+  const { activeTab, setActiveTab, menuOpen, setMenuOpen, dashDetail, setDashDetail } = useTabState()
 
+  // 🔸 Hook per gestione categorie
   const {
     customMainCats,
     subcats,
@@ -31,8 +76,9 @@ export default function App() {
     addSubcat,
     updateSubcat,
     removeSubcat,
-  } = useCategories(token);
+  } = useCategories(token)
 
+  // 🔸 Hook per gestione transazioni
   const {
     transactions,
     txModalOpen,
@@ -42,10 +88,9 @@ export default function App() {
     closeTxModal,
     delTx,
     saveTx,
-  } = useTransactions(token);
+  } = useTransactions(token)
 
-  
-
+  // 🔸 State consolidato per performance (memoized)
   const state = useMemo(() => ({
     theme,
     customMainCats,
@@ -53,8 +98,9 @@ export default function App() {
     subcats,
     budgets,
     transactions,
-  }), [theme, customMainCats, mainEnabled, subcats, budgets, transactions]);
+  }), [theme, customMainCats, mainEnabled, subcats, budgets, transactions])
 
+  // 🔸 Props per i tab components (memoized)
   const tabProps = useMemo(() => ({
     dashboard: {
       state,
@@ -81,7 +127,7 @@ export default function App() {
       year,
       upsertBudget,
     },
-  }), [state, year, dashDetail, delTx, openEditTx, addSubcat, updateSubcat, removeSubcat, updateMainCat, addMainCat, removeMainCat, upsertBudget]);
+  }), [state, year, dashDetail, delTx, openEditTx, addSubcat, updateSubcat, removeSubcat, updateMainCat, addMainCat, removeMainCat, upsertBudget])
 
   return (
     <ToastProvider>
@@ -139,7 +185,6 @@ export default function App() {
               </div>
 
               <div className="mt-4">
-                {activeTab === 'budgeting' && <Budgeting state={state} year={year} upsertBudget={upsertBudget} />}
                 {tabs.map(({ key, component: Component }) => {
                   if (activeTab !== key) return null;
                   return <Component key={key} {...tabProps[key]} />;
