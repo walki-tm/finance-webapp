@@ -11,6 +11,7 @@ const txSchema = z.object({
   amount: z.coerce.number(),
   main: z.string().min(1).max(32).transform(s => s.toUpperCase()),
   subId: z.string().optional().nullable(),
+  subName: z.string().optional().nullable(),
   note: z.string().optional().nullable(),
   payee: z.string().optional().nullable(),
 })
