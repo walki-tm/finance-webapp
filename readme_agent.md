@@ -48,7 +48,8 @@ UI: Custom components + Lucide Icons
 - Seguire le convenzioni in `.conventions.md`
 - Mantenere compatibilità backward
 - Aggiungere documentazione per nuovo codice
-- Testare modifiche prima del commit
+- Testare modifiche prima del commit, chiedere all'utente se può testare personalmente
+- Chiedere all'utente se si può procedere al commit
 - Usare TypeScript dove appropriato
 - Seguire pattern esistenti
 
