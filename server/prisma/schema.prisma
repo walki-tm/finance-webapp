@@ -18,6 +18,7 @@ model User {
   categories    Category[]
   subcategories Subcategory[]
   transactions  Transaction[]
+  budgets       Budget[]
 }
 
 model Category {
@@ -43,6 +44,7 @@ model Subcategory {
   categoryId String
   name       String
   iconKey    String?
+  sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -50,8 +52,34 @@ model Subcategory {
   Category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   transactions Transaction[]
+  budgets      Budget[]
 
   @@unique([userId, categoryId, name])
+  @@index([userId, categoryId, sortOrder])
+}
+
+model Budget {
+  id             String   @id @default(cuid())
+  userId         String
+  main           String   @db.VarChar(32) // deve combaciare con la MAIN della Category
+  subcategoryId  String?  // riferimento alla sottocategoria specifica
+  period         String   // formato "YYYY-MM" per anno-mese
+  amount         Decimal  @db.Decimal(20, 2)
+  style          String   @default("FIXED") // FIXED, PERCENT_OF_INCOME, ENVELOPE, ONE_OFF
+  pctOfIncome    Decimal? @db.Decimal(5, 2) // percentuale del reddito se style = PERCENT_OF_INCOME
+  rollover       Boolean  @default(false)
+  capType        String?  // SOFT, HARD
+  notes          String?
+  overrideChildren Boolean @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  User User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subcategory Subcategory? @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, main, subcategoryId, period])
+  @@index([userId, period])
+  @@index([userId, main])
 }
 
 model Transaction {

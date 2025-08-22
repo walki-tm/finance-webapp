@@ -30,6 +30,7 @@ export default function Categories({
   addSubcat,
   updateSubcat,
   removeSubcat,
+  reorderSubcats,
   updateMainCat,
   addMainCat,
   removeMainCat,
@@ -73,6 +74,7 @@ export default function Categories({
             addSubcat={addSubcat}
             updateSubcat={updateSubcat}
             removeSubcat={removeSubcat}
+            reorderSubcats={reorderSubcats}
           />
         )}
       </div>

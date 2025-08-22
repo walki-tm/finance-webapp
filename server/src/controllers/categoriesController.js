@@ -28,6 +28,7 @@ import {
   updateSubcategory as updateSubcategoryService,
   deleteCategory as deleteCategoryService,
   deleteSubcategory as deleteSubcategoryService,
+  reorderSubcategories as reorderSubcategoriesService,
 } from '../services/categoryService.js'
 
 // 🔸 Validation schemas per categorie
@@ -56,6 +57,11 @@ const subcategorySchema = z.object({
 const subcategoryPatchSchema = z.object({
   name: z.string().min(1, 'Nome sottocategoria richiesto').max(80, 'Nome sottocategoria troppo lungo').optional(),
   iconKey: z.string().nullable().optional(),
+  sortOrder: z.number().int().min(0).optional(),
+})
+
+const reorderSchema = z.object({
+  items: z.array(z.object({ id: z.string().min(1), sortOrder: z.number().int().min(0) })).min(1)
 })
 
 /**
@@ -252,5 +258,23 @@ export async function deleteSubcategory(req, res, next) {
     res.status(204).end()
   } catch (e) { 
     next(e) 
+  }
+}
+
+/**
+ * 🎯 CONTROLLER: Riordina sottocategorie (batch)
+ */
+export async function reorderSubcategories(req, res, next) {
+  const parsed = reorderSchema.safeParse(req.body)
+  if (!parsed.success) {
+    const errors = parsed.error.errors.map(e => e.message).join(', ')
+    return res.status(400).json({ error: 'Dati reorder non validi', details: errors })
+  }
+  try {
+    const { items } = parsed.data
+    await reorderSubcategoriesService(req.user.id, items)
+    res.status(204).end()
+  } catch (e) {
+    next(e)
   }
 }

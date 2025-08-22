@@ -9,7 +9,11 @@ function httpError(status, message) {
 export async function getCategories(userId) {
   return prisma.category.findMany({
     where: { userId },
-    include: { subcats: true },
+    include: {
+      subcats: {
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }]
+      }
+    },
     orderBy: [{ main: 'asc' }, { name: 'asc' }]
   })
 }
@@ -39,6 +43,20 @@ export async function updateSubcategory(userId, id, data) {
   const sub = await prisma.subcategory.findFirst({ where: { id, userId } })
   if (!sub) throw httpError(404, 'Not found')
   return prisma.subcategory.update({ where: { id }, data })
+}
+
+export async function reorderSubcategories(userId, items) {
+  await prisma.$transaction(async (tx) => {
+    for (const it of items) {
+      const sub = await tx.subcategory.findFirst({ where: { id: it.id, userId } })
+      if (!sub) throw httpError(404, 'Subcategory not found')
+      await tx.subcategory.update({
+        where: { id: it.id },
+        data: { sortOrder: it.sortOrder }
+      })
+    }
+  })
+  return true
 }
 
 export async function deleteCategory(userId, id) {

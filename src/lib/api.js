@@ -127,6 +127,11 @@ export const api = {
   updateSubCategory: (token, id, data) =>
     request(`/api/categories/sub/${id}`, "PUT", token, data),
   /**
+   * Riordina sottocategorie (batch)
+   */
+  reorderSubCategories: (token, items) =>
+    request(`/api/categories/sub/reorder`, "PUT", token, { items }),
+  /**
    * Elimina una sottocategoria.
    * @param {string} token Token di accesso JWT.
    * @param {string|number} id Identificativo della sottocategoria.
@@ -175,4 +180,52 @@ export const api = {
    */
   deleteTransaction: (token, id) =>
     request(`/api/transactions/${id}`, "DELETE", token),
+
+  // ---- Budgets ----
+  /**
+   * Elenca tutti i budget dell'utente per un anno.
+   * @param {string} token Token di accesso JWT.
+   * @param {number} year Anno di riferimento.
+   * @returns {Promise<Array>} Lista di budget.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  listBudgets: (token, year) =>
+    request(`/api/budgets?year=${year}`, "GET", token),
+  /**
+   * Crea o aggiorna un budget specifico.
+   * @param {string} token Token di accesso JWT.
+   * @param {object} data Dettagli del budget.
+   * @returns {Promise<object>} Budget creato/aggiornato.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  upsertBudget: (token, data) =>
+    request("/api/budgets", "POST", token, data),
+  /**
+   * Crea o aggiorna più budget in una singola operazione.
+   * @param {string} token Token di accesso JWT.
+   * @param {Array} budgets Array di budget da creare/aggiornare.
+   * @returns {Promise<Array>} Budget creati/aggiornati.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  batchUpsertBudgets: (token, budgets) =>
+    request("/api/budgets/batch", "POST", token, { budgets }),
+  /**
+   * Elimina un budget.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} id Identificativo del budget.
+   * @returns {Promise<null>} Nessun contenuto in caso di successo.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  deleteBudget: (token, id) =>
+    request(`/api/budgets/${id}`, "DELETE", token),
+  /**
+   * Elenca budget per categoria specifica.
+   * @param {string} token Token di accesso JWT.
+   * @param {string} main Categoria principale.
+   * @param {number} year Anno di riferimento.
+   * @returns {Promise<Array>} Lista di budget per la categoria.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  getBudgetsByCategory: (token, main, year) =>
+    request(`/api/budgets/category/${main}?year=${year}`, "GET", token),
 };

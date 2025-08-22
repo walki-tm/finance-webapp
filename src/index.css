@@ -33,3 +33,96 @@
 .dark ::-webkit-scrollbar-thumb:hover {
   background-color: rgba(148, 163, 184, 0.5);
 }
+
+/* Griglia personalizzata per budgeting (1 colonna label + 12 mesi) */
+.grid-cols-13 {
+  display: grid;
+  grid-template-columns: 2fr repeat(12, 1fr);
+  gap: 0.5rem;
+}
+
+@media (min-width: 1024px) {
+  .grid-cols-13 {
+    grid-template-columns: 1.5fr repeat(12, 1fr);
+    gap: 0.75rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .grid-cols-13 {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+  
+  .grid-cols-13 > div:first-child {
+    grid-column: 1 / -1;
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  }
+  
+  .grid-cols-13 > div:not(:first-child) {
+    display: inline-flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.25rem 0;
+  }
+  
+  .grid-cols-13 > div:not(:first-child)::before {
+    content: attr(data-month);
+    font-size: 0.75rem;
+    opacity: 0.7;
+    min-width: 3rem;
+  }
+}
+
+/* Tabelle responsive con colonne compatte */
+.budget-table-responsive {
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.budget-table-responsive th,
+.budget-table-responsive td {
+  padding: 0.5rem 0.25rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.budget-table-responsive th:first-child,
+.budget-table-responsive td:first-child {
+  text-align: left;
+  padding-left: 0.5rem;
+}
+
+.budget-table-responsive th:last-child,
+.budget-table-responsive td:last-child {
+  padding-right: 0.5rem;
+}
+
+/* Colonne mesi più compatte */
+.month-col {
+  min-width: 60px;
+  max-width: 80px;
+  font-size: 0.75rem;
+}
+
+/* Responsive per schermi piccoli - manteniamo tabella ma compatta */
+@media (max-width: 1200px) {
+  .budget-table-responsive {
+    font-size: 0.75rem;
+  }
+  
+  .budget-table-responsive th,
+  .budget-table-responsive td {
+    padding: 0.375rem 0.125rem;
+  }
+  
+  .month-col {
+    min-width: 50px;
+    max-width: 65px;
+    font-size: 0.7rem;
+  }
+}

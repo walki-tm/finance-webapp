@@ -9,6 +9,7 @@ import {
   updateSubcategory,
   deleteCategory,
   deleteSubcategory,
+  reorderSubcategories,
 } from '../controllers/categoriesController.js'
 
 const router = Router()
@@ -18,6 +19,7 @@ router.get('/', listCategories)
 router.post('/', createCategory)
 router.put('/:id', updateCategory)
 router.post('/sub', createSubcategory)
+router.put('/sub/reorder', reorderSubcategories)  // DEVE ESSERE PRIMA di /sub/:id
 router.put('/sub/:id', updateSubcategory)
 router.delete('/:id', deleteCategory)
 router.delete('/sub/:id', deleteSubcategory)

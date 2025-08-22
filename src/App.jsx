@@ -61,7 +61,7 @@ export default function App() {
   // 🔸 Hook per UI e navigazione
   const { theme, toggleTheme } = useTheme()
   const year = String(new Date().getFullYear())
-  const { budgets, upsertBudget } = useBudgets(year)
+  const { budgets, upsertBudget, batchUpsertBudgets } = useBudgets(year)
   const { activeTab, setActiveTab, menuOpen, setMenuOpen, dashDetail, setDashDetail } = useTabState()
 
   // 🔸 Hook per gestione categorie
@@ -76,6 +76,7 @@ export default function App() {
     addSubcat,
     updateSubcat,
     removeSubcat,
+    reorderSubcats,
   } = useCategories(token)
 
   // 🔸 Hook per gestione transazioni
@@ -121,13 +122,15 @@ export default function App() {
       updateMainCat,
       addMainCat,
       removeMainCat,
+      reorderSubcats,
     },
     budgeting: {
       state,
       year,
       upsertBudget,
+      batchUpsertBudgets,
     },
-  }), [state, year, dashDetail, delTx, openEditTx, addSubcat, updateSubcat, removeSubcat, updateMainCat, addMainCat, removeMainCat, upsertBudget])
+  }), [state, year, dashDetail, delTx, openEditTx, addSubcat, updateSubcat, removeSubcat, updateMainCat, addMainCat, removeMainCat, upsertBudget, batchUpsertBudgets])
 
   return (
     <ToastProvider>

@@ -44,7 +44,7 @@ export function useCategories(token) {
             iconKey: c.iconKey || undefined,
           });
           if (typeof c.visible === 'boolean') enabledMap[key] = c.visible;
-          subByMain[key] = (c.subcats || []).map(sc => ({ id: sc.id, name: sc.name, iconKey: sc.iconKey || null }));
+          subByMain[key] = (c.subcats || []).map(sc => ({ id: sc.id, name: sc.name, iconKey: sc.iconKey || null, sortOrder: sc.sortOrder ?? 0 }));
         }
 
         for (const c of customs) {
@@ -57,7 +57,7 @@ export function useCategories(token) {
             iconKey: c.iconKey || undefined,
           });
           if (typeof c.visible === 'boolean') enabledMap[key] = c.visible;
-          const arr = (c.subcats || []).map(sc => ({ id: sc.id, name: sc.name, iconKey: sc.iconKey || null }));
+          const arr = (c.subcats || []).map(sc => ({ id: sc.id, name: sc.name, iconKey: sc.iconKey || null, sortOrder: sc.sortOrder ?? 0 }));
           subByMain[key] = (subByMain[key] || []).concat(arr);
         }
 
@@ -180,6 +180,36 @@ export function useCategories(token) {
     return Object.values(byKey);
   }, [customMainCats, mainEnabled]);
 
+  function getCategoryIdByMain(key) {
+    const list = customMainCats;
+    const found = list.find(c => c.key === key);
+    return found?.id || null;
+  }
+
+  const reorderSubcats = async (main, idsInOrder) => {
+    const items = idsInOrder.map((id, idx) => ({ id, sortOrder: idx }));
+
+    // optimistic update
+    let prev;
+    setSubcats((s) => {
+      prev = s;
+      const nextList = (s[main] || [])
+        .slice()
+        .sort((a, b) => idsInOrder.indexOf(a.id) - idsInOrder.indexOf(b.id))
+        .map((sc, idx) => ({ ...sc, sortOrder: idx }));
+      return { ...s, [main]: nextList };
+    });
+
+    try {
+      await api.reorderSubCategories(token, items);
+      return true;
+    } catch (e) {
+      // rollback on failure
+      if (prev) setSubcats(prev);
+      throw e;
+    }
+  };
+
   return {
     customMainCats,
     subcats,
@@ -191,6 +221,7 @@ export function useCategories(token) {
     addSubcat,
     updateSubcat,
     removeSubcat,
+    reorderSubcats,
   };
 }
 

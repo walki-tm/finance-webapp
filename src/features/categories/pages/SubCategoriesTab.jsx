@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Card, CardContent, Input, Button } from "../../ui";
-import { Save, Check, X, ChevronDown } from "lucide-react";
+import { Save, Check, X, ChevronDown, GripVertical } from "lucide-react";
 import { useToast } from "../../toast";
 import SvgIcon from "../../icons/components/SvgIcon.jsx";
 import IconBrowserModal from "../components/IconBrowserModal.jsx";
@@ -90,7 +90,7 @@ function getMainPalette(state) {
   return { core, customs, all: [...core, ...customs] };
 }
 
-export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSubcat = () => {}, removeSubcat = () => {} }) {
+export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSubcat = () => {}, removeSubcat = () => {}, reorderSubcats = () => {} }) {
   const toast = useToast();
   const { core, customs } = getMainPalette(state);
 
@@ -111,6 +111,12 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
   const [editAll, setEditAll] = useState(false);
   const [draftRows, setDraftRows] = useState([]);
   const [editingRowId, setEditingRowId] = useState(null);
+
+  // Drag & Drop state
+  const [dragIdx, setDragIdx] = useState(null);
+  const [overIdx, setOverIdx] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   const entriesMemo = useMemo(() => entries, [entries]);
 
@@ -190,7 +196,14 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
   }
 
   const rowsView = editAll ? draftRows : entries;
-  const rowsSorted = [...rowsView].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  const rowsSorted = useMemo(() => {
+    const arr = [...rowsView];
+    // Ordina per sortOrder se presente, altrimenti per nome
+    arr.sort((a,b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    return arr;
+  }, [rowsView]);
+
+  const displayedRows = preview ?? rowsSorted;
 
   return (
     <div className="space-y-4">
@@ -258,34 +271,94 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
           </div>
 
           <div className="overflow-auto rounded-xl border border-slate-200/20">
+            <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
+              Suggerimento: trascina le righe per riordinare (disponibile fuori da "Modifica" generale).
+            </div>
             <table className="w-full text-sm">
               <thead className="bg-slate-100 dark:bg-slate-800">
                 <tr>
-                  <th className="text-left px-2 py-3 w-12">Icona</th>
+                  <th className="text-left px-2 py-3 w-20">Icona</th>
                   <th className="text-left px-2 py-3">Nome</th>
                   <th className="text-left px-2 py-3 w-24">Azioni</th>
                 </tr>
               </thead>
               <tbody className="text-[#444] dark:text-slate-200">
-                {rowsSorted.map(sc => {
+                {displayedRows.map((sc, idx) => {
                   const isEditing = !editAll && editingRowId === sc.id;
                   const titleName = toTitleCase(sc.name);
+                  const rowClasses = [
+                    'border-t','border-slate-200/10','hover:bg-slate-50','dark:hover:bg-slate-800/40',
+                    overIdx === idx ? 'bg-slate-100/60 dark:bg-slate-800/60' : ''
+                  ].join(' ');
                   return (
-                    <tr key={sc.id || sc.name} className="border-t border-slate-200/10 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <tr
+                      key={sc.id || sc.name}
+                      className={rowClasses}
+                      onDragOver={(e) => {
+                        if (editAll || savingOrder) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        if (dragIdx === null) return;
+                        if (idx === dragIdx) return;
+                        const base = preview ?? rowsSorted;
+                        const newOrder = [...base];
+                        const [moved] = newOrder.splice(dragIdx, 1);
+                        newOrder.splice(idx, 0, moved);
+                        setPreview(newOrder);
+                        setOverIdx(idx);
+                        setDragIdx(idx);
+                      }}
+                      onDrop={async (e) => {
+                        if (editAll || savingOrder) return;
+                        e.preventDefault();
+                        const finalOrder = (preview ?? rowsSorted).map(r => r.id).filter(Boolean);
+                        if (finalOrder.length) {
+                          try {
+                            setSavingOrder(true);
+                            await reorderSubcats(main, finalOrder);
+                          } catch (err) {
+                            // Errore gestito dall'optimistic update rollback
+                          } finally {
+                            setSavingOrder(false);
+                          }
+                        }
+                        setPreview(null);
+                        setDragIdx(null);
+                        setOverIdx(null);
+                      }}
+                      onDragEnd={() => { if (!savingOrder) { setPreview(null); setDragIdx(null); setOverIdx(null); } }}
+                      onDragLeave={() => { setOverIdx(null); }}
+                    >
                       <td className="px-2 py-3">
-                        <button
-                          type="button"
-                          title="Cambia icona"
-                          className="rounded-lg px-1 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
-                          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            openIconFor(sc.id);
-                          }}
-                        >
-                          <SvgIcon name={sc.iconKey} color={mainColor} size={22} />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <span
+                            title="Trascina per riordinare"
+                            draggable={!editAll}
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', String(idx));
+                              e.dataTransfer.effectAllowed = 'move';
+                              setDragIdx(idx);
+                              setOverIdx(idx);
+                              setPreview(displayedRows);
+                            }}
+                            className="inline-flex items-center justify-center p-1 rounded cursor-grab active:cursor-grabbing hover:bg-slate-100 dark:hover:bg-slate-800"
+                          >
+                            <GripVertical className="h-4 w-4 opacity-70" />
+                          </span>
+                          <button
+                            type="button"
+                            title="Cambia icona"
+                            className="rounded-lg px-1 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
+                            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              openIconFor(sc.id);
+                            }}
+                          >
+                            <SvgIcon name={sc.iconKey} color={mainColor} size={22} />
+                          </button>
+                        </div>
                       </td>
 
                       <td className="px-2 py-3 align-middle">
