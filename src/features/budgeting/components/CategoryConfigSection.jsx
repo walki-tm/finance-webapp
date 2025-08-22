@@ -40,6 +40,25 @@ export default function CategoryConfigSection({
   const cardBg = hexToRgba(color, dark ? 0.08 : 0.06);
   const cardBorder = hexToRgba(color, dark ? 0.35 : 0.25);
   const headBg = hexToRgba(color, dark ? 0.20 : 0.12);
+  
+  // Calcola DA ALLOCARE per ogni mese (reddito - tutte le spese budget)
+  const calculateToAllocate = (monthIndex) => {
+    const incomeForMonth = (state.subcats?.['income'] || []).reduce((sum, sub) => {
+      return sum + Number(state.budgets[year]?.[`income:${sub.name}:${monthIndex}`] || 0);
+    }, 0);
+    
+    const allExpensesForMonth = Object.keys(state.subcats || {})
+      .filter(key => key !== 'income')
+      .reduce((sum, mainKey) => {
+        const mainSubs = state.subcats[mainKey] || [];
+        const mainTotal = mainSubs.reduce((subSum, sub) => {
+          return subSum + Number(state.budgets[year]?.[`${mainKey}:${sub.name}:${monthIndex}`] || 0);
+        }, 0);
+        return sum + mainTotal;
+      }, 0);
+    
+    return incomeForMonth - allExpensesForMonth;
+  };
 
   // Calcola totali
   const yearTotal = MONTH_INDEXES.reduce((sum, i) => {
@@ -179,6 +198,36 @@ export default function CategoryConfigSection({
                         </tr>
                       );
                     })}
+                    
+                    {/* Riga Disponibilità - separata ma integrata nella tabella */}
+                    <tr className="border-t-2" style={{ 
+                      borderColor: color,
+                      backgroundColor: hexToRgba(color, isDark() ? 0.15 : 0.08)
+                    }}>
+                      <td className="p-2" style={{ color }}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">💰</span>
+                          <span className="font-bold text-sm">Disponibilità:</span>
+                        </div>
+                      </td>
+                      {visibleMonths.map(i => {
+                        const toAllocate = calculateToAllocate(i);
+                        const isNegative = toAllocate < 0;
+                        return (
+                          <td key={i} className="px-3 py-2 text-center">
+                            <div 
+                              className="px-3 py-2 rounded-lg text-sm font-black text-white shadow-lg"
+                              style={{ 
+                                backgroundColor: isNegative ? hexToRgba(color, 0.95) : color,
+                                opacity: isNegative ? 0.8 : 0.9
+                              }}
+                            >
+                              {isNegative ? '-' : ''}{Math.abs(toAllocate).toLocaleString('it-IT')}€
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -350,6 +399,46 @@ export default function CategoryConfigSection({
               </div>
             );
           })}
+          
+          {/* Riga Disponibilità per Mobile - separata ma allineata */}
+          <div className="p-4 border-t-2" style={{ 
+            borderColor: color,
+            backgroundColor: hexToRgba(color, isDark() ? 0.15 : 0.08)
+          }}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2" style={{ color }}>
+                <span className="text-sm">💰</span>
+                <span className="font-bold">Disponibilità:</span>
+              </div>
+            </div>
+            
+            {/* Griglia mesi per disponibilità */}
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              {MONTH_INDEXES.map(i => {
+                const toAllocate = calculateToAllocate(i);
+                const isNegative = toAllocate < 0;
+                return (
+                  <div 
+                    key={i} 
+                    className="p-3 rounded-lg text-center shadow-md" 
+                    style={{
+                      backgroundColor: isNegative ? hexToRgba(color, 0.95) : color,
+                      opacity: isNegative ? 0.8 : 0.9
+                    }}
+                  >
+                    <div className="text-xs font-medium mb-1 text-white" style={{ 
+                      opacity: 0.8 
+                    }}>
+                      {months[i].substring(0, 3)}
+                    </div>
+                    <div className="text-sm font-black text-white">
+                      {isNegative ? '-' : ''}{Math.abs(toAllocate).toLocaleString('it-IT')}€
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Riepilogo totali */}

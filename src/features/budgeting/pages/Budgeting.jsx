@@ -255,10 +255,10 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
     // Calcola statistiche per TUTTE le categorie main (incluso income per Da Allocare)
     const allCategoryStats = {};
     
-    // Prima aggiungi la categoria income per "Da Allocare"
+    // Prima aggiungi la categoria income per "Reddito"
     const incomeMeta = mainMeta('income');
     allCategoryStats['income'] = {
-      meta: { ...incomeMeta, name: 'DA ALLOCARE' },
+      meta: { ...incomeMeta, name: 'REDDITO' },
       yearlyPercentage: 100, // Il reddito è sempre 100% di se stesso
       yearlyAmount: Math.round(yearlyIncome),
       isToAllocate: true,
@@ -353,7 +353,7 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
                                   {isToAllocate && stats.isOverBudget ? 'SFORAMENTO' : stats.meta.name.toUpperCase()}
                                 </h3>
                                 <p className="text-xs lg:text-sm text-slate-500 truncate">
-                                  {isToAllocate ? 'Totale anno' : '% su reddito annuo'}
+                                  {isToAllocate ? 'Disponibile' : '% su reddito annuo'}
                                 </p>
                               </div>
                             </div>
@@ -390,11 +390,15 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
                                       data={[
                                         { 
                                           name: 'used', 
-                                          value: isToAllocate ? Math.abs(stats.toAllocateValue) : stats.yearlyPercentage 
+                                          value: isToAllocate ? 
+                                            (summaryStats.yearlyIncome > 0 ? Math.round((summaryStats.yearlyExpenses / summaryStats.yearlyIncome) * 100) : 0)
+                                            : stats.yearlyPercentage 
                                         },
                                         { 
                                           name: 'remaining', 
-                                          value: isToAllocate ? 0 : Math.max(0, 100 - stats.yearlyPercentage)
+                                          value: isToAllocate ? 
+                                            (summaryStats.yearlyIncome > 0 ? Math.max(0, 100 - Math.round((summaryStats.yearlyExpenses / summaryStats.yearlyIncome) * 100)) : 100)
+                                            : Math.max(0, 100 - stats.yearlyPercentage)
                                         }
                                       ]}
                                       dataKey="value"

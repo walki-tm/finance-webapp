@@ -1,7 +1,7 @@
 # 📍 Finance WebApp - Mappa Pagine e Componenti
 
-> **Aggiornato**: 22 Gennaio 2025  
-> **Versione**: 1.2.0
+> **Aggiornato**: 22 Agosto 2025  
+> **Versione**: 2.0.0
 
 ## 🗺️ Struttura Generale
 
@@ -88,17 +88,26 @@ Finance WebApp/
 ### 💰 Budgeting System
 **Directory**: `src/features/budgeting/`
 
-#### Pagina Principale
+#### Pagina Principale - Interfaccia Cards Interattive
 - **File**: `pages/Budgeting.jsx`
-- **Scopo**: Sistema completo gestione budget mensili/annuali
+- **Scopo**: Sistema completo gestione budget con interfaccia cards espandibili
 - **Funzionalità**:
-  - Pianificazione budget per categoria e sottocategoria
-  - Vista semestrale (Q1/Q2) con controlli toggle
-  - Calcolo automatico "Da allocare" con avvisi over-budget
-  - Percentuali di allocazione per categoria
-  - Riepilogo mensile con trend e confronti
+  - **Cards responsive**: 2 per riga su desktop, 1 su mobile/tablet
+  - **Cards espandibili**: Click per espandere configurazione a tutta larghezza
+  - **Ring charts visuali**: Rappresentazione grafica percentuali categoria su reddito
+  - **Calcolo "Da Allocare"**: Monitoraggio automatico con avvisi sforamento
+  - **Vista semestrale**: Controlli integrati nell'header delle sezioni espanse
+  - **Sincronizzazione real-time**: Aggiornamenti automatici tra componenti
 
-#### Componenti Avanzati
+#### Componenti Configurazione Specializzati
+- **File**: `components/IncomeConfigSection.jsx`
+  - **Scopo**: Sezione dedicata configurazione reddito ("Da Allocare")
+  - **Features**: Tabelle responsive, controlli semestre integrati, totali annuali
+- **File**: `components/CategoryConfigSection.jsx`
+  - **Scopo**: Sezione configurazione categorie di spesa generiche
+  - **Features**: Layout adattivo desktop/mobile, gestione batch operations
+
+#### Componenti Avanzati di Editing
 - **File**: `components/EditableCell.jsx`
   - **Scopo**: Cella editabile inline per valori budget
   - **Features**: Input dinamico, validazione real-time, focus intelligente
@@ -107,12 +116,20 @@ Finance WebApp/
 - **File**: `components/BudgetRowActions.jsx`
   - **Scopo**: Azioni bulk per righe budget (Imposta tutti, Reset)
 
+#### Architettura UI/UX Innovativa
+- **Cards-First Design**: Interfaccia focalizzata su cards interattive
+- **Expand-on-Demand**: Configurazione dettagliata solo quando necessaria
+- **Visual Feedback**: Ring charts e indicatori colorati per comprensione immediata
+- **Contextual Controls**: Controlli semestre contestuali per ogni categoria
+- **Event System**: Comunicazione tra componenti tramite custom events
+
 #### Sistema di Editing Professionale
 - **Inline Editing**: Modifica diretta con larghezza dinamica
 - **Keyboard Navigation**: Enter, Escape, Tab per navigazione
 - **Smart Focus**: Gestione intelligente focus con pulsanti azione
 - **Input Validation**: Supporto decimali/virgole, sanitizzazione real-time
 - **Mobile Optimized**: Tastiera decimale su dispositivi touch
+- **Responsive Tables**: Layout adattivo per desktop e mobile
 
 ---
 
