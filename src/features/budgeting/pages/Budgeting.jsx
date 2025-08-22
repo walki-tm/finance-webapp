@@ -9,6 +9,9 @@ import { buildCtxFromState, selectBudgetRows } from '../lib';
 import EditableCell from '../components/EditableCell.jsx';
 import TotalCell from '../components/TotalCell.jsx';
 import BudgetRowActions from '../components/BudgetRowActions.jsx';
+import IncomeConfigSection from '../components/IncomeConfigSection.jsx';
+import CategoryConfigSection from '../components/CategoryConfigSection.jsx';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
 // helper utili
 const CORE = new Set(['income', 'expense', 'debt', 'saving']);
@@ -59,6 +62,18 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
     });
 
     return () => observer.disconnect();
+  }, []);
+
+  // Hook per gestire il cambio semestre dalle sezioni espanse
+  useEffect(() => {
+    const handleSemesterChange = (event) => {
+      setViewMode(event.detail);
+    };
+
+    window.addEventListener('changeSemester', handleSemesterChange);
+    return () => {
+      window.removeEventListener('changeSemester', handleSemesterChange);
+    };
   }, []);
 
   // Costruisci elenco main da renderizzare: solo quelli abilitati e che hanno sottocategorie
@@ -209,6 +224,9 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
   };
 
   // Calcola statistiche per il riepilogo cards
+  // Stato per gestire quale categoria è espansa
+  const [expandedCategory, setExpandedCategory] = useState(null);
+
   const summaryStats = useMemo(() => {
     // Totale da allocare di tutti i mesi dell'anno
     const yearlyToAllocate = MONTH_INDEXES.reduce((sum, i) => {
@@ -234,8 +252,21 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
     // Determina se c'è sovra-spesa
     const isOverBudget = yearlyExpenses > yearlyIncome && yearlyIncome > 0;
     
-    // Calcola totali annuali e percentuali per categoria
-    const categoryStats = {};
+    // Calcola statistiche per TUTTE le categorie main (incluso income per Da Allocare)
+    const allCategoryStats = {};
+    
+    // Prima aggiungi la categoria income per "Da Allocare"
+    const incomeMeta = mainMeta('income');
+    allCategoryStats['income'] = {
+      meta: { ...incomeMeta, name: 'DA ALLOCARE' },
+      yearlyPercentage: 100, // Il reddito è sempre 100% di se stesso
+      yearlyAmount: Math.round(yearlyIncome),
+      isToAllocate: true,
+      toAllocateValue: yearlyToAllocate,
+      isOverBudget: yearlyToAllocate < 0
+    };
+    
+    // Poi aggiungi tutte le altre categorie
     mainsToRender
       .filter(key => key !== 'income')
       .forEach(key => {
@@ -251,10 +282,11 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
           ? Math.round((yearlyAmount / yearlyIncome) * 100)
           : 0;
         
-        categoryStats[key] = { 
+        allCategoryStats[key] = { 
           meta, 
           yearlyPercentage,
-          yearlyAmount: Math.round(yearlyAmount)
+          yearlyAmount: Math.round(yearlyAmount),
+          isToAllocate: false
         };
       });
     
@@ -263,7 +295,7 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
       yearlyIncome,
       yearlyExpenses,
       isOverBudget,
-      categoryStats
+      allCategoryStats
     };
   }, [monthlyStats, year, mainsToRender, mainMeta]);
 
@@ -272,529 +304,160 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
 
       {/* SEZIONE ALTA: CARDS RIEPILOGO BUDGET */}
       <div className="space-y-4">
-        {/* Cards principali */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card Da Allocare */}
-          <Card className={`shadow-md hover:shadow-lg transition-shadow duration-200 border-l-2 ${
-            summaryStats.yearlyToAllocate < 0 ? 'border-red-400 bg-red-50/30 dark:bg-red-900/10' : ''
-          }`} style={{ borderLeftColor: summaryStats.yearlyToAllocate < 0 ? '#ef4444' : mainMeta('income').color }}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full flex items-center justify-center" style={{ 
-                    backgroundColor: summaryStats.yearlyToAllocate < 0 ? '#ef4444' : mainMeta('income').color 
-                  }}>
-                    {summaryStats.yearlyToAllocate < 0 && (
-                      <span className="text-white text-xs leading-none">⚠</span>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-slate-700 dark:text-slate-200 text-sm">
-                      {summaryStats.yearlyToAllocate < 0 ? 'SFORAMENTO' : 'DA ALLOCARE'}
-                    </h3>
-                    <p className="text-xs text-slate-500">Totale anno</p>
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="text-2xl font-bold" style={{ 
-                  color: summaryStats.yearlyToAllocate < 0 ? '#ef4444' : mainMeta('income').color 
-                }}>
-                  {summaryStats.yearlyToAllocate < 0 ? '-' : ''}
-                  {Math.abs(summaryStats.yearlyToAllocate).toLocaleString('it-IT')}€
-                </div>
-                <div className="text-xs" style={{ 
-                  color: summaryStats.yearlyToAllocate < 0 ? '#ef4444' : '#64748b' 
-                }}>
-                  {summaryStats.yearlyToAllocate < 0 ? (
-                    `Spese: ${summaryStats.yearlyExpenses.toLocaleString('it-IT')}€ | Reddito: ${summaryStats.yearlyIncome.toLocaleString('it-IT')}€`
-                  ) : (
-                    '\u00A0' // spazio non-breaking per mantenere altezza
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          {/* Cards per le principali categorie */}
-          {Object.entries(summaryStats.categoryStats)
-            .sort(([,a], [,b]) => b.yearlyPercentage - a.yearlyPercentage) // ordina per percentuale decrescente
-            .slice(0, 3)
-            .map(([key, stats], idx) => {
-            const isTop = idx === 0 && stats.yearlyPercentage > 0; // Top solo se > 0%
-            return (
-              <Card key={key} className={`shadow-md hover:shadow-lg transition-shadow duration-200 ${
-                isTop ? 'border-l-4' : 'border-l-2'
-              }`} style={{ borderLeftColor: stats.meta.color }}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: stats.meta.color }}></div>
-                      <div>
-                        <h3 className="font-semibold text-slate-700 dark:text-slate-200 text-sm">
-                          {stats.meta.name.toUpperCase()}
-                        </h3>
-                        <p className="text-xs text-slate-500">% su reddito annuo</p>
+        {/* Cards principali - Layout responsive con 2 card per riga su desktop */}
+        <div className="space-y-4">
+          {/* Griglia delle cards con distribuzione intelligente dei colori */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {Object.entries(summaryStats.allCategoryStats)
+              .sort(([,a], [,b]) => {
+                // Da Allocare sempre per primo, poi ordina per percentuale
+                if (a.isToAllocate) return -1;
+                if (b.isToAllocate) return 1;
+                return b.yearlyPercentage - a.yearlyPercentage;
+              })
+              .map(([key, stats]) => {
+                const isExpanded = expandedCategory === key;
+                const isToAllocate = stats.isToAllocate;
+                const cardColor = isToAllocate && stats.isOverBudget ? '#ef4444' : stats.meta.color;
+                
+                return (
+                  <div key={key} className={`w-full ${isExpanded ? 'lg:col-span-2' : ''}`}>
+                    {/* Card principale */}
+                    <button
+                      onClick={() => setExpandedCategory(isExpanded ? null : key)}
+                      className="group w-full transition-all duration-300 transform hover:scale-[1.02] focus:outline-none"
+                    >
+                      <Card className={`shadow-lg hover:shadow-xl transition-all duration-200 border-2 h-20 ${
+                        isToAllocate && stats.isOverBudget ? 'border-red-400 bg-red-50/30 dark:bg-red-900/10' : ''
+                      }`} style={{ borderColor: cardColor }}>
+                        <CardContent className="p-4 h-full">
+                          <div className="flex items-center justify-between h-full">
+                            {/* Contenuto principale */}
+                            <div className="flex items-center gap-4 lg:gap-6">
+                              {/* Icona categoria */}
+                              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ 
+                                backgroundColor: cardColor 
+                              }}>
+                                {isToAllocate && stats.isOverBudget ? (
+                                  <span className="text-white text-sm leading-none">⚠</span>
+                                ) : (
+                                  <span className="text-white text-sm font-bold">
+                                    {isToAllocate ? '€' : stats.meta.name.charAt(0)}
+                                  </span>
+                                )}
+                              </div>
+                              
+                              {/* Nome e descrizione */}
+                              <div className="text-left min-w-0 flex-1">
+                                <h3 className="font-bold text-base lg:text-lg truncate" style={{ color: cardColor }}>
+                                  {isToAllocate && stats.isOverBudget ? 'SFORAMENTO' : stats.meta.name.toUpperCase()}
+                                </h3>
+                                <p className="text-xs lg:text-sm text-slate-500 truncate">
+                                  {isToAllocate ? 'Totale anno' : '% su reddito annuo'}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            {/* Valori e grafico */}
+                            <div className="flex items-center gap-3 lg:gap-6 flex-shrink-0">
+                              {/* Valori numerici */}
+                              <div className="text-right">
+                                <div className="text-xl lg:text-2xl font-bold" style={{ color: cardColor }}>
+                                  {isToAllocate ? (
+                                    `${stats.toAllocateValue < 0 ? '-' : ''}${Math.abs(stats.toAllocateValue).toLocaleString('it-IT')}€`
+                                  ) : (
+                                    `${stats.yearlyPercentage}%`
+                                  )}
+                                </div>
+                                <div className="text-xs lg:text-sm text-slate-500">
+                                  {isToAllocate ? (
+                                    stats.isOverBudget ? (
+                                      `${summaryStats.yearlyExpenses.toLocaleString('it-IT')}€ spese`
+                                    ) : (
+                                      `${stats.yearlyAmount.toLocaleString('it-IT')}€ reddito`
+                                    )
+                                  ) : (
+                                    `${stats.yearlyAmount.toLocaleString('it-IT')}€/anno`
+                                  )}
+                                </div>
+                              </div>
+                              
+                              {/* Ring chart */}
+                              <div className="w-10 h-10 lg:w-12 lg:h-12 relative flex-shrink-0">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                    <Pie
+                                      data={[
+                                        { 
+                                          name: 'used', 
+                                          value: isToAllocate ? Math.abs(stats.toAllocateValue) : stats.yearlyPercentage 
+                                        },
+                                        { 
+                                          name: 'remaining', 
+                                          value: isToAllocate ? 0 : Math.max(0, 100 - stats.yearlyPercentage)
+                                        }
+                                      ]}
+                                      dataKey="value"
+                                      innerRadius={14}
+                                      outerRadius={20}
+                                      startAngle={90}
+                                      endAngle={450}
+                                      strokeWidth={0}
+                                    >
+                                      <Cell fill={cardColor} />
+                                      <Cell fill={isToAllocate ? 'transparent' : `${cardColor}20`} />
+                                    </Pie>
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </div>
+                              
+                              {/* Indicatore espansione */}
+                              <div className="text-slate-400 transition-transform duration-200 flex-shrink-0" style={{
+                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'
+                              }}>
+                                ▼
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </button>
+                    
+                    {/* Sezione espandibile per questa categoria - sempre a tutta larghezza */}
+                    {isExpanded && (
+                      <div className="mt-4 animate-fadeIn col-span-full">
+                        {stats.isToAllocate ? (
+                          <IncomeConfigSection 
+                            year={year}
+                            state={state}
+                            viewMode={viewMode}
+                            visibleMonths={visibleMonths}
+                            upsertBudget={upsertBudget}
+                            batchUpsertBudgets={batchUpsertBudgets}
+                            mainMeta={mainMeta}
+                            onClose={() => setExpandedCategory(null)}
+                          />
+                        ) : (
+                          <CategoryConfigSection 
+                            categoryKey={key}
+                            year={year}
+                            state={state}
+                            viewMode={viewMode}
+                            visibleMonths={visibleMonths}
+                            upsertBudget={upsertBudget}
+                            batchUpsertBudgets={batchUpsertBudgets}
+                            mainMeta={mainMeta}
+                            onClose={() => setExpandedCategory(null)}
+                          />
+                        )}
                       </div>
-                    </div>
-                    {isTop && (
-                      <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 px-2 py-1 rounded-full font-medium">
-                        Top
-                      </span>
                     )}
                   </div>
-                  <div className="space-y-2">
-                    <div className="text-2xl font-bold" style={{ color: stats.meta.color }}>
-                      {stats.yearlyPercentage}%
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {stats.yearlyAmount.toLocaleString('it-IT')}€ / anno
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                );
+              })}
+          </div>
         </div>
       </div>
-
-      {/* SEZIONE DETTAGLIO MENSILE (collassabile) */}
-      <Card className="shadow-lg shadow-slate-200/50 dark:shadow-slate-800/50">
-        <CardContent>
-          <details className="group">
-            <summary className="flex items-center justify-between cursor-pointer p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-semibold text-slate-700 dark:text-slate-200">📋 Dettaglio Mensile</span>
-                <span className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">
-                  Click per espandere
-                </span>
-              </div>
-              <div className="text-slate-400 group-open:rotate-180 transition-transform duration-200">
-                ▼
-              </div>
-            </summary>
-            
-            <div className="mt-4 rounded-xl border border-slate-200/20 shadow-md shadow-slate-100/30 dark:shadow-slate-800/30">
-            {/* Header con griglia responsive */}
-            <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-t-xl">
-              <div className="grid grid-cols-13 gap-2 text-sm font-semibold">
-                <div className="text-left col-span-2 lg:col-span-1">Voce</div>
-                {MONTH_INDEXES.map(i => (
-                  <div key={i} className="text-center text-xs lg:text-sm">
-                    {months[i].substring(0, 3).toUpperCase()}
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            {/* Contenuto con griglia responsive */}
-            <div className="p-4 space-y-3">
-              {/* Da allocare */}
-              <div className="grid grid-cols-13 gap-2 py-2 border-b border-slate-200/10">
-                <div className="col-span-2 lg:col-span-1 font-semibold text-sm" style={{ color: mainMeta('income').color }}>Da allocare</div>
-                {MONTH_INDEXES.map(i => {
-                  const key = `${year}-${String(i + 1).padStart(2, '0')}`;
-                  const monthStat = monthlyStats[key];
-                  const toAllocate = monthStat?.toAllocate || 0;
-                  let textColor = '#64748b'; // default color
-                  let displayText = '';
-                  
-                  if (toAllocate > 0) {
-                    textColor = mainMeta('income').color;
-                    displayText = Math.round(toAllocate).toLocaleString('it-IT') + '€';
-                  } else if (toAllocate < 0) {
-                    textColor = '#ef4444'; // rosso
-                    displayText = `-${Math.round(Math.abs(toAllocate)).toLocaleString('it-IT')}€`;
-                  } else {
-                    // Valori zero = blank (stringa vuota)
-                    displayText = '';
-                  }
-                  
-                  return (
-                    <div 
-                      key={i} 
-                      className="text-center font-semibold text-base" 
-                      style={{ color: textColor }}
-                      data-month={months[i].substring(0, 3).toUpperCase()}
-                    >
-                      {displayText}
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {/* Percentuali per ogni main presente */}
-              {mainsToRender
-                .filter(key => key !== 'income') // escludi income
-                .map(key => {
-                  const meta = mainMeta(key);
-                  return (
-                    <div key={key} className="grid grid-cols-13 gap-2 py-2 border-b border-slate-200/10">
-                      <div className="col-span-2 lg:col-span-1 text-sm" style={{ color: meta.color }}>
-                        % {meta.name.toLowerCase()}
-                      </div>
-                      {MONTH_INDEXES.map(i => {
-                        const monthKey = `${year}-${String(i + 1).padStart(2, '0')}`;
-                        const monthStat = monthlyStats[monthKey];
-                        const percentage = monthStat?.budgetPct?.[key] || 0;
-                        const hasWarning = monthStat?.hasWarning || false;
-                        const budgetIncome = monthStat?.budgetTotals?.['income'] || 0;
-                        
-                        let displayContent = '';
-                        if (budgetIncome === 0 && percentage > 0) {
-                          displayContent = '⚠️'; // Segnale di avvertenza se non c'è reddito MA ci sono spese
-                        } else if (percentage === 0) {
-                          displayContent = '';
-                        } else {
-                          displayContent = `${percentage}%`;
-                          if (hasWarning) displayContent += ' ⚠️'; // Segnale se spese > reddito
-                        }
-                        
-                        return (
-                          <div 
-                            key={i} 
-                            className="text-center font-semibold text-xs" 
-                            style={{ color: budgetIncome === 0 ? '#ef4444' : meta.color }}
-                            data-month={months[i].substring(0, 3).toUpperCase()}
-                          >
-                            {displayContent}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-          </details>
-        </CardContent>
-      </Card>
-
-      {/* CONTROLLI NAVIGAZIONE SEMESTRE */}
-      <div className="flex justify-center mb-6">
-        <Card className="shadow-md shadow-slate-200/40 dark:shadow-slate-800/40">
-          <CardContent className="px-6 py-4">
-            <div className="flex items-center justify-center gap-6">
-              <button
-                onClick={() => setViewMode(viewMode === 'semester1' ? 'semester2' : 'semester1')}
-                className="group p-3 rounded-xl text-xl font-bold transition-all duration-200 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-700 hover:from-blue-100 hover:to-blue-200 dark:hover:from-blue-800/40 dark:hover:to-blue-700/40 hover:scale-105 hover:shadow-lg"
-                title="Cambia semestre"
-              >
-                <span className="group-hover:scale-110 transition-transform duration-200">←</span>
-              </button>
-              
-              <div className="px-8 py-3 rounded-2xl font-bold text-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25 dark:shadow-blue-500/20 border border-blue-400 dark:border-blue-600">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                  <span className="tracking-wide">{viewMode === 'semester1' ? 'GEN-GIU' : 'LUG-DIC'}</span>
-                  <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                </div>
-              </div>
-              
-              <button
-                onClick={() => setViewMode(viewMode === 'semester1' ? 'semester2' : 'semester1')}
-                className="group p-3 rounded-xl text-xl font-bold transition-all duration-200 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-700 hover:from-blue-100 hover:to-blue-200 dark:hover:from-blue-800/40 dark:hover:to-blue-700/40 hover:scale-105 hover:shadow-lg"
-                title="Cambia semestre"
-              >
-                <span className="group-hover:scale-110 transition-transform duration-200">→</span>
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* SEZIONE BASSA: UN FORM PER OGNI MAIN (core + custom con sottocategorie) */}
-      {mainsToRender.map(mainKey => {
-        const subs = state.subcats?.[mainKey] || [];
-        if (!subs.length) return null; // salta se non ci sono sottocategorie
-        const { name, color } = mainMeta(mainKey);
-        const rowsActual = mapMainSubPerMonth[mainKey] || {};
-        const planFor = (sub, i) => Number(state.budgets[year]?.[`${mainKey}:${sub}:${i}`] || 0);
-        const dark = isDark();
-        const cardBg = hexToRgba(color, dark ? 0.08 : 0.06);
-        const cardBorder = hexToRgba(color, dark ? 0.35 : 0.25);
-        const headBg = hexToRgba(color, dark ? 0.20 : 0.12);
-        
-        // Calcola totali semestri
-        const semester1Total = MONTH_INDEXES.slice(0, 6).reduce((sum, i) => {
-          return sum + subs.reduce((subSum, sc) => subSum + planFor(sc.name, i), 0);
-        }, 0);
-        const semester2Total = MONTH_INDEXES.slice(6, 12).reduce((sum, i) => {
-          return sum + subs.reduce((subSum, sc) => subSum + planFor(sc.name, i), 0);
-        }, 0);
-        const yearTotal = semester1Total + semester2Total;
-        
-        return (
-          <div key={mainKey}>
-            {/* Card unica con entrambe le tabelle */}
-            <Card style={{ borderColor: cardBorder, backgroundColor: cardBg }} className="border">
-              <CardContent>
-                <div className="font-semibold mb-3" style={{ color }}>{name.toUpperCase()}</div>
-                <div className="flex gap-4">
-                  {/* Tabella principale */}
-                  <div className="flex-1">
-                    <div className="rounded-xl border" style={{ borderColor: cardBorder }}>
-                      {/* Vista Desktop - Tabella compatta */}
-                      <div className="hidden lg:block overflow-x-auto">
-                        <table className="w-full">
-                          <thead style={{ backgroundColor: headBg }}>
-                            <tr>
-                              <th className="text-left p-2" style={{ color }}>Sottocategoria</th>
-                              {visibleMonths.map(i => (
-                                <th key={i} className="text-center px-3 py-2 whitespace-nowrap" style={{ color }}>
-                                  {months[i].toUpperCase()}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {subs.map((sc, idx) => {
-                              const totalPlanned = MONTH_INDEXES.reduce((a, i) => a + planFor(sc.name, i), 0);
-                              const rowBg = hexToRgba(color, isDark() ? 0.22 : 0.12);
-                              const rowAltBg = hexToRgba(color, isDark() ? 0.14 : 0.08);
-                              
-                              const handleSetAllMonths = async (value) => {
-                                // Optimistic update - non aspettare il risultato
-                                if (batchUpsertBudgets) {
-                                  const updates = MONTH_INDEXES.map(monthIdx => ({
-                                    main: mainKey,
-                                    keyWithMonth: `${sc.name}:${monthIdx}`,
-                                    value
-                                  }));
-                                  batchUpsertBudgets(updates).catch(console.error);
-                                } else {
-                                  MONTH_INDEXES.forEach(monthIdx => {
-                                    upsertBudget(mainKey, `${sc.name}:${monthIdx}`, value).catch(console.error);
-                                  });
-                                }
-                              };
-                              
-                              const handleResetAll = async () => {
-                                // Optimistic update - non aspettare il risultato
-                                if (batchUpsertBudgets) {
-                                  const updates = MONTH_INDEXES.map(monthIdx => ({
-                                    main: mainKey,
-                                    keyWithMonth: `${sc.name}:${monthIdx}`,
-                                    value: 0
-                                  }));
-                                  batchUpsertBudgets(updates).catch(console.error);
-                                } else {
-                                  MONTH_INDEXES.forEach(monthIdx => {
-                                    upsertBudget(mainKey, `${sc.name}:${monthIdx}`, 0).catch(console.error);
-                                  });
-                                }
-                              };
-                              
-                              return (
-                                <tr 
-                                  key={sc.id || sc.name} 
-                                  className="border-t" 
-                                  style={{ 
-                                    borderColor: cardBorder,
-                                    backgroundColor: (idx % 2 === 0) ? rowBg : rowAltBg 
-                                  }}
-                                >
-                                  <td className="p-2" style={{ color }}>
-                                    <div className="flex items-center gap-2">
-                                      <SvgIcon name={sc.iconKey} color={color} size={18} />
-                                      <span className="font-semibold text-sm">{sc.name}</span>
-                                    </div>
-                                  </td>
-                                  {visibleMonths.map(i => (
-                                    <td key={i} className="px-3 py-2 text-center">
-                                      <EditableCell
-                                        value={planFor(sc.name, i)}
-                                        color={color}
-                                        onSave={async (newValue) => {
-                                          await upsertBudget(mainKey, `${sc.name}:${i}`, newValue);
-                                        }}
-                                      />
-                                    </td>
-                                  ))}
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Tabella totali e azioni a destra */}
-                  <div className="w-48">
-                    <div className="rounded-xl border" style={{ borderColor: cardBorder }}>
-                      {/* Vista Desktop - Colonne totale/azioni */}
-                      <div className="hidden lg:block">
-                        <table className="w-full">
-                          <thead style={{ backgroundColor: headBg }}>
-                            <tr>
-                              <th className="text-center px-3 py-2" style={{ color }}>Totale</th>
-                              <th className="text-center px-3 py-2" style={{ color }}>Azioni</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {subs.map((sc, idx) => {
-                              const totalPlanned = MONTH_INDEXES.reduce((a, i) => a + planFor(sc.name, i), 0);
-                              const rowBg = hexToRgba(color, isDark() ? 0.22 : 0.12);
-                              const rowAltBg = hexToRgba(color, isDark() ? 0.14 : 0.08);
-                              
-                              const handleSetAllMonths = async (value) => {
-                                // Optimistic update - non aspettare il risultato
-                                if (batchUpsertBudgets) {
-                                  const updates = MONTH_INDEXES.map(monthIdx => ({
-                                    main: mainKey,
-                                    keyWithMonth: `${sc.name}:${monthIdx}`,
-                                    value
-                                  }));
-                                  batchUpsertBudgets(updates).catch(console.error);
-                                } else {
-                                  MONTH_INDEXES.forEach(monthIdx => {
-                                    upsertBudget(mainKey, `${sc.name}:${monthIdx}`, value).catch(console.error);
-                                  });
-                                }
-                              };
-                              
-                              const handleResetAll = async () => {
-                                // Optimistic update - non aspettare il risultato
-                                if (batchUpsertBudgets) {
-                                  const updates = MONTH_INDEXES.map(monthIdx => ({
-                                    main: mainKey,
-                                    keyWithMonth: `${sc.name}:${monthIdx}`,
-                                    value: 0
-                                  }));
-                                  batchUpsertBudgets(updates).catch(console.error);
-                                } else {
-                                  MONTH_INDEXES.forEach(monthIdx => {
-                                    upsertBudget(mainKey, `${sc.name}:${monthIdx}`, 0).catch(console.error);
-                                  });
-                                }
-                              };
-                              
-                              return (
-                                <tr 
-                                  key={sc.id || sc.name} 
-                                  className="border-t" 
-                                  style={{ 
-                                    borderColor: cardBorder,
-                                    backgroundColor: (idx % 2 === 0) ? rowBg : rowAltBg 
-                                  }}
-                                >
-                                  <td className="px-3 py-2 text-center">
-                                    <TotalCell
-                                      value={totalPlanned}
-                                      color={color}
-                                      label={`Totale ${sc.name}`}
-                                    />
-                                  </td>
-                                  <td className="px-3 py-2 text-center">
-                                    <BudgetRowActions
-                                      color={color}
-                                      onSetAllMonths={handleSetAllMonths}
-                                      onResetAll={handleResetAll}
-                                    />
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Vista Mobile/Tablet - Layout a cards */}
-                <div className="lg:hidden">
-                  {subs.map((sc, idx) => {
-                    const totalPlanned = MONTH_INDEXES.reduce((a, i) => a + planFor(sc.name, i), 0);
-                    const rowBg = hexToRgba(color, isDark() ? 0.22 : 0.12);
-                    
-                    const handleSetAllMonths = async (value) => {
-                      // Optimistic update - non aspettare il risultato
-                      if (batchUpsertBudgets) {
-                        const updates = MONTH_INDEXES.map(monthIdx => ({
-                          main: mainKey,
-                          keyWithMonth: `${sc.name}:${monthIdx}`,
-                          value
-                        }));
-                        batchUpsertBudgets(updates).catch(console.error);
-                      } else {
-                        MONTH_INDEXES.forEach(monthIdx => {
-                          upsertBudget(mainKey, `${sc.name}:${monthIdx}`, value).catch(console.error);
-                        });
-                      }
-                    };
-                    
-                    const handleResetAll = async () => {
-                      // Optimistic update - non aspettare il risultato
-                      if (batchUpsertBudgets) {
-                        const updates = MONTH_INDEXES.map(monthIdx => ({
-                          main: mainKey,
-                          keyWithMonth: `${sc.name}:${monthIdx}`,
-                          value: 0
-                        }));
-                        batchUpsertBudgets(updates).catch(console.error);
-                      } else {
-                        MONTH_INDEXES.forEach(monthIdx => {
-                          upsertBudget(mainKey, `${sc.name}:${monthIdx}`, 0).catch(console.error);
-                        });
-                      }
-                    };
-                    
-                    return (
-                      <div 
-                        key={sc.id || sc.name} 
-                        className="p-4 border-t" 
-                        style={{ 
-                          borderColor: cardBorder,
-                          backgroundColor: rowBg 
-                        }}
-                      >
-                        {/* Header sottocategoria */}
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2" style={{ color }}>
-                            <SvgIcon name={sc.iconKey} color={color} size={18} />
-                            <span className="font-semibold">{sc.name}</span>
-                          </div>
-                          <BudgetRowActions
-                            color={color}
-                            onSetAllMonths={handleSetAllMonths}
-                            onResetAll={handleResetAll}
-                          />
-                        </div>
-                        
-                        {/* Griglia mesi */}
-                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-3">
-                          {MONTH_INDEXES.map(i => (
-                            <div key={i} className="bg-white bg-opacity-20 rounded-lg p-2">
-                              <div className="text-xs font-medium mb-1" style={{ color, opacity: 0.8 }}>
-                                {months[i].substring(0, 3)}
-                              </div>
-                              <EditableCell
-                                value={planFor(sc.name, i)}
-                                color={color}
-                                onSave={async (newValue) => {
-                                  await upsertBudget(mainKey, `${sc.name}:${i}`, newValue);
-                                }}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                        
-                        {/* Totale */}
-                        <div className="flex justify-between items-center pt-2 border-t" style={{ borderColor: cardBorder }}>
-                          <span className="font-medium" style={{ color }}>Totale:</span>
-                          <span className="font-bold" style={{ color }}>{Math.round(totalPlanned).toLocaleString('it-IT')}€</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        );
-      })}
     </div>
   );
 }
