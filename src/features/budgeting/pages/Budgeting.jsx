@@ -1,5 +1,5 @@
 // src/features/budgeting/pages/Budgeting.jsx
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent } from '../../ui';
 import { MAIN_CATS, months } from '../../../lib/constants.js';
 import { nice } from '../../../lib/utils.js';
@@ -34,6 +34,7 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
   const [selMain, setSelMain] = useState('expense');
   const [mode, setMode] = useState('year'); // 'year' | 'month'
   const [viewMode, setViewMode] = useState('semester1'); // 'semester1' | 'semester2' | 'all'
+  const [darkMode, setDarkMode] = useState(() => isDark());
   const today = new Date();
   const defaultMonth = useMemo(() => {
     const y = Number(year);
@@ -44,6 +45,20 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
   }, [year]);
   const [monthIdx, setMonthIdx] = useState(defaultMonth);
   React.useEffect(() => { setMonthIdx(defaultMonth); }, [defaultMonth]);
+
+  // Hook per rilevare cambiamenti tema
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setDarkMode(isDark());
+    });
+    
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   // Costruisci elenco main da renderizzare: solo quelli abilitati e che hanno sottocategorie
   const mainsToRender = useMemo(() => {
@@ -179,10 +194,10 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
 
 
       {/* SEZIONE ALTA: RIEPILOGO MENSILE (vista Anno) */}
-      <Card>
+      <Card className="shadow-lg shadow-slate-200/50 dark:shadow-slate-800/50">
         <CardContent>
-          <div className="font-semibold mb-2">Riepilogo mese per mese</div>
-          <div className="rounded-xl border border-slate-200/20">
+          <div className="font-semibold mb-2">RIEPILOGO</div>
+          <div className="rounded-xl border border-slate-200/20 shadow-md shadow-slate-100/30 dark:shadow-slate-800/30">
             {/* Header con griglia responsive */}
             <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-t-xl">
               <div className="grid grid-cols-13 gap-2 text-sm font-semibold">
@@ -205,13 +220,17 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
                   const monthStat = monthlyStats[key];
                   const toAllocate = monthStat?.toAllocate || 0;
                   let textColor = '#64748b'; // default color
-                  let displayText = Math.round(toAllocate).toLocaleString('it-IT') + '€';
+                  let displayText = '';
                   
                   if (toAllocate > 0) {
                     textColor = mainMeta('income').color;
+                    displayText = Math.round(toAllocate).toLocaleString('it-IT') + '€';
                   } else if (toAllocate < 0) {
                     textColor = '#ef4444'; // rosso
                     displayText = `OVER ${Math.round(Math.abs(toAllocate)).toLocaleString('it-IT')}€`;
+                  } else {
+                    // Valori zero = blank (stringa vuota)
+                    displayText = '';
                   }
                   
                   return (
@@ -248,7 +267,7 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
                             style={{ color: meta.color }}
                             data-month={months[i].substring(0, 3).toUpperCase()}
                           >
-                            {percentage}%
+                            {percentage === 0 ? '' : `${percentage}%`}
                           </div>
                         );
                       })}
@@ -260,28 +279,37 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
         </CardContent>
       </Card>
 
-      {/* CONTROLLI VISUALIZZAZIONE */}
-      <div className="flex items-center justify-center gap-2 mb-6">
-        <button
-          onClick={() => setViewMode('semester1')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
-            viewMode === 'semester1' 
-              ? 'bg-blue-500 text-white border-blue-500' 
-              : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-          }`}
-        >
-          Semestre 1 (GEN-GIU)
-        </button>
-        <button
-          onClick={() => setViewMode('semester2')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
-            viewMode === 'semester2' 
-              ? 'bg-blue-500 text-white border-blue-500' 
-              : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-          }`}
-        >
-          Semestre 2 (LUG-DIC)
-        </button>
+      {/* CONTROLLI NAVIGAZIONE SEMESTRE */}
+      <div className="flex justify-center mb-6">
+        <Card className="shadow-md shadow-slate-200/40 dark:shadow-slate-800/40">
+          <CardContent className="px-6 py-4">
+            <div className="flex items-center justify-center gap-6">
+              <button
+                onClick={() => setViewMode(viewMode === 'semester1' ? 'semester2' : 'semester1')}
+                className="group p-3 rounded-xl text-xl font-bold transition-all duration-200 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-700 hover:from-blue-100 hover:to-blue-200 dark:hover:from-blue-800/40 dark:hover:to-blue-700/40 hover:scale-105 hover:shadow-lg"
+                title="Cambia semestre"
+              >
+                <span className="group-hover:scale-110 transition-transform duration-200">←</span>
+              </button>
+              
+              <div className="px-8 py-3 rounded-2xl font-bold text-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25 dark:shadow-blue-500/20 border border-blue-400 dark:border-blue-600">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                  <span className="tracking-wide">{viewMode === 'semester1' ? 'GEN-GIU' : 'LUG-DIC'}</span>
+                  <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => setViewMode(viewMode === 'semester1' ? 'semester2' : 'semester1')}
+                className="group p-3 rounded-xl text-xl font-bold transition-all duration-200 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-700 hover:from-blue-100 hover:to-blue-200 dark:hover:from-blue-800/40 dark:hover:to-blue-700/40 hover:scale-105 hover:shadow-lg"
+                title="Cambia semestre"
+              >
+                <span className="group-hover:scale-110 transition-transform duration-200">→</span>
+              </button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* SEZIONE BASSA: UN FORM PER OGNI MAIN (core + custom con sottocategorie) */}
@@ -310,7 +338,7 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
             {/* Card unica con entrambe le tabelle */}
             <Card style={{ borderColor: cardBorder, backgroundColor: cardBg }} className="border">
               <CardContent>
-                <div className="font-semibold mb-3" style={{ color }}>{name}</div>
+                <div className="font-semibold mb-3" style={{ color }}>{name.toUpperCase()}</div>
                 <div className="flex gap-4">
                   {/* Tabella principale */}
                   <div className="flex-1">
@@ -335,32 +363,34 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
                               const rowAltBg = hexToRgba(color, isDark() ? 0.14 : 0.08);
                               
                               const handleSetAllMonths = async (value) => {
+                                // Optimistic update - non aspettare il risultato
                                 if (batchUpsertBudgets) {
                                   const updates = MONTH_INDEXES.map(monthIdx => ({
                                     main: mainKey,
                                     keyWithMonth: `${sc.name}:${monthIdx}`,
                                     value
                                   }));
-                                  await batchUpsertBudgets(updates);
+                                  batchUpsertBudgets(updates).catch(console.error);
                                 } else {
-                                  for (const monthIdx of MONTH_INDEXES) {
-                                    await upsertBudget(mainKey, `${sc.name}:${monthIdx}`, value);
-                                  }
+                                  MONTH_INDEXES.forEach(monthIdx => {
+                                    upsertBudget(mainKey, `${sc.name}:${monthIdx}`, value).catch(console.error);
+                                  });
                                 }
                               };
                               
                               const handleResetAll = async () => {
+                                // Optimistic update - non aspettare il risultato
                                 if (batchUpsertBudgets) {
                                   const updates = MONTH_INDEXES.map(monthIdx => ({
                                     main: mainKey,
                                     keyWithMonth: `${sc.name}:${monthIdx}`,
                                     value: 0
                                   }));
-                                  await batchUpsertBudgets(updates);
+                                  batchUpsertBudgets(updates).catch(console.error);
                                 } else {
-                                  for (const monthIdx of MONTH_INDEXES) {
-                                    await upsertBudget(mainKey, `${sc.name}:${monthIdx}`, 0);
-                                  }
+                                  MONTH_INDEXES.forEach(monthIdx => {
+                                    upsertBudget(mainKey, `${sc.name}:${monthIdx}`, 0).catch(console.error);
+                                  });
                                 }
                               };
                               
@@ -418,32 +448,34 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
                               const rowAltBg = hexToRgba(color, isDark() ? 0.14 : 0.08);
                               
                               const handleSetAllMonths = async (value) => {
+                                // Optimistic update - non aspettare il risultato
                                 if (batchUpsertBudgets) {
                                   const updates = MONTH_INDEXES.map(monthIdx => ({
                                     main: mainKey,
                                     keyWithMonth: `${sc.name}:${monthIdx}`,
                                     value
                                   }));
-                                  await batchUpsertBudgets(updates);
+                                  batchUpsertBudgets(updates).catch(console.error);
                                 } else {
-                                  for (const monthIdx of MONTH_INDEXES) {
-                                    await upsertBudget(mainKey, `${sc.name}:${monthIdx}`, value);
-                                  }
+                                  MONTH_INDEXES.forEach(monthIdx => {
+                                    upsertBudget(mainKey, `${sc.name}:${monthIdx}`, value).catch(console.error);
+                                  });
                                 }
                               };
                               
                               const handleResetAll = async () => {
+                                // Optimistic update - non aspettare il risultato
                                 if (batchUpsertBudgets) {
                                   const updates = MONTH_INDEXES.map(monthIdx => ({
                                     main: mainKey,
                                     keyWithMonth: `${sc.name}:${monthIdx}`,
                                     value: 0
                                   }));
-                                  await batchUpsertBudgets(updates);
+                                  batchUpsertBudgets(updates).catch(console.error);
                                 } else {
-                                  for (const monthIdx of MONTH_INDEXES) {
-                                    await upsertBudget(mainKey, `${sc.name}:${monthIdx}`, 0);
-                                  }
+                                  MONTH_INDEXES.forEach(monthIdx => {
+                                    upsertBudget(mainKey, `${sc.name}:${monthIdx}`, 0).catch(console.error);
+                                  });
                                 }
                               };
                               
@@ -487,32 +519,34 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
                     const rowBg = hexToRgba(color, isDark() ? 0.22 : 0.12);
                     
                     const handleSetAllMonths = async (value) => {
+                      // Optimistic update - non aspettare il risultato
                       if (batchUpsertBudgets) {
                         const updates = MONTH_INDEXES.map(monthIdx => ({
                           main: mainKey,
                           keyWithMonth: `${sc.name}:${monthIdx}`,
                           value
                         }));
-                        await batchUpsertBudgets(updates);
+                        batchUpsertBudgets(updates).catch(console.error);
                       } else {
-                        for (const monthIdx of MONTH_INDEXES) {
-                          await upsertBudget(mainKey, `${sc.name}:${monthIdx}`, value);
-                        }
+                        MONTH_INDEXES.forEach(monthIdx => {
+                          upsertBudget(mainKey, `${sc.name}:${monthIdx}`, value).catch(console.error);
+                        });
                       }
                     };
                     
                     const handleResetAll = async () => {
+                      // Optimistic update - non aspettare il risultato
                       if (batchUpsertBudgets) {
                         const updates = MONTH_INDEXES.map(monthIdx => ({
                           main: mainKey,
                           keyWithMonth: `${sc.name}:${monthIdx}`,
                           value: 0
                         }));
-                        await batchUpsertBudgets(updates);
+                        batchUpsertBudgets(updates).catch(console.error);
                       } else {
-                        for (const monthIdx of MONTH_INDEXES) {
-                          await upsertBudget(mainKey, `${sc.name}:${monthIdx}`, 0);
-                        }
+                        MONTH_INDEXES.forEach(monthIdx => {
+                          upsertBudget(mainKey, `${sc.name}:${monthIdx}`, 0).catch(console.error);
+                        });
                       }
                     };
                     

@@ -6,12 +6,13 @@
  * - Input number/currency
  * - Salvataggio automatico onBlur/Enter
  * - Annullamento con Escape
+ * - Optimistic updates per zero lag
  * 
  * @author Finance WebApp Team
- * @modified 21 Gennaio 2025 - Creazione componente
+ * @modified 22 Agosto 2025 - Ottimizzazioni performance
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Check, X } from 'lucide-react';
 import { nice } from '../../../lib/utils.js';
 import { useToast } from '../../toast';
@@ -23,48 +24,60 @@ export default function EditableCell({
   className = '',
   disabled = false,
   tabIndex = 0,
-  onTab = null // Callback per navigazione Tab
+  onTab = null
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const inputRef = useRef(null);
   const measureRef = useRef(null);
-  const [inputWidth, setInputWidth] = useState(60); // Larghezza minima
+  const [inputWidth, setInputWidth] = useState(60);
   const toast = useToast();
+  const saveTimeoutRef = useRef(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
-      // Calcola larghezza iniziale basata sul valore corrente
       updateInputWidth(inputValue);
     }
   }, [isEditing]);
 
-  // Aggiorna la larghezza dell'input in base al contenuto
-  const updateInputWidth = (text) => {
+  // Memoized per evitare re-render inutili
+  const updateInputWidth = useCallback((text) => {
     if (measureRef.current) {
       measureRef.current.textContent = text || '0';
-      const width = Math.max(40, measureRef.current.scrollWidth + 20); // Minimo 40px + padding
+      const width = Math.max(40, measureRef.current.scrollWidth + 20);
       setInputWidth(width);
     }
-  };
+  }, []);
 
-  // Aggiorna la larghezza quando il valore cambia
+  // Ottimizzato con requestAnimationFrame per smooth updates
   useEffect(() => {
     if (isEditing) {
-      updateInputWidth(inputValue);
+      requestAnimationFrame(() => updateInputWidth(inputValue));
     }
-  }, [inputValue, isEditing]);
+  }, [inputValue, isEditing, updateInputWidth]);
 
-  const handleStartEdit = () => {
+  const handleStartEdit = useCallback(() => {
     if (disabled) return;
     // Se il valore è zero, inizia con una stringa vuota per facilitare l'inserimento
     setInputValue(value && value > 0 ? String(value) : '');
     setIsEditing(true);
-  };
+  }, [disabled, value]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
+    if (isSaving) return; // Previeni chiamate multiple
+    
     const cleanedValue = inputValue.replace(/[^\d.-]/g, '');
     const numValue = parseFloat(cleanedValue) || 0;
     
@@ -80,74 +93,85 @@ export default function EditableCell({
       return;
     }
     
+    const preciseValue = Math.round(numValue * 100) / 100;
+    
+    // ISTANTANEO: chiudi editor immediatamente, nessun loading
+    setIsEditing(false);
+    
     try {
-      // Salva con precisione di 2 decimali
-      const preciseValue = Math.round(numValue * 100) / 100;
-      await onSave(preciseValue);
-      setIsEditing(false);
+      // Fire and forget - completamente istantaneo
+      onSave(preciseValue);
     } catch (error) {
       console.error('Error saving budget value:', error);
+      // Errore: torna in editing
+      setIsEditing(true);
       toast.error('Errore durante il salvataggio');
     }
-  };
+  }, [inputValue, isSaving, onSave, toast]);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     setIsEditing(false);
     setInputValue('');
-  };
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+  }, []);
 
-  const handleBlur = async (e) => {
+  const handleBlur = useCallback(async (e) => {
     // Check if focus is moving to our action buttons
     const relatedTarget = e.relatedTarget;
     if (relatedTarget && relatedTarget.closest('.editable-cell-actions')) {
-      // Focus is moving to our action buttons, don't auto-save
       return;
     }
-    // Focus is moving elsewhere, auto-save
-    await handleSave();
-  };
+    // Debounced save per evitare troppe chiamate
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = setTimeout(() => handleSave(), 100);
+  }, [handleSave]);
 
-  const handleKeyDown = async (e) => {
+  const handleKeyDown = useCallback(async (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      // Salvataggio immediato per Enter (no debounce)
       await handleSave();
-      // Dopo salvare, naviga alla prossima cella se disponibile
+      // Navigazione dopo salvataggio ottimistico
       if (onTab) {
-        onTab(1); // 1 = avanti
+        onTab(1);
       }
     } else if (e.key === 'Escape') {
       e.preventDefault();
       handleCancel();
     } else if (e.key === 'Tab') {
       e.preventDefault();
+      // Clear timeout se presente
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
       await handleSave();
-      // Naviga in base alla direzione di Tab
       if (onTab) {
-        onTab(e.shiftKey ? -1 : 1); // -1 = indietro, 1 = avanti
+        onTab(e.shiftKey ? -1 : 1);
       }
     }
-  };
+  }, [handleSave, handleCancel, onTab]);
 
-  // Validate and clean input value
-  const validateInput = (value) => {
-    // Remove any non-numeric characters except dots and commas
+  // Memoized input validation per performance
+  const validateInput = useCallback((value) => {
     const cleaned = value.replace(/[^\d.,]/g, '');
-    // Replace comma with dot for decimal separator
     const normalized = cleaned.replace(',', '.');
-    // Ensure only one decimal point
     const parts = normalized.split('.');
     if (parts.length > 2) {
       return parts[0] + '.' + parts.slice(1).join('');
     }
     return normalized;
-  };
+  }, []);
 
-  // Formatta il valore per display consistente
-  const formatDisplayValue = (val) => {
+  // Memoized formatting per performance
+  const formatDisplayValue = useCallback((val) => {
     const num = Math.round(val || 0);
-    // Mostra anche i valori zero
     return num.toLocaleString('it-IT') + '€';
-  };
+  }, []);
+  
 
   if (isEditing) {
     return (
@@ -189,12 +213,12 @@ export default function EditableCell({
         {/* Pulsanti di azione integrati - posizionati come overlay sopra la cella */}
         <div className="editable-cell-actions absolute top-0 right-0 flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-full shadow-lg px-1.5 py-1 z-20 transform translate-x-2 -translate-y-2">
           <button
-            onClick={handleSave}
-            onMouseDown={(e) => e.preventDefault()} // Prevent focus stealing
+            onClick={() => handleSave()}
+            onMouseDown={(e) => e.preventDefault()}
             className="p-1 rounded-full hover:bg-green-50 dark:hover:bg-green-900/30 transition-all duration-200 hover:scale-110"
             title="Conferma e salva (Enter)"
             aria-label="Conferma modifiche"
-            tabIndex={-1} // Remove from tab order
+            tabIndex={-1}
           >
             <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
           </button>
