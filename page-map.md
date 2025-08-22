@@ -1,7 +1,7 @@
 # 📍 Finance WebApp - Mappa Pagine e Componenti
 
-> **Aggiornato**: 19 Gennaio 2025  
-> **Versione**: 1.0.0
+> **Aggiornato**: 22 Gennaio 2025  
+> **Versione**: 1.2.0
 
 ## 🗺️ Struttura Generale
 
@@ -85,14 +85,34 @@ Finance WebApp/
 - **File**: `components/IconBrowserModal.jsx`
   - **Scopo**: Modal selezione icone
 
-### 💰 Budgeting
+### 💰 Budgeting System
 **Directory**: `src/features/budgeting/`
+
+#### Pagina Principale
 - **File**: `pages/Budgeting.jsx`
-- **Scopo**: Gestione budget mensili/annuali
-- **Sottosezioni**:
-  - Impostazione budget per categoria
-  - Tracking spese vs budget
-  - Alert e notifiche
+- **Scopo**: Sistema completo gestione budget mensili/annuali
+- **Funzionalità**:
+  - Pianificazione budget per categoria e sottocategoria
+  - Vista semestrale (Q1/Q2) con controlli toggle
+  - Calcolo automatico "Da allocare" con avvisi over-budget
+  - Percentuali di allocazione per categoria
+  - Riepilogo mensile con trend e confronti
+
+#### Componenti Avanzati
+- **File**: `components/EditableCell.jsx`
+  - **Scopo**: Cella editabile inline per valori budget
+  - **Features**: Input dinamico, validazione real-time, focus intelligente
+- **File**: `components/TotalCell.jsx`
+  - **Scopo**: Cella non-editabile per visualizzazione totali
+- **File**: `components/BudgetRowActions.jsx`
+  - **Scopo**: Azioni bulk per righe budget (Imposta tutti, Reset)
+
+#### Sistema di Editing Professionale
+- **Inline Editing**: Modifica diretta con larghezza dinamica
+- **Keyboard Navigation**: Enter, Escape, Tab per navigazione
+- **Smart Focus**: Gestione intelligente focus con pulsanti azione
+- **Input Validation**: Supporto decimali/virgole, sanitizzazione real-time
+- **Mobile Optimized**: Tastiera decimale su dispositivi touch
 
 ---
 
@@ -138,6 +158,7 @@ Finance WebApp/
 | Auth | `auth.js` | `/api/auth/*` | Login, register |
 | Categories | `categories.js` | `/api/categories/*` | CRUD categorie |
 | Transactions | `transactions.js` | `/api/transactions/*` | CRUD transazioni |
+| Budgets | `budgets.js` | `/api/budgets/*` | CRUD budget, operazioni batch |
 
 ### 🎮 Controllers
 **Directory**: `server/src/controllers/`
@@ -147,6 +168,7 @@ Finance WebApp/
 | Auth | `authController.js` | Gestione autenticazione |
 | Categories | `categoriesController.js` | Gestione categorie |
 | Transactions | `transactionsController.js` | Gestione transazioni |
+| Budgets | `budgetsController.js` | Gestione budget e pianificazione |
 
 ### 🔧 Services (Business Logic)
 **Directory**: `server/src/services/`
@@ -156,6 +178,7 @@ Finance WebApp/
 | Auth | `authService.js` | Logica autenticazione e JWT |
 | Categories | `categoryService.js` | Logica categorie e validazione |
 | Transactions | `transactionService.js` | Logica transazioni e calcoli |
+| Budgets | `budgetService.js` | Logica budget e validazione stili |
 
 ### 🛡️ Middleware
 **Directory**: `server/src/middleware/`
@@ -173,10 +196,11 @@ Finance WebApp/
 
 | Tabella | Scopo | Relazioni |
 |---------|-------|-----------|
-| `users` | Utenti registrati | → categories, transactions |
+| `users` | Utenti registrati | → categories, transactions, budgets |
 | `categories` | Categorie principali | → subcategories |
-| `subcategories` | Sottocategorie | → transactions |
+| `subcategories` | Sottocategorie | → transactions, budgets |
 | `transactions` | Transazioni finanziarie | ← users, subcategories |
+| `budgets` | Budget pianificati | ← users, subcategories |
 
 ---
 
