@@ -33,10 +33,11 @@ function monthKey(date) {
 export default function Budgeting({ state, year, upsertBudget, batchUpsertBudgets }) {
   const [selMain, setSelMain] = useState('expense');
   const [mode, setMode] = useState('year'); // 'year' | 'month'
-  const [viewMode, setViewMode] = useState('semester1'); // 'semester1' | 'semester2'
+  const [viewMode, setViewMode] = useState('semester1'); // 'semester1' | 'semester2' | 'all'
   const [darkMode, setDarkMode] = useState(() => isDark());
+  const [autoSaveStatus, setAutoSaveStatus] = useState('saved'); // 'saving' | 'saved' | 'error'
+  const [lastSaveTime, setLastSaveTime] = useState(null);
   const today = new Date();
-  const currentMonth = today.getMonth(); // 0-11 per Jan-Dec
   const defaultMonth = useMemo(() => {
     const y = Number(year);
     if (today.getFullYear() !== y) return 0;
@@ -108,25 +109,14 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
       
       s.toAllocate = budgetIncome - totalBudgetExpenses;
       
-      // Percentuali basate sui budget del reddito - SOLO SE c'è reddito
-      if (budgetIncome > 0) {
-        const pct = (x) => Math.round((Math.abs(x) / budgetIncome) * 100);
-        Object.entries(s.budgetTotals).forEach(([mainKey, total]) => {
-          if (mainKey !== 'income') { // Solo per le categorie di spesa
-            s.budgetPct[mainKey] = pct(total);
-          }
-        });
-      } else {
-        // Se non c'è reddito, tutte le percentuali sono 0
-        Object.keys(s.budgetTotals).forEach(mainKey => {
-          if (mainKey !== 'income') {
-            s.budgetPct[mainKey] = 0;
-          }
-        });
-      }
+      const pct = (x) => budgetIncome > 0 ? Math.round((Math.abs(x) / budgetIncome) * 100) : 0;
       
-      // Flag di avvertenza se le spese > reddito
-      s.hasWarning = totalBudgetExpenses > budgetIncome && budgetIncome > 0;
+      // Percentuali basate sui budget del reddito
+      Object.entries(s.budgetTotals).forEach(([mainKey, total]) => {
+        if (mainKey !== 'income') { // Solo per le categorie di spesa
+          s.budgetPct[mainKey] = pct(total);
+        }
+      });
     }
     return stats;
   }, [state.budgets, state.subcats, mainsToRender, year]);
@@ -164,6 +154,57 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
     }
   }, [viewMode]);
 
+  // Helper per ottenere status del mese
+  const getMonthStatus = (toAllocate) => {
+    if (toAllocate < 0) return { status: 'over', icon: '⚠️', color: '#ef4444', bgColor: '#fef2f2' };
+    if (toAllocate > 0) return { status: 'unallocated', icon: '💰', color: '#f59e0b', bgColor: '#fffbeb' };
+    return { status: 'balanced', icon: '✅', color: '#10b981', bgColor: '#f0fdf4' };
+  };
+
+  // Calcola statistiche per il riepilogo cards
+  const summaryStats = useMemo(() => {
+    const currentMonth = today.getMonth();
+    const currentMonthKey = `${year}-${String(currentMonth + 1).padStart(2, '0')}`;
+    const currentStats = monthlyStats[currentMonthKey];
+    
+    // Da allocare del mese corrente
+    const currentToAllocate = currentStats?.toAllocate || 0;
+    
+    // Media da allocare dell'anno
+    const yearlyAverage = MONTH_INDEXES.reduce((sum, i) => {
+      const key = `${year}-${String(i + 1).padStart(2, '0')}`;
+      return sum + (monthlyStats[key]?.toAllocate || 0);
+    }, 0) / 12;
+    
+    // Top categorie per percentuale media - includiamo anche quelle con 0% per mostrare struttura
+    const allCategories = mainsToRender
+      .filter(key => key !== 'income')
+      .map(key => {
+        const meta = mainMeta(key);
+        const avgPercentage = MONTH_INDEXES.reduce((sum, i) => {
+          const monthKey = `${year}-${String(i + 1).padStart(2, '0')}`;
+          return sum + (monthlyStats[monthKey]?.budgetPct?.[key] || 0);
+        }, 0) / 12;
+        const avgAmount = MONTH_INDEXES.reduce((sum, i) => {
+          const monthKey = `${year}-${String(i + 1).padStart(2, '0')}`;
+          return sum + (monthlyStats[monthKey]?.budgetTotals?.[key] || 0);
+        }, 0) / 12;
+        return { key, meta, avgPercentage: Math.round(avgPercentage), avgAmount: Math.round(avgAmount) };
+      })
+      .sort((a, b) => b.avgPercentage - a.avgPercentage);
+    
+    // Se non ci sono categorie con percentuali > 0, mostra comunque le prime 3 disponibili
+    const topCategories = allCategories.length > 0 ? allCategories.slice(0, 3) : [];
+    
+    return {
+      currentToAllocate,
+      yearlyAverage: Math.round(yearlyAverage),
+      topCategories,
+      currentMonthName: months[currentMonth],
+      hasData: allCategories.length > 0
+    };
+  }, [monthlyStats, year, mainsToRender, mainMeta, today]);
+
   // Calcola mappa valori per mese per (main, sub)
   const mapMainSubPerMonth = useMemo(() => {
     const map = {}; // main -> sub -> {0..11}
@@ -192,311 +233,286 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
   const compatCtx = useMemo(() => buildCtxFromState(state, year), [state, year]);
   const monthRows = useMemo(() => selectBudgetRows({ period: periodMonthKey, ...compatCtx, prorataMode: 'equal' }), [periodMonthKey, compatCtx]);
 
+  // Ottimizzazione: wrapped upsert con auto-save feedback
+  const optimizedUpsertBudget = React.useCallback(async (main, keyWithMonth, value) => {
+    setAutoSaveStatus('saving');
+    setLastSaveTime(Date.now());
+    try {
+      await upsertBudget(main, keyWithMonth, value);
+      setAutoSaveStatus('saved');
+    } catch (error) {
+      console.error('Error saving budget:', error);
+      setAutoSaveStatus('error');
+    }
+  }, [upsertBudget]);
+
+  // Ottimizzazione: wrapped batch upsert con auto-save feedback
+  const optimizedBatchUpsertBudgets = React.useCallback(async (updates) => {
+    setAutoSaveStatus('saving');
+    setLastSaveTime(Date.now());
+    try {
+      await batchUpsertBudgets(updates);
+      setAutoSaveStatus('saved');
+    } catch (error) {
+      console.error('Error batch saving budgets:', error);
+      setAutoSaveStatus('error');
+    }
+  }, [batchUpsertBudgets]);
+
   async function handleUpdateCell(period, categoryKey, patch) {
     if (!patch || typeof patch.amount !== 'number') return;
     const y = Number(period.slice(0,4));
     const m = Number(period.slice(5,7)) - 1; // 0..11
     const [main, sub] = String(categoryKey).split(':');
     if (!main || !sub) return;
-    await upsertBudget(main, `${sub}:${m}`, Number(patch.amount) || 0);
+    await optimizedUpsertBudget(main, `${sub}:${m}`, Number(patch.amount) || 0);
   }
-
-  // Helper per ottenere status del mese
-  const getMonthStatus = (toAllocate) => {
-    if (toAllocate < 0) return { status: 'over', icon: '⚠️', color: '#ef4444', bgColor: '#fef2f2' };
-    if (toAllocate > 0) return { status: 'unallocated', icon: '💰', color: '#f59e0b', bgColor: '#fffbeb' };
-    return { status: 'balanced', icon: '✅', color: '#10b981', bgColor: '#f0fdf4' };
-  };
-
-  // Calcola statistiche per il riepilogo cards
-  const summaryStats = useMemo(() => {
-    // Totale da allocare di tutti i mesi dell'anno
-    const yearlyToAllocate = MONTH_INDEXES.reduce((sum, i) => {
-      const key = `${year}-${String(i + 1).padStart(2, '0')}`;
-      return sum + (monthlyStats[key]?.toAllocate || 0);
-    }, 0);
-    
-    // Calcola totali annuali per reddito e spese
-    const yearlyIncome = MONTH_INDEXES.reduce((sum, i) => {
-      const key = `${year}-${String(i + 1).padStart(2, '0')}`;
-      return sum + (monthlyStats[key]?.budgetTotals?.['income'] || 0);
-    }, 0);
-    
-    const yearlyExpenses = MONTH_INDEXES.reduce((sum, i) => {
-      const key = `${year}-${String(i + 1).padStart(2, '0')}`;
-      const monthStat = monthlyStats[key];
-      if (!monthStat) return sum;
-      return sum + Object.entries(monthStat.budgetTotals)
-        .filter(([mainKey]) => mainKey !== 'income')
-        .reduce((monthSum, [, val]) => monthSum + Math.abs(val), 0);
-    }, 0);
-    
-    // Determina se c'è sovra-spesa
-    const isOverBudget = yearlyExpenses > yearlyIncome && yearlyIncome > 0;
-    
-    // Calcola totali annuali e percentuali per categoria
-    const categoryStats = {};
-    mainsToRender
-      .filter(key => key !== 'income')
-      .forEach(key => {
-        const meta = mainMeta(key);
-        // Totale annuo della categoria
-        const yearlyAmount = MONTH_INDEXES.reduce((sum, i) => {
-          const monthKey = `${year}-${String(i + 1).padStart(2, '0')}`;
-          return sum + (monthlyStats[monthKey]?.budgetTotals?.[key] || 0);
-        }, 0);
-        
-        // Percentuale annua sul reddito totale annuo
-        const yearlyPercentage = yearlyIncome > 0 
-          ? Math.round((yearlyAmount / yearlyIncome) * 100)
-          : 0;
-        
-        categoryStats[key] = { 
-          meta, 
-          yearlyPercentage,
-          yearlyAmount: Math.round(yearlyAmount)
-        };
-      });
-    
-    return {
-      yearlyToAllocate,
-      yearlyIncome,
-      yearlyExpenses,
-      isOverBudget,
-      categoryStats
-    };
-  }, [monthlyStats, year, mainsToRender, mainMeta]);
 
   return (
     <div className="space-y-6 pb-20"> {/* Extra padding bottom for context menus */}
 
-      {/* SEZIONE ALTA: CARDS RIEPILOGO BUDGET */}
-      <div className="space-y-4">
-        {/* Cards principali */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card Da Allocare */}
-          <Card className={`shadow-md hover:shadow-lg transition-shadow duration-200 border-l-2 ${
-            summaryStats.yearlyToAllocate < 0 ? 'border-red-400 bg-red-50/30 dark:bg-red-900/10' : ''
-          }`} style={{ borderLeftColor: summaryStats.yearlyToAllocate < 0 ? '#ef4444' : mainMeta('income').color }}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full flex items-center justify-center" style={{ 
-                    backgroundColor: summaryStats.yearlyToAllocate < 0 ? '#ef4444' : mainMeta('income').color 
-                  }}>
-                    {summaryStats.yearlyToAllocate < 0 && (
-                      <span className="text-white text-xs leading-none">⚠</span>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-slate-700 dark:text-slate-200 text-sm">
-                      {summaryStats.yearlyToAllocate < 0 ? 'SFORAMENTO' : 'DA ALLOCARE'}
-                    </h3>
-                    <p className="text-xs text-slate-500">Totale anno</p>
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="text-2xl font-bold" style={{ 
-                  color: summaryStats.yearlyToAllocate < 0 ? '#ef4444' : mainMeta('income').color 
-                }}>
-                  {summaryStats.yearlyToAllocate < 0 ? '-' : ''}
-                  {Math.abs(summaryStats.yearlyToAllocate).toLocaleString('it-IT')}€
-                </div>
-                <div className="text-xs" style={{ 
-                  color: summaryStats.yearlyToAllocate < 0 ? '#ef4444' : '#64748b' 
-                }}>
-                  {summaryStats.yearlyToAllocate < 0 ? (
-                    `Spese: ${summaryStats.yearlyExpenses.toLocaleString('it-IT')}€ | Reddito: ${summaryStats.yearlyIncome.toLocaleString('it-IT')}€`
-                  ) : (
-                    '\u00A0' // spazio non-breaking per mantenere altezza
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          {/* Cards per le principali categorie */}
-          {Object.entries(summaryStats.categoryStats)
-            .sort(([,a], [,b]) => b.yearlyPercentage - a.yearlyPercentage) // ordina per percentuale decrescente
-            .slice(0, 3)
-            .map(([key, stats], idx) => {
-            const isTop = idx === 0 && stats.yearlyPercentage > 0; // Top solo se > 0%
-            return (
-              <Card key={key} className={`shadow-md hover:shadow-lg transition-shadow duration-200 ${
-                isTop ? 'border-l-4' : 'border-l-2'
-              }`} style={{ borderLeftColor: stats.meta.color }}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: stats.meta.color }}></div>
-                      <div>
-                        <h3 className="font-semibold text-slate-700 dark:text-slate-200 text-sm">
-                          {stats.meta.name.toUpperCase()}
-                        </h3>
-                        <p className="text-xs text-slate-500">% su reddito annuo</p>
-                      </div>
-                    </div>
-                    {isTop && (
-                      <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 px-2 py-1 rounded-full font-medium">
-                        Top
-                      </span>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <div className="text-2xl font-bold" style={{ color: stats.meta.color }}>
-                      {stats.yearlyPercentage}%
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {stats.yearlyAmount.toLocaleString('it-IT')}€ / anno
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      </div>
 
-      {/* SEZIONE DETTAGLIO MENSILE (collassabile) */}
-      <Card className="shadow-lg shadow-slate-200/50 dark:shadow-slate-800/50">
-        <CardContent>
-          <details className="group">
-            <summary className="flex items-center justify-between cursor-pointer p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-semibold text-slate-700 dark:text-slate-200">📋 Dettaglio Mensile</span>
-                <span className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">
-                  Click per espandere
-                </span>
-              </div>
-              <div className="text-slate-400 group-open:rotate-180 transition-transform duration-200">
-                ▼
-              </div>
-            </summary>
-            
-            <div className="mt-4 rounded-xl border border-slate-200/20 shadow-md shadow-slate-100/30 dark:shadow-slate-800/30">
-            {/* Header con griglia responsive */}
-            <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-t-xl">
-              <div className="grid grid-cols-13 gap-2 text-sm font-semibold">
-                <div className="text-left col-span-2 lg:col-span-1">Voce</div>
-                {MONTH_INDEXES.map(i => (
-                  <div key={i} className="text-center text-xs lg:text-sm">
-                    {months[i].substring(0, 3).toUpperCase()}
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            {/* Contenuto con griglia responsive */}
-            <div className="p-4 space-y-3">
-              {/* Da allocare */}
-              <div className="grid grid-cols-13 gap-2 py-2 border-b border-slate-200/10">
-                <div className="col-span-2 lg:col-span-1 font-semibold text-sm" style={{ color: mainMeta('income').color }}>Da allocare</div>
-                {MONTH_INDEXES.map(i => {
-                  const key = `${year}-${String(i + 1).padStart(2, '0')}`;
-                  const monthStat = monthlyStats[key];
-                  const toAllocate = monthStat?.toAllocate || 0;
-                  let textColor = '#64748b'; // default color
-                  let displayText = '';
-                  
-                  if (toAllocate > 0) {
-                    textColor = mainMeta('income').color;
-                    displayText = Math.round(toAllocate).toLocaleString('it-IT') + '€';
-                  } else if (toAllocate < 0) {
-                    textColor = '#ef4444'; // rosso
-                    displayText = `-${Math.round(Math.abs(toAllocate)).toLocaleString('it-IT')}€`;
-                  } else {
-                    // Valori zero = blank (stringa vuota)
-                    displayText = '';
-                  }
-                  
-                  return (
-                    <div 
-                      key={i} 
-                      className="text-center font-semibold text-base" 
-                      style={{ color: textColor }}
-                      data-month={months[i].substring(0, 3).toUpperCase()}
-                    >
-                      {displayText}
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {/* Percentuali per ogni main presente */}
-              {mainsToRender
-                .filter(key => key !== 'income') // escludi income
-                .map(key => {
-                  const meta = mainMeta(key);
-                  return (
-                    <div key={key} className="grid grid-cols-13 gap-2 py-2 border-b border-slate-200/10">
-                      <div className="col-span-2 lg:col-span-1 text-sm" style={{ color: meta.color }}>
-                        % {meta.name.toLowerCase()}
-                      </div>
-                      {MONTH_INDEXES.map(i => {
-                        const monthKey = `${year}-${String(i + 1).padStart(2, '0')}`;
-                        const monthStat = monthlyStats[monthKey];
-                        const percentage = monthStat?.budgetPct?.[key] || 0;
-                        const hasWarning = monthStat?.hasWarning || false;
-                        const budgetIncome = monthStat?.budgetTotals?.['income'] || 0;
-                        
-                        let displayContent = '';
-                        if (budgetIncome === 0 && percentage > 0) {
-                          displayContent = '⚠️'; // Segnale di avvertenza se non c'è reddito MA ci sono spese
-                        } else if (percentage === 0) {
-                          displayContent = '';
-                        } else {
-                          displayContent = `${percentage}%`;
-                          if (hasWarning) displayContent += ' ⚠️'; // Segnale se spese > reddito
-                        }
-                        
-                        return (
-                          <div 
-                            key={i} 
-                            className="text-center font-semibold text-xs" 
-                            style={{ color: budgetIncome === 0 ? '#ef4444' : meta.color }}
-                            data-month={months[i].substring(0, 3).toUpperCase()}
-                          >
-                            {displayContent}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+      {/* SEZIONE ALTA: RIEPILOGO SMART CARDS */}
+      <div className="space-y-6">
+        {/* Header e Cards principali */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">📊 Riepilogo Budget</h2>
+            <div className="text-sm text-slate-500 dark:text-slate-400">
+              Anno {year} • {summaryStats.currentMonthName}
             </div>
           </div>
-          </details>
-        </CardContent>
-      </Card>
+          
+          {/* Cards principali */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Card Da Allocare */}
+            <Card className="border-l-4 border-l-blue-500 shadow-md hover:shadow-lg transition-shadow duration-200">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">{getMonthStatus(summaryStats.currentToAllocate).icon}</span>
+                    <div>
+                      <h3 className="font-semibold text-slate-700 dark:text-slate-200">Da Allocare</h3>
+                      <p className="text-xs text-slate-500">{summaryStats.currentMonthName}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-2xl font-bold" style={{ color: getMonthStatus(summaryStats.currentToAllocate).color }}>
+                    {Math.abs(summaryStats.currentToAllocate).toLocaleString('it-IT')}€
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    Media anno: {Math.abs(summaryStats.yearlyAverage).toLocaleString('it-IT')}€
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            {/* Cards Top Categorie */}
+            {summaryStats.topCategories.length > 0 ? (
+              summaryStats.topCategories.slice(0, 3).map((cat, idx) => (
+                <Card key={cat.key} className={`shadow-md hover:shadow-lg transition-shadow duration-200 ${
+                  idx === 0 ? 'border-l-4' : 'border-l-2'
+                }`} style={{ borderLeftColor: cat.meta.color }}>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.meta.color }}></div>
+                        <div>
+                          <h3 className="font-semibold text-slate-700 dark:text-slate-200 text-sm">
+                            {cat.meta.name}
+                          </h3>
+                          <p className="text-xs text-slate-500">Media mensile</p>
+                        </div>
+                      </div>
+                      {idx === 0 && (
+                        <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 px-2 py-1 rounded-full font-medium">
+                          Top
+                        </span>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-2xl font-bold" style={{ color: cat.meta.color }}>
+                        {cat.avgPercentage}%
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {cat.avgAmount.toLocaleString('it-IT')}€ / mese
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              // Cards placeholder quando non ci sono categorie
+              Array.from({ length: 3 }, (_, idx) => (
+                <Card key={`placeholder-${idx}`} className="shadow-md border-l-2 border-l-slate-300 dark:border-l-slate-600">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-600"></div>
+                        <div>
+                          <h3 className="font-semibold text-slate-500 dark:text-slate-400 text-sm">
+                            Categoria {idx + 1}
+                          </h3>
+                          <p className="text-xs text-slate-400">Non configurata</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-2xl font-bold text-slate-400">
+                        0%
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        0€ / mese
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </div>
+        
+        {/* Riepilogo dettagliato collassabile */}
+        <Card className="shadow-lg shadow-slate-200/50 dark:shadow-slate-800/50">
+          <CardContent>
+            <details className="group">
+              <summary className="flex items-center justify-between cursor-pointer p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-semibold text-slate-700 dark:text-slate-200">📋 Dettaglio Mensile</span>
+                  <span className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">
+                    Click per espandere
+                  </span>
+                </div>
+                <div className="text-slate-400 group-open:rotate-180 transition-transform duration-200">
+                  ▼
+                </div>
+              </summary>
+              
+              <div className="mt-4 rounded-xl border border-slate-200/20 shadow-md shadow-slate-100/30 dark:shadow-slate-800/30">
+                {/* Header con griglia responsive */}
+                <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-t-xl">
+                  <div className="grid grid-cols-13 gap-2 text-sm font-semibold">
+                    <div className="text-left col-span-2 lg:col-span-1">Voce</div>
+                    {MONTH_INDEXES.map(i => (
+                      <div key={i} className="text-center text-xs lg:text-sm">
+                        {months[i].substring(0, 3).toUpperCase()}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Contenuto con griglia responsive */}
+                <div className="p-4 space-y-3">
+                  {/* Da allocare */}
+                  <div className="grid grid-cols-13 gap-2 py-2 border-b border-slate-200/10">
+                    <div className="col-span-2 lg:col-span-1 font-semibold text-sm" style={{ color: mainMeta('income').color }}>Da allocare</div>
+                    {MONTH_INDEXES.map(i => {
+                      const key = `${year}-${String(i + 1).padStart(2, '0')}`;
+                      const monthStat = monthlyStats[key];
+                      const toAllocate = monthStat?.toAllocate || 0;
+                      const status = getMonthStatus(toAllocate);
+                      
+                      return (
+                        <div key={i} className="text-center font-semibold text-sm" data-month={months[i].substring(0, 3).toUpperCase()}>
+                          {toAllocate !== 0 && (
+                            <div className="flex flex-col items-center gap-1">
+                              <span className="text-xs">{status.icon}</span>
+                              <span style={{ color: status.color }}>
+                                {toAllocate > 0 
+                                  ? `${Math.round(toAllocate).toLocaleString('it-IT')}€`
+                                  : `${Math.round(Math.abs(toAllocate)).toLocaleString('it-IT')}€`
+                                }
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Percentuali per ogni main presente */}
+                  {mainsToRender
+                    .filter(key => key !== 'income') // escludi income
+                    .map(key => {
+                      const meta = mainMeta(key);
+                      return (
+                        <div key={key} className="grid grid-cols-13 gap-2 py-2 border-b border-slate-200/10">
+                          <div className="col-span-2 lg:col-span-1 text-sm flex items-center gap-2">
+                            <span style={{ color: meta.color }}>
+                              % {meta.name.toLowerCase()}
+                            </span>
+                          </div>
+                          {MONTH_INDEXES.map(i => {
+                            const monthKey = `${year}-${String(i + 1).padStart(2, '0')}`;
+                            const monthStat = monthlyStats[monthKey];
+                            const percentage = monthStat?.budgetPct?.[key] || 0;
+                            return (
+                              <div 
+                                key={i} 
+                                className="text-center font-semibold text-xs" 
+                                style={{ color: meta.color }}
+                                data-month={months[i].substring(0, 3).toUpperCase()}
+                              >
+                                {percentage === 0 ? '' : `${percentage}%`}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            </details>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* CONTROLLI NAVIGAZIONE SEMESTRE */}
+      {/* CONTROLLI NAVIGAZIONE SEMESTRE CON FRECCE */}
       <div className="flex justify-center mb-6">
-        <Card className="shadow-md shadow-slate-200/40 dark:shadow-slate-800/40">
-          <CardContent className="px-6 py-4">
-            <div className="flex items-center justify-center gap-6">
+        <Card className="shadow-lg">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-center gap-4">
+              {/* Freccia sinistra */}
               <button
-                onClick={() => setViewMode(viewMode === 'semester1' ? 'semester2' : 'semester1')}
-                className="group p-3 rounded-xl text-xl font-bold transition-all duration-200 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-700 hover:from-blue-100 hover:to-blue-200 dark:hover:from-blue-800/40 dark:hover:to-blue-700/40 hover:scale-105 hover:shadow-lg"
-                title="Cambia semestre"
+                onClick={() => setViewMode('semester1')}
+                disabled={viewMode === 'semester1'}
+                className={`p-2 rounded-lg transition-all duration-200 ${
+                  viewMode === 'semester1'
+                    ? 'text-slate-400 cursor-not-allowed'
+                    : 'text-slate-600 hover:text-blue-600 hover:bg-blue-50 dark:text-slate-400 dark:hover:text-blue-400 dark:hover:bg-blue-900/20'
+                }`}
+                title="Precedente (Gennaio-Giugno)"
               >
-                <span className="group-hover:scale-110 transition-transform duration-200">←</span>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
               </button>
               
-              <div className="px-8 py-3 rounded-2xl font-bold text-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25 dark:shadow-blue-500/20 border border-blue-400 dark:border-blue-600">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                  <span className="tracking-wide">{viewMode === 'semester1' ? 'GEN-GIU' : 'LUG-DIC'}</span>
-                  <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+              {/* Visualizzazione corrente */}
+              <div className="text-center min-w-[120px]">
+                <div className="text-lg font-bold text-slate-800 dark:text-slate-200">
+                  {viewMode === 'semester1' ? 'GEN - GIU' : 'LUG - DIC'}
+                </div>
+                <div className="text-xs text-slate-500 mt-1">
+                  {viewMode === 'semester1' ? 'Primo Semestre' : 'Secondo Semestre'}
                 </div>
               </div>
               
+              {/* Freccia destra */}
               <button
-                onClick={() => setViewMode(viewMode === 'semester1' ? 'semester2' : 'semester1')}
-                className="group p-3 rounded-xl text-xl font-bold transition-all duration-200 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-700 hover:from-blue-100 hover:to-blue-200 dark:hover:from-blue-800/40 dark:hover:to-blue-700/40 hover:scale-105 hover:shadow-lg"
-                title="Cambia semestre"
+                onClick={() => setViewMode('semester2')}
+                disabled={viewMode === 'semester2'}
+                className={`p-2 rounded-lg transition-all duration-200 ${
+                  viewMode === 'semester2'
+                    ? 'text-slate-400 cursor-not-allowed'
+                    : 'text-slate-600 hover:text-blue-600 hover:bg-blue-50 dark:text-slate-400 dark:hover:text-blue-400 dark:hover:bg-blue-900/20'
+                }`}
+                title="Successivo (Luglio-Dicembre)"
               >
-                <span className="group-hover:scale-110 transition-transform duration-200">→</span>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </button>
             </div>
           </CardContent>
@@ -526,22 +542,23 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
         
         return (
           <div key={mainKey}>
-            {/* Card unica con entrambe le tabelle */}
+            {/* Card con layout fisso per evitare sovrapposizioni */}
             <Card style={{ borderColor: cardBorder, backgroundColor: cardBg }} className="border">
-              <CardContent>
-                <div className="font-semibold mb-3" style={{ color }}>{name.toUpperCase()}</div>
-                <div className="flex gap-4">
-                  {/* Tabella principale */}
-                  <div className="flex-1">
-                    <div className="rounded-xl border" style={{ borderColor: cardBorder }}>
-                      {/* Vista Desktop - Tabella compatta */}
-                      <div className="hidden lg:block overflow-x-auto">
-                        <table className="w-full">
+              <CardContent className="p-6">
+                <div className="font-semibold mb-4" style={{ color }}>{name.toUpperCase()}</div>
+                
+                {/* Vista Desktop - Due tabelle affiancate */}
+                <div className="hidden lg:block">
+                  <div className="flex gap-0">
+                    {/* Tabella principale dei mesi */}
+                    <div className="flex-1">
+                      <div className="overflow-x-auto rounded-l-lg border-l border-t border-b" style={{ borderColor: cardBorder }}>
+                        <table className="w-full table-auto">
                           <thead style={{ backgroundColor: headBg }}>
                             <tr>
-                              <th className="text-left p-2" style={{ color }}>Sottocategoria</th>
+                              <th className="text-left p-3" style={{ color, minWidth: '160px' }}>Sottocategoria</th>
                               {visibleMonths.map(i => (
-                                <th key={i} className="text-center px-3 py-2 whitespace-nowrap" style={{ color }}>
+                                <th key={i} className="text-center px-3 py-3 whitespace-nowrap" style={{ color, minWidth: '90px' }}>
                                   {months[i].toUpperCase()}
                                 </th>
                               ))}
@@ -553,37 +570,35 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
                               const rowBg = hexToRgba(color, isDark() ? 0.22 : 0.12);
                               const rowAltBg = hexToRgba(color, isDark() ? 0.14 : 0.08);
                               
-                              const handleSetAllMonths = async (value) => {
-                                // Optimistic update - non aspettare il risultato
-                                if (batchUpsertBudgets) {
+                              const handleSetAllMonths = React.useCallback(async (value) => {
+                                if (optimizedBatchUpsertBudgets) {
                                   const updates = MONTH_INDEXES.map(monthIdx => ({
                                     main: mainKey,
                                     keyWithMonth: `${sc.name}:${monthIdx}`,
                                     value
                                   }));
-                                  batchUpsertBudgets(updates).catch(console.error);
+                                  optimizedBatchUpsertBudgets(updates).catch(console.error);
                                 } else {
                                   MONTH_INDEXES.forEach(monthIdx => {
-                                    upsertBudget(mainKey, `${sc.name}:${monthIdx}`, value).catch(console.error);
+                                    optimizedUpsertBudget(mainKey, `${sc.name}:${monthIdx}`, value).catch(console.error);
                                   });
                                 }
-                              };
+                              }, [mainKey, sc.name, optimizedBatchUpsertBudgets, optimizedUpsertBudget]);
                               
-                              const handleResetAll = async () => {
-                                // Optimistic update - non aspettare il risultato
-                                if (batchUpsertBudgets) {
+                              const handleResetAll = React.useCallback(async () => {
+                                if (optimizedBatchUpsertBudgets) {
                                   const updates = MONTH_INDEXES.map(monthIdx => ({
                                     main: mainKey,
                                     keyWithMonth: `${sc.name}:${monthIdx}`,
                                     value: 0
                                   }));
-                                  batchUpsertBudgets(updates).catch(console.error);
+                                  optimizedBatchUpsertBudgets(updates).catch(console.error);
                                 } else {
                                   MONTH_INDEXES.forEach(monthIdx => {
-                                    upsertBudget(mainKey, `${sc.name}:${monthIdx}`, 0).catch(console.error);
+                                    optimizedUpsertBudget(mainKey, `${sc.name}:${monthIdx}`, 0).catch(console.error);
                                   });
                                 }
-                              };
+                              }, [mainKey, sc.name, optimizedBatchUpsertBudgets, optimizedUpsertBudget]);
                               
                               return (
                                 <tr 
@@ -594,7 +609,7 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
                                     backgroundColor: (idx % 2 === 0) ? rowBg : rowAltBg 
                                   }}
                                 >
-                                  <td className="p-2" style={{ color }}>
+                                  <td className="p-3" style={{ color }}>
                                     <div className="flex items-center gap-2">
                                       <SvgIcon name={sc.iconKey} color={color} size={18} />
                                       <span className="font-semibold text-sm">{sc.name}</span>
@@ -606,7 +621,7 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
                                         value={planFor(sc.name, i)}
                                         color={color}
                                         onSave={async (newValue) => {
-                                          await upsertBudget(mainKey, `${sc.name}:${i}`, newValue);
+                                          await optimizedUpsertBudget(mainKey, `${sc.name}:${i}`, newValue);
                                         }}
                                       />
                                     </td>
@@ -618,18 +633,15 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
                         </table>
                       </div>
                     </div>
-                  </div>
-                  
-                  {/* Tabella totali e azioni a destra */}
-                  <div className="w-48">
-                    <div className="rounded-xl border" style={{ borderColor: cardBorder }}>
-                      {/* Vista Desktop - Colonne totale/azioni */}
-                      <div className="hidden lg:block">
-                        <table className="w-full">
+                    
+                    {/* Tabella separata per totali e azioni */}
+                    <div className="w-48 flex-shrink-0">
+                      <div className="rounded-r-lg border-r border-t border-b" style={{ borderColor: cardBorder }}>
+                        <table className="w-full table-auto">
                           <thead style={{ backgroundColor: headBg }}>
                             <tr>
-                              <th className="text-center px-3 py-2" style={{ color }}>Totale</th>
-                              <th className="text-center px-3 py-2" style={{ color }}>Azioni</th>
+                              <th className="text-center px-3 py-3" style={{ color, minWidth: '80px' }}>Totale</th>
+                              <th className="text-center px-3 py-3" style={{ color, minWidth: '80px' }}>Azioni</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -639,33 +651,31 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
                               const rowAltBg = hexToRgba(color, isDark() ? 0.14 : 0.08);
                               
                               const handleSetAllMonths = async (value) => {
-                                // Optimistic update - non aspettare il risultato
-                                if (batchUpsertBudgets) {
+                                if (optimizedBatchUpsertBudgets) {
                                   const updates = MONTH_INDEXES.map(monthIdx => ({
                                     main: mainKey,
                                     keyWithMonth: `${sc.name}:${monthIdx}`,
                                     value
                                   }));
-                                  batchUpsertBudgets(updates).catch(console.error);
+                                  optimizedBatchUpsertBudgets(updates).catch(console.error);
                                 } else {
                                   MONTH_INDEXES.forEach(monthIdx => {
-                                    upsertBudget(mainKey, `${sc.name}:${monthIdx}`, value).catch(console.error);
+                                    optimizedUpsertBudget(mainKey, `${sc.name}:${monthIdx}`, value).catch(console.error);
                                   });
                                 }
                               };
                               
                               const handleResetAll = async () => {
-                                // Optimistic update - non aspettare il risultato
-                                if (batchUpsertBudgets) {
+                                if (optimizedBatchUpsertBudgets) {
                                   const updates = MONTH_INDEXES.map(monthIdx => ({
                                     main: mainKey,
                                     keyWithMonth: `${sc.name}:${monthIdx}`,
                                     value: 0
                                   }));
-                                  batchUpsertBudgets(updates).catch(console.error);
+                                  optimizedBatchUpsertBudgets(updates).catch(console.error);
                                 } else {
                                   MONTH_INDEXES.forEach(monthIdx => {
-                                    upsertBudget(mainKey, `${sc.name}:${monthIdx}`, 0).catch(console.error);
+                                    optimizedUpsertBudget(mainKey, `${sc.name}:${monthIdx}`, 0).catch(console.error);
                                   });
                                 }
                               };
