@@ -201,40 +201,65 @@ export default function MainCategoriesTab({ state, updateMainCat, addMainCat, re
             {headerActions}
           </div>
 
-          <div className="overflow-auto rounded-xl border border-slate-200/20">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-100 dark:bg-slate-800">
-                <tr>
-                  <th className="text-left px-2 py-3">Categoria</th>
-                  <th className="text-left px-2 py-3">Nome</th>
-                  <th className="text-left px-2 py-3">Colore</th>
-                  <th className="text-left px-2 py-3">Visibile</th>
-                  <th className="text-left px-2 py-3">Azioni</th>
-                </tr>
-              </thead>
-              <tbody className="text-[#444] dark:text-slate-200">
-                {merged.map(m => {
-                  const draft = editAll ? (draftMap[m.key] || { name: m.name, color: m.color, enabled: m.enabled }) : null;
-                  const nameVal = (editAll ? draft.name : m.name) || "";
-                  const colorVal = (editAll ? draft.color : m.color) || '#5B86E5';
-                  const enabledVal = editAll ? draft.enabled : m.enabled;
-                  const isCore = CORE_KEYS.has(m.key);
-                  const isEditing = editingKey === m.key;
+          {/* Modern card-style layout instead of table */}
+          <div className="space-y-3">
+            <style>{`
+              @keyframes fadeInUp {
+                from {
+                  opacity: 0;
+                  transform: translateY(20px);
+                }
+                to {
+                  opacity: 1;
+                  transform: translateY(0);
+                }
+              }
+              .fade-in-up {
+                animation: fadeInUp 0.5s ease-out;
+              }
+            `}</style>
+            {merged.map(m => {
+              const draft = editAll ? (draftMap[m.key] || { name: m.name, color: m.color, enabled: m.enabled }) : null;
+              const nameVal = (editAll ? draft.name : m.name) || "";
+              const colorVal = (editAll ? draft.color : m.color) || '#5B86E5';
+              const enabledVal = editAll ? draft.enabled : m.enabled;
+              const isCore = CORE_KEYS.has(m.key);
+              const isEditing = editingKey === m.key;
 
-                  return (
-                    <tr key={m.key} className="border-t border-slate-200/10 hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="px-2 py-3 whitespace-nowrap">
-                        <CategoryBadge color={colorVal} size="lg">
-                          {nameVal.toUpperCase()}
-                        </CategoryBadge>
-                      </td>
-
-                      <td className="px-2 py-3">
+              // Calculate background and border colors using category color
+              const bgColor = `${colorVal}08`; // 8% opacity
+              const borderColor = `${colorVal}30`; // 30% opacity
+              
+              return (
+                <div 
+                  key={m.key} 
+                  className="group rounded-xl border-2 shadow-sm hover:shadow-lg transition-all duration-300 p-4 hover:scale-[1.02]"
+                  style={{
+                    backgroundColor: bgColor,
+                    borderColor: borderColor,
+                    boxShadow: `0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)`,
+                    '--tw-shadow-colored': `0 10px 15px -3px ${colorVal}15, 0 4px 6px -4px ${colorVal}10`
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = `0 10px 25px -5px ${colorVal}20, 0 10px 10px -5px ${colorVal}10`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = `0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)`;
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    {/* Left section: Badge and Name */}
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                      <CategoryBadge color={colorVal} size="lg">
+                        {nameVal.toUpperCase()}
+                      </CategoryBadge>
+                      
+                      <div className="flex-1 min-w-0">
                         {editAll ? (
                           <Input
                             value={nameVal.toUpperCase()}
                             onChange={(e) => setDraftMap(d => ({ ...d, [m.key]: { ...(d[m.key] || {}), name: e.target.value.toUpperCase() } }))}
-                            className="font-semibold"
+                            className="font-bold text-lg"
                           />
                         ) : isEditing ? (
                           <div className="flex items-center gap-2">
@@ -243,7 +268,7 @@ export default function MainCategoriesTab({ state, updateMainCat, addMainCat, re
                               value={nameDraft}
                               onChange={(e) => setNameDraft(e.target.value.toUpperCase())}
                               onKeyDown={(e) => { if (e.key === "Enter") saveRowEdit(m); if (e.key === "Escape") cancelRowEdit(); }}
-                              className="font-semibold"
+                              className="font-bold text-lg"
                             />
                             <Button size="sm" onClick={() => saveRowEdit(m)} className="inline-flex items-center gap-1">
                               <Check className="h-4 w-4" />
@@ -252,56 +277,58 @@ export default function MainCategoriesTab({ state, updateMainCat, addMainCat, re
                           </div>
                         ) : (
                           <span
-                            className="font-semibold cursor-text"
+                            className="font-black text-xl tracking-tight cursor-text"
+                            style={{ color: colorVal }}
                             title="Doppio clic per rinominare"
                             onDoubleClick={() => enterRowEdit(m)}
                           >
                             {nameVal.toUpperCase()}
                           </span>
                         )}
-                      </td>
-
-                      <td className="px-2 py-3">
-                        <ColorPicker
-                          value={colorVal}
-                          onChange={(c) => changeColor(m, c)}
-                          paletteKey={m.key}
+                      </div>
+                    </div>
+                    
+                    {/* Right section: Controls */}
+                    <div className="flex items-center gap-3">
+                      <ColorPicker
+                        value={colorVal}
+                        onChange={(c) => changeColor(m, c)}
+                        paletteKey={m.key}
+                      />
+                      
+                      {isCore ? (
+                        <div className="px-3">
+                          <span className="text-slate-400 dark:text-slate-500 text-xs font-medium">Core</span>
+                        </div>
+                      ) : (
+                        <Switch
+                          checked={!!enabledVal}
+                          onCheckedChange={(v) => toggleEnabled(m, v)}
+                          style={!enabledVal ? { filter: isDark() ? "" : "grayscale(40%) opacity(.9)" } : {}}
                         />
-                      </td>
-
-                      <td className="px-2 py-3">
-                        {isCore ? (
-                          <span className="text-slate-400 dark:text-slate-500">—</span>
-                        ) : (
-                          <Switch
-                            checked={!!enabledVal}
-                            onCheckedChange={(v) => toggleEnabled(m, v)}
-                            style={!enabledVal ? { filter: isDark() ? "" : "grayscale(40%) opacity(.9)" } : {}}
-                          />
-                        )}
-                      </td>
-
-                      <td className="px-2 py-3">
-                        <ActionsMenu
-                          onEdit={() => enterRowEdit(m)}
-                          onRemove={!isCore ? async () => {
-                            const ok = await removeMainCat(m.key);
-                            if (!ok) {
-                              toast.error("Impossibile rimuovere la categoria");
-                            }
-                          } : undefined}
-                          onReset={isCore ? () => resetCore(m) : undefined}
-                          disableRemove={isCore}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-                {merged.length === 0 && (
-                  <tr><td colSpan={5} className="p-4 text-center text-slate-500">Nessuna categoria</td></tr>
-                )}
-              </tbody>
-            </table>
+                      )}
+                      
+                      <ActionsMenu
+                        onEdit={() => enterRowEdit(m)}
+                        onRemove={!isCore ? async () => {
+                          const ok = await removeMainCat(m.key);
+                          if (!ok) {
+                            toast.error("Impossibile rimuovere la categoria");
+                          }
+                        } : undefined}
+                        onReset={isCore ? () => resetCore(m) : undefined}
+                        disableRemove={isCore}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {merged.length === 0 && (
+              <div className="p-8 text-center text-slate-500 rounded-xl border border-dashed border-slate-300 dark:border-slate-600">
+                Nessuna categoria configurata
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -46,7 +46,7 @@ export default function ActionsMenu({ onEdit, onRemove, onReset, disableRemove =
       <button
         type="button"
         ref={btnRef}
-        className="rounded-xl px-2 py-2 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+        className="rounded-xl px-2 py-2 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 opacity-30 group-hover:opacity-100 hover:!opacity-100"
         onClick={() => setOpen(o => !o)}
         aria-haspopup="menu"
         aria-expanded={open}

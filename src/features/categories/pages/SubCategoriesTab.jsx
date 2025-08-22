@@ -270,98 +270,120 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
             </div>
           </div>
 
-          <div className="overflow-auto rounded-xl border border-slate-200/20">
-            <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
-              Suggerimento: trascina le righe per riordinare (disponibile fuori da "Modifica" generale).
-            </div>
-            <table className="w-full text-sm">
-              <thead className="bg-slate-100 dark:bg-slate-800">
-                <tr>
-                  <th className="text-left px-2 py-3 w-20">Icona</th>
-                  <th className="text-left px-2 py-3">Nome</th>
-                  <th className="text-left px-2 py-3 w-24">Azioni</th>
-                </tr>
-              </thead>
-              <tbody className="text-[#444] dark:text-slate-200">
-                {displayedRows.map((sc, idx) => {
-                  const isEditing = !editAll && editingRowId === sc.id;
-                  const titleName = toTitleCase(sc.name);
-                  const rowClasses = [
-                    'border-t','border-slate-200/10','hover:bg-slate-50','dark:hover:bg-slate-800/40',
-                    overIdx === idx ? 'bg-slate-100/60 dark:bg-slate-800/60' : ''
-                  ].join(' ');
-                  return (
-                    <tr
-                      key={sc.id || sc.name}
-                      className={rowClasses}
-                      onDragOver={(e) => {
-                        if (editAll || savingOrder) return;
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = 'move';
-                        if (dragIdx === null) return;
-                        if (idx === dragIdx) return;
-                        const base = preview ?? rowsSorted;
-                        const newOrder = [...base];
-                        const [moved] = newOrder.splice(dragIdx, 1);
-                        newOrder.splice(idx, 0, moved);
-                        setPreview(newOrder);
-                        setOverIdx(idx);
-                        setDragIdx(idx);
-                      }}
-                      onDrop={async (e) => {
-                        if (editAll || savingOrder) return;
-                        e.preventDefault();
-                        const finalOrder = (preview ?? rowsSorted).map(r => r.id).filter(Boolean);
-                        if (finalOrder.length) {
-                          try {
-                            setSavingOrder(true);
-                            await reorderSubcats(main, finalOrder);
-                          } catch (err) {
-                            // Errore gestito dall'optimistic update rollback
-                          } finally {
-                            setSavingOrder(false);
-                          }
-                        }
-                        setPreview(null);
-                        setDragIdx(null);
-                        setOverIdx(null);
-                      }}
-                      onDragEnd={() => { if (!savingOrder) { setPreview(null); setDragIdx(null); setOverIdx(null); } }}
-                      onDragLeave={() => { setOverIdx(null); }}
-                    >
-                      <td className="px-2 py-3">
-                        <div className="flex items-center gap-2">
-                          <span
-                            title="Trascina per riordinare"
-                            draggable={!editAll}
-                            onDragStart={(e) => {
-                              e.dataTransfer.setData('text/plain', String(idx));
-                              e.dataTransfer.effectAllowed = 'move';
-                              setDragIdx(idx);
-                              setOverIdx(idx);
-                              setPreview(displayedRows);
-                            }}
-                            className="inline-flex items-center justify-center p-1 rounded cursor-grab active:cursor-grabbing hover:bg-slate-100 dark:hover:bg-slate-800"
-                          >
-                            <GripVertical className="h-4 w-4 opacity-70" />
-                          </span>
-                          <button
-                            type="button"
-                            title="Cambia icona"
-                            className="rounded-lg px-1 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
-                            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              openIconFor(sc.id);
-                            }}
-                          >
-                            <SvgIcon name={sc.iconKey} color={mainColor} size={22} />
-                          </button>
-                        </div>
-                      </td>
+          <div className="mb-3 px-3 py-2 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-lg">
+            Suggerimento: trascina le carte per riordinare (disponibile fuori da "Modifica" generale).
+          </div>
+          
+          {/* Modern card-style layout */}
+          <div className="space-y-3">
+            {displayedRows.map((sc, idx) => {
+              const isEditing = !editAll && editingRowId === sc.id;
+              const titleName = toTitleCase(sc.name);
+              
+              // Calculate background and border colors using main category color with alternating pattern
+              const isEven = idx % 2 === 0;
+              const baseOpacity = isEven ? '06' : '10'; // Alternate between 6% and 10% opacity
+              const bgColor = `${mainColor}${baseOpacity}`;
+              const borderColor = `${mainColor}30`; // 30% opacity
+              const hoverBg = overIdx === idx ? `${mainColor}15` : bgColor;
+              
+              return (
+                <div
+                  key={sc.id || sc.name}
+                  className={`
+                    group relative rounded-2xl transition-all duration-300 p-4
+                    border-2 shadow-sm hover:shadow-lg hover:scale-[1.01]
+                    ${overIdx === idx ? 'border-opacity-60 shadow-lg scale-[1.01]' : 'border-opacity-40'}
+                  `}
+                  style={{
+                    backgroundColor: hoverBg,
+                    borderColor,
+                    boxShadow: overIdx === idx 
+                      ? `0 10px 25px -5px ${mainColor}25, 0 10px 10px -5px ${mainColor}15`
+                      : `0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)`
+                  }}
+                  onMouseEnter={(e) => {
+                    if (overIdx !== idx) {
+                      e.currentTarget.style.boxShadow = `0 10px 25px -5px ${mainColor}20, 0 10px 10px -5px ${mainColor}10`;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (overIdx !== idx) {
+                      e.currentTarget.style.boxShadow = `0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)`;
+                    }
+                  }}
+                  onDragOver={(e) => {
+                    if (editAll || savingOrder) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (dragIdx === null) return;
+                    if (idx === dragIdx) return;
+                    const base = preview ?? rowsSorted;
+                    const newOrder = [...base];
+                    const [moved] = newOrder.splice(dragIdx, 1);
+                    newOrder.splice(idx, 0, moved);
+                    setPreview(newOrder);
+                    setOverIdx(idx);
+                    setDragIdx(idx);
+                  }}
+                  onDrop={async (e) => {
+                    if (editAll || savingOrder) return;
+                    e.preventDefault();
+                    const finalOrder = (preview ?? rowsSorted).map(r => r.id).filter(Boolean);
+                    if (finalOrder.length) {
+                      try {
+                        setSavingOrder(true);
+                        await reorderSubcats(main, finalOrder);
+                      } catch (err) {
+                        // Errore gestito dall'optimistic update rollback
+                      } finally {
+                        setSavingOrder(false);
+                      }
+                    }
+                    setPreview(null);
+                    setDragIdx(null);
+                    setOverIdx(null);
+                  }}
+                  onDragEnd={() => { if (!savingOrder) { setPreview(null); setDragIdx(null); setOverIdx(null); } }}
+                  onDragLeave={() => { setOverIdx(null); }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <span
+                          title="Trascina per riordinare"
+                          draggable={!editAll}
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('text/plain', String(idx));
+                            e.dataTransfer.effectAllowed = 'move';
+                            setDragIdx(idx);
+                            setOverIdx(idx);
+                            setPreview(displayedRows);
+                            // Add stronger shadow during drag
+                            e.currentTarget.closest('.group').style.boxShadow = `0 20px 40px -10px ${mainColor}40, 0 20px 20px -10px ${mainColor}25`;
+                            e.currentTarget.closest('.group').style.transform = 'scale(1.03) rotate(1deg)';
+                            e.currentTarget.closest('.group').style.zIndex = '1000';
+                          }}
+                          className="inline-flex items-center justify-center p-2 rounded-lg cursor-grab active:cursor-grabbing hover:bg-white/80 dark:hover:bg-slate-900/80 transition-all duration-200"
+                        >
+                          <GripVertical className="h-4 w-4 opacity-60" />
+                        </span>
+                        <button
+                          type="button"
+                          title="Cambia icona"
+                          className="rounded-xl px-3 py-2 hover:bg-white/80 dark:hover:bg-slate-900/80 flex items-center justify-center transition-colors"
+                          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openIconFor(sc.id);
+                          }}
+                        >
+                          <SvgIcon name={sc.iconKey} color={mainColor} size={24} />
+                        </button>
+                      </div>
 
-                      <td className="px-2 py-3 align-middle">
+                      <div className="flex-1">
                         {editAll ? (
                           <Input
                             value={titleName}
@@ -374,7 +396,7 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
                                 return r;
                               }));
                             }}
-                            className="font-semibold"
+                            className="text-lg font-bold bg-white/80 dark:bg-slate-900/80 border-slate-300 dark:border-slate-600"
                           />
                         ) : isEditing ? (
                           <div className="flex items-center gap-2">
@@ -385,35 +407,55 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
                                 if (e.key === "Enter") saveRowEdit(sc.id, e.currentTarget);
                                 if (e.key === "Escape") cancelRowEdit();
                               }}
-                              className="font-semibold"
+                              className="text-lg font-bold bg-white/80 dark:bg-slate-900/80 border-slate-300 dark:border-slate-600"
                             />
-                            <Button size="sm" onClick={(e) => saveRowEdit(sc.id, { value: e.currentTarget.parentElement.querySelector('input').value })}><Check className="h-4 w-4" /></Button>
-                            <Button size="sm" variant="ghost" onClick={cancelRowEdit}><X className="h-4 w-4" /></Button>
+                            <Button 
+                              size="sm" 
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                              onClick={(e) => saveRowEdit(sc.id, { value: e.currentTarget.parentElement.querySelector('input').value })}
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                              onClick={cancelRowEdit}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
                           </div>
                         ) : (
-                          <span className="font-semibold" onDoubleClick={() => beginRowEdit(sc)} title="Doppio clic per rinominare">
+                          <span 
+                            className="text-xl font-black tracking-tight text-slate-800 dark:text-slate-200 cursor-pointer hover:underline" 
+                            onDoubleClick={() => beginRowEdit(sc)} 
+                            title="Doppio clic per rinominare"
+                          >
                             {titleName}
                           </span>
                         )}
-                      </td>
+                      </div>
+                    </div>
 
-                      <td className="px-2 py-3">
-                        <ActionsMenu
-                          onEdit={() => beginRowEdit(sc)}
-                          onRemove={async () => {
-                            const ok = await removeSubcat(main, sc.id);
-                            if (!ok) toast.error("Impossibile rimuovere la sottocategoria");
-                          }}
-                        />
-                      </td>
-                    </tr>
+                    <div className="ml-4">
+                      <ActionsMenu
+                        onEdit={() => beginRowEdit(sc)}
+                        onRemove={async () => {
+                          const ok = await removeSubcat(main, sc.id);
+                          if (!ok) toast.error("Impossibile rimuovere la sottocategoria");
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
                   );
                 })}
                 {rowsSorted.length === 0 && (
-                  <tr><td className="p-4 text-center text-slate-500" colSpan={3}>Nessuna sottocategoria</td></tr>
+                  <div className="p-8 text-center text-slate-500 dark:text-slate-400 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700">
+                    <div className="text-lg font-medium mb-2">Nessuna sottocategoria</div>
+                    <div className="text-sm">Aggiungi la prima sottocategoria per iniziare</div>
+                  </div>
                 )}
-              </tbody>
-            </table>
           </div>
 
           <IconBrowserModal
