@@ -209,7 +209,7 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
     <div className="space-y-4">
       <div className="text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
         In <b>Modifica</b> generale confermi con <b>Salva</b> in alto. In modifica singola: <b>Enter</b> salva, <b>Esc</b> annulla.
-        I nomi vengono sempre in <b>Title Case e grassetto</b>.
+        I nomi vengono sempre in <b>Title Case</b>.
       </div>
 
       <Card>
@@ -291,9 +291,9 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
                 <div
                   key={sc.id || sc.name}
                   className={`
-                    group relative rounded-2xl transition-all duration-300 p-4
-                    border-2 shadow-sm hover:shadow-lg hover:scale-[1.01]
-                    ${overIdx === idx ? 'border-opacity-60 shadow-lg scale-[1.01]' : 'border-opacity-40'}
+                    group relative rounded-xl transition-all duration-300 p-3
+                    border-2 shadow-sm hover:shadow-md
+                    ${overIdx === idx ? 'border-opacity-60 shadow-md' : 'border-opacity-40'}
                   `}
                   style={{
                     backgroundColor: hoverBg,
@@ -344,7 +344,19 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
                     setDragIdx(null);
                     setOverIdx(null);
                   }}
-                  onDragEnd={() => { if (!savingOrder) { setPreview(null); setDragIdx(null); setOverIdx(null); } }}
+                  onDragEnd={(e) => { 
+                    // Always reset transformations immediately
+                    const card = e.currentTarget;
+                    card.style.boxShadow = `0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)`;
+                    card.style.transform = '';
+                    card.style.zIndex = '';
+                    
+                    if (!savingOrder) { 
+                      setPreview(null); 
+                      setDragIdx(null); 
+                      setOverIdx(null); 
+                    } 
+                  }}
                   onDragLeave={() => { setOverIdx(null); }}
                 >
                   <div className="flex items-center justify-between">
@@ -360,9 +372,10 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
                             setOverIdx(idx);
                             setPreview(displayedRows);
                             // Add stronger shadow during drag
-                            e.currentTarget.closest('.group').style.boxShadow = `0 20px 40px -10px ${mainColor}40, 0 20px 20px -10px ${mainColor}25`;
-                            e.currentTarget.closest('.group').style.transform = 'scale(1.03) rotate(1deg)';
-                            e.currentTarget.closest('.group').style.zIndex = '1000';
+                            const card = e.currentTarget.closest('.group');
+                            card.style.boxShadow = `0 15px 30px -8px ${mainColor}35, 0 15px 15px -8px ${mainColor}20`;
+                            card.style.transform = 'scale(1.02) rotate(0.5deg)';
+                            card.style.zIndex = '1000';
                           }}
                           className="inline-flex items-center justify-center p-2 rounded-lg cursor-grab active:cursor-grabbing hover:bg-white/80 dark:hover:bg-slate-900/80 transition-all duration-200"
                         >
@@ -379,7 +392,7 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
                             openIconFor(sc.id);
                           }}
                         >
-                          <SvgIcon name={sc.iconKey} color={mainColor} size={24} />
+                          <SvgIcon name={sc.iconKey} color={mainColor} size={24} iconType="sub" />
                         </button>
                       </div>
 
@@ -396,7 +409,7 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
                                 return r;
                               }));
                             }}
-                            className="text-lg font-bold bg-white/80 dark:bg-slate-900/80 border-slate-300 dark:border-slate-600"
+                            className="text-sm bg-white/80 dark:bg-slate-900/80 border-slate-300 dark:border-slate-600"
                           />
                         ) : isEditing ? (
                           <div className="flex items-center gap-2">
@@ -407,7 +420,7 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
                                 if (e.key === "Enter") saveRowEdit(sc.id, e.currentTarget);
                                 if (e.key === "Escape") cancelRowEdit();
                               }}
-                              className="text-lg font-bold bg-white/80 dark:bg-slate-900/80 border-slate-300 dark:border-slate-600"
+                              className="text-sm bg-white/80 dark:bg-slate-900/80 border-slate-300 dark:border-slate-600"
                             />
                             <Button 
                               size="sm" 
@@ -427,7 +440,7 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
                           </div>
                         ) : (
                           <span 
-                            className="text-xl font-black tracking-tight text-slate-800 dark:text-slate-200 cursor-pointer hover:underline" 
+                            className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer hover:underline" 
                             onDoubleClick={() => beginRowEdit(sc)} 
                             title="Doppio clic per rinominare"
                           >
@@ -466,6 +479,7 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
               if (!iconModalTarget?.subId) return;
               setIcon(iconModalTarget.subId, key);
             }}
+            iconType="sub"
           />
         </CardContent>
       </Card>

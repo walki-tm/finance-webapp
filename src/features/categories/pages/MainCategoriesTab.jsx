@@ -1,11 +1,13 @@
 import React, { useState } from "react";
 import { Card, CardContent, Input, Button, Switch } from "../../ui";
 import { MAIN_CATS } from "../../../lib/constants.js";
-import { Check, X, Save } from "lucide-react";
+import { Check, X, Save, ImageIcon } from "lucide-react";
 import { useToast } from "../../toast";
 import ColorPicker from "../components/ColorPicker.jsx";
 import CategoryBadge, { isDark } from "../components/CategoryBadge.jsx";
 import ActionsMenu from "../components/ActionsMenu.jsx";
+import SvgIcon from "../../icons/components/SvgIcon.jsx";
+import IconBrowserModal from "../components/IconBrowserModal.jsx";
 
 const CORE_KEYS = new Set(MAIN_CATS.map(m => m.key));
 const CORE_DEFAULT = Object.fromEntries(MAIN_CATS.map(m => [m.key, { name: m.name, color: m.color }]));
@@ -39,11 +41,15 @@ export default function MainCategoriesTab({ state, updateMainCat, addMainCat, re
   const [editAll, setEditAll] = useState(false);
   const [draftMap, setDraftMap] = useState({});
   const [editingKey, setEditingKey] = useState(null);
+  
+  // Icon selection modal state
+  const [iconModalOpen, setIconModalOpen] = useState(false);
+  const [iconModalTarget, setIconModalTarget] = useState(null);
 
   function startEditAll() {
     const init = Object.fromEntries(merged.map(m => [
       m.key,
-      { name: m.name, color: m.color, enabled: m.enabled }
+      { name: m.name, color: m.color, enabled: m.enabled, iconKey: m.iconKey }
     ]));
     setDraftMap(init);
     setEditAll(true);
@@ -71,6 +77,7 @@ export default function MainCategoriesTab({ state, updateMainCat, addMainCat, re
       const upName = (draft.name || "").toUpperCase();
       if (upName !== m.name) patch.name = upName;
       if (draft.color !== m.color) patch.color = draft.color;
+      if (draft.iconKey !== m.iconKey) patch.iconKey = draft.iconKey;
       const isCore = CORE_KEYS.has(m.key);
       if (!isCore && draft.enabled !== m.enabled) patch.visible = draft.enabled;
 
@@ -118,6 +125,34 @@ export default function MainCategoriesTab({ state, updateMainCat, addMainCat, re
       }
     }
   }
+  
+  // Icon handling functions
+  function openIconFor(categoryKey) {
+    setIconModalTarget({ categoryKey });
+    setIconModalOpen(true);
+  }
+  
+  function closeIconModal() {
+    setIconModalOpen(false);
+    setIconModalTarget(null);
+  }
+  
+  function setIcon(categoryKey, iconKey) {
+    if (editAll) {
+      setDraftMap(d => ({
+        ...d,
+        [categoryKey]: {
+          ...(d[categoryKey] || { name: merged.find(m => m.key === categoryKey)?.name, color: merged.find(m => m.key === categoryKey)?.color, enabled: merged.find(m => m.key === categoryKey)?.enabled }),
+          iconKey
+        }
+      }));
+    } else {
+      updateMainCat(categoryKey, { iconKey })
+        .then(() => toast.success("Icona aggiornata"))
+        .catch(e => toast.error("Errore aggiornamento icona", { description: String(e.message || e) }));
+    }
+  }
+  
   function toggleEnabled(m, v) {
     if (CORE_KEYS.has(m.key)) return;
     if (editAll) {
@@ -190,7 +225,7 @@ export default function MainCategoriesTab({ state, updateMainCat, addMainCat, re
   return (
     <div className="space-y-4">
       <div className="text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
-        <b>Doppio clic</b> per rinominare singolarmente. Clicca il <b>box colore</b> per cambiare tinta.
+        <b>Doppio clic</b> per rinominare singolarmente. Clicca il <b>box colore</b> per cambiare tinta e il <b>pulsante icona</b> per selezionare l'icona.
         In <b>Modifica</b> generale, conferma con <b>Salva</b> in alto.
       </div>
 
@@ -219,9 +254,10 @@ export default function MainCategoriesTab({ state, updateMainCat, addMainCat, re
               }
             `}</style>
             {merged.map(m => {
-              const draft = editAll ? (draftMap[m.key] || { name: m.name, color: m.color, enabled: m.enabled }) : null;
+              const draft = editAll ? (draftMap[m.key] || { name: m.name, color: m.color, enabled: m.enabled, iconKey: m.iconKey }) : null;
               const nameVal = (editAll ? draft.name : m.name) || "";
               const colorVal = (editAll ? draft.color : m.color) || '#5B86E5';
+              const iconKeyVal = (editAll ? draft.iconKey : m.iconKey) || null;
               const enabledVal = editAll ? draft.enabled : m.enabled;
               const isCore = CORE_KEYS.has(m.key);
               const isEditing = editingKey === m.key;
@@ -233,12 +269,12 @@ export default function MainCategoriesTab({ state, updateMainCat, addMainCat, re
               return (
                 <div 
                   key={m.key} 
-                  className="group rounded-xl border-2 shadow-sm hover:shadow-lg transition-all duration-300 p-4 hover:scale-[1.02]"
+                  className="group rounded-xl border-2 shadow-sm hover:shadow-md transition-all duration-300 p-3 hover:scale-[1.01]"
                   style={{
                     backgroundColor: bgColor,
                     borderColor: borderColor,
                     boxShadow: `0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)`,
-                    '--tw-shadow-colored': `0 10px 15px -3px ${colorVal}15, 0 4px 6px -4px ${colorVal}10`
+                    '--tw-shadow-colored': `0 8px 12px -3px ${colorVal}15, 0 4px 6px -4px ${colorVal}10`
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.boxShadow = `0 10px 25px -5px ${colorVal}20, 0 10px 10px -5px ${colorVal}10`;
@@ -250,10 +286,6 @@ export default function MainCategoriesTab({ state, updateMainCat, addMainCat, re
                   <div className="flex items-center justify-between gap-4">
                     {/* Left section: Badge and Name */}
                     <div className="flex items-center gap-4 flex-1 min-w-0">
-                      <CategoryBadge color={colorVal} size="lg">
-                        {nameVal.toUpperCase()}
-                      </CategoryBadge>
-                      
                       <div className="flex-1 min-w-0">
                         {editAll ? (
                           <Input
@@ -276,20 +308,42 @@ export default function MainCategoriesTab({ state, updateMainCat, addMainCat, re
                             <Button size="sm" variant="ghost" onClick={cancelRowEdit}><X className="h-4 w-4" /></Button>
                           </div>
                         ) : (
-                          <span
-                            className="font-black text-xl tracking-tight cursor-text"
-                            style={{ color: colorVal }}
+                          <CategoryBadge 
+                            color={colorVal} 
+                            size="xl"
+                            className="cursor-text"
                             title="Doppio clic per rinominare"
                             onDoubleClick={() => enterRowEdit(m)}
                           >
-                            {nameVal.toUpperCase()}
-                          </span>
+                            <div className="flex items-center gap-2">
+                              {iconKeyVal && <SvgIcon name={iconKeyVal} color={colorVal} size={20} iconType="main" />}
+                              <span>{nameVal.toUpperCase()}</span>
+                            </div>
+                          </CategoryBadge>
                         )}
                       </div>
                     </div>
                     
                     {/* Right section: Controls */}
                     <div className="flex items-center gap-3">
+                      {/* Icon Button */}
+                      <button
+                        type="button"
+                        onClick={() => openIconFor(m.key)}
+                        className="flex items-center justify-center w-10 h-10 rounded-xl border-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                        style={{
+                          borderColor: `${colorVal}40`,
+                          backgroundColor: iconKeyVal ? `${colorVal}08` : 'transparent'
+                        }}
+                        title="Cambia icona"
+                      >
+                        {iconKeyVal ? (
+                          <SvgIcon name={iconKeyVal} color={colorVal} size={20} iconType="main" />
+                        ) : (
+                          <ImageIcon className="h-5 w-5" style={{ color: `${colorVal}80` }} />
+                        )}
+                      </button>
+                      
                       <ColorPicker
                         value={colorVal}
                         onChange={(c) => changeColor(m, c)}
@@ -332,6 +386,19 @@ export default function MainCategoriesTab({ state, updateMainCat, addMainCat, re
           </div>
         </CardContent>
       </Card>
+      
+      {/* Icon Selection Modal */}
+      <IconBrowserModal
+        open={iconModalOpen}
+        onClose={closeIconModal}
+        onPick={(iconKey) => {
+          if (iconModalTarget?.categoryKey) {
+            setIcon(iconModalTarget.categoryKey, iconKey);
+          }
+        }}
+        tintColor={iconModalTarget ? merged.find(m => m.key === iconModalTarget.categoryKey)?.color || '#5B86E5' : '#5B86E5'}
+        iconType="main"
+      />
     </div>
   );
 }

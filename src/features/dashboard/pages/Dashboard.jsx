@@ -261,7 +261,7 @@ function DetailPanel({ mainKey, state, year, color, addTx }) {
                 <tr key={r.sub} className="border-t border-slate-200/10">
                   {/* ⬇️ qui usiamo la stessa icona configurata in Categories, tinta col colore della main */}
                   <td className="p-2">
-                    <SvgIcon name={r.iconKey} color={color} size={20} />
+                    <SvgIcon name={r.iconKey} color={color} size={20} iconType="sub" />
                   </td>
                   <td className="p-2">{r.sub}</td>
                   <td className="p-2 text-right">{nice(r.budget)}</td>

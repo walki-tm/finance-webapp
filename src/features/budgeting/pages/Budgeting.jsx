@@ -156,15 +156,15 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
     return Array.from(byKey);
   }, [state.customMainCats, state.mainEnabled]);
 
-  // ---- Helper: recupera metadati colore/nome per una main (core o custom)
+  // ---- Helper: recupera metadati colore/nome/icona per una main (core o custom)
   const mainMeta = (key) => {
     // Prima prova a leggere override dal DB (presenti in customMainCats anche per le core)
     const c = (state.customMainCats || []).find(x => x.key === key);
-    if (c) return { name: c.name || key.toUpperCase(), color: c.color || '#64748b' };
+    if (c) return { name: c.name || key.toUpperCase(), color: c.color || '#64748b', iconKey: c.iconKey };
     // Fallback ai default statici
     const core = MAIN_CATS.find(m => m.key === key);
-    if (core) return { name: core.name, color: core.color };
-    return { name: key.toUpperCase(), color: '#64748b' };
+    if (core) return { name: core.name, color: core.color, iconKey: core.iconKey };
+    return { name: key.toUpperCase(), color: '#64748b', iconKey: null };
   };
 
   // Determina quali mesi mostrare in base alla view mode
@@ -258,7 +258,7 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
     // Prima aggiungi la categoria income per "Reddito"
     const incomeMeta = mainMeta('income');
     allCategoryStats['income'] = {
-      meta: { ...incomeMeta, name: 'REDDITO' },
+      meta: { ...incomeMeta },
       yearlyPercentage: 100, // Il reddito è sempre 100% di se stesso
       yearlyAmount: Math.round(yearlyIncome),
       isToAllocate: true,
@@ -340,9 +340,13 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
                               }}>
                                 {isToAllocate && stats.isOverBudget ? (
                                   <span className="text-white text-sm leading-none">⚠</span>
+                                ) : stats.meta.iconKey ? (
+                                  <SvgIcon name={stats.meta.iconKey} color="white" size={18} iconType="main" />
+                                ) : isToAllocate ? (
+                                  <span className="text-white text-sm font-bold">€</span>
                                 ) : (
                                   <span className="text-white text-sm font-bold">
-                                    {isToAllocate ? '€' : stats.meta.name.charAt(0)}
+                                    {stats.meta.name.charAt(0)}
                                   </span>
                                 )}
                               </div>

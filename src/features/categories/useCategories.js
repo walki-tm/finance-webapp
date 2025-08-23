@@ -93,11 +93,16 @@ export function useCategories(token) {
       const payload = {
         ...(patch.name ? { name: patch.name } : {}),
         ...(patch.color ? { colorHex: patch.color } : {}),
-        ...(patch.iconKey ? { iconKey: patch.iconKey } : {}),
+        ...('iconKey' in patch ? { iconKey: patch.iconKey } : {}),
         ...(typeof patch.visible === 'boolean' ? { visible: patch.visible } : {}),
       };
       const updated = await api.updateCategory(token, cat.id, payload);
-      setCustomMainCats(s => s.map(c => (c.key === key ? { ...c, ...updated, color: updated.colorHex ?? c.color } : c)));
+      setCustomMainCats(s => s.map(c => (c.key === key ? { 
+        ...c, 
+        ...updated, 
+        color: updated.colorHex ?? c.color,
+        iconKey: updated.iconKey ?? c.iconKey
+      } : c)));
       if (typeof updated.visible === 'boolean') {
         setMainEnabled(s => ({ ...s, [key]: updated.visible }));
       }

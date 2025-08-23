@@ -2,11 +2,12 @@
 import React, { useEffect, useRef, useState } from "react";
 
 /**
- * Carica /public/icons/<name>.svg, normalizzasa fill/stroke a currentColor,
+ * Carica icone SVG dalle cartelle /public/icons/subcategories/ o /public/icons/main/,
+ * con fallback alla cartella root /public/icons/. Normalizza fill/stroke a currentColor,
  * rimuove width/height hardcoded e applica il colore passato.
  * Funziona sia in dev che in build (rispetta import.meta.env.BASE_URL).
  */
-export default function SvgIcon({ name, color = "#0b1220", size = 22, className = "" }) {
+export default function SvgIcon({ name, color = "#0b1220", size = 22, className = "", iconType = "auto" }) {
   const [svgHtml, setSvgHtml] = useState(null);
   const mounted = useRef(true);
 
@@ -16,13 +17,50 @@ export default function SvgIcon({ name, color = "#0b1220", size = 22, className 
 
     const fname = name.endsWith(".svg") ? name : `${name}.svg`;
     const base = (import.meta?.env?.BASE_URL || "/").replace(/\/+$/, ""); // no slash finale
-    const url = `${base}/icons/${fname}`;
+    
+    // Determine paths based on iconType
+    let possiblePaths;
+    if (iconType === "main") {
+      possiblePaths = [
+        `${base}/icons/main/${fname}`,
+        `${base}/icons/${fname}` // fallback for legacy icons
+      ];
+    } else if (iconType === "sub") {
+      possiblePaths = [
+        `${base}/icons/subcategories/${fname}`,
+        `${base}/icons/${fname}` // fallback for legacy icons
+      ];
+    } else {
+      // auto: try subcategories → main → root (legacy)
+      possiblePaths = [
+        `${base}/icons/subcategories/${fname}`,
+        `${base}/icons/main/${fname}`,
+        `${base}/icons/${fname}` // fallback for legacy icons
+      ];
+    }
 
-    fetch(url)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Impossibile caricare ${url}`);
-        return res.text();
-      })
+    // Try each path until we find the icon
+    const tryLoadIcon = async () => {
+      console.log(`[SvgIcon] Loading icon: ${name}, paths:`, possiblePaths);
+      for (const url of possiblePaths) {
+        try {
+          console.log(`[SvgIcon] Trying: ${url}`);
+          const res = await fetch(url);
+          console.log(`[SvgIcon] Response for ${url}:`, res.status, res.ok);
+          if (res.ok) {
+            const text = await res.text();
+            console.log(`[SvgIcon] Success! Content length:`, text.length);
+            return text;
+          }
+        } catch (error) {
+          console.log(`[SvgIcon] Error ${url}:`, error);
+        }
+      }
+      console.error(`[SvgIcon] Icon ${name} not found in any directory`);
+      throw new Error(`Icon ${name} not found in any directory`);
+    };
+
+    tryLoadIcon()
       .then((svgText) => {
         let s = svgText
           .replace(/<\?xml[\s\S]*?\?>/g, "")
@@ -47,7 +85,7 @@ export default function SvgIcon({ name, color = "#0b1220", size = 22, className 
       .catch(() => mounted.current && setSvgHtml(null));
 
     return () => { mounted.current = false; };
-  }, [name]);
+  }, [name, iconType]);
 
   if (!svgHtml) {
     return (

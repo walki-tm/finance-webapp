@@ -149,7 +149,7 @@ function SubcatSelect({ value, onChange, options = [], color }) {
         color
       }}
     >
-      <SvgIcon name={iconKey} size={14} color={color} />
+      <SvgIcon name={iconKey} size={14} color={color} iconType="sub" />
     </span>
   );
 

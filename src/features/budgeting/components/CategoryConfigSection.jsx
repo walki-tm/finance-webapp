@@ -180,7 +180,7 @@ export default function CategoryConfigSection({
                         >
                           <td className="p-2" style={{ color }}>
                             <div className="flex items-center gap-2">
-                              <SvgIcon name={sc.iconKey} color={color} size={18} />
+                              <SvgIcon name={sc.iconKey} color={color} size={18} iconType="sub" />
                               <span className="font-semibold text-sm">{sc.name}</span>
                             </div>
                           </td>
@@ -363,7 +363,7 @@ export default function CategoryConfigSection({
                 {/* Header sottocategoria */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2" style={{ color }}>
-                    <SvgIcon name={sc.iconKey} color={color} size={18} />
+                    <SvgIcon name={sc.iconKey} color={color} size={18} iconType="sub" />
                     <span className="font-semibold">{sc.name}</span>
                   </div>
                   <BudgetRowActions
