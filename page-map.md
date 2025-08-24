@@ -48,13 +48,36 @@ Finance WebApp/
 
 #### Pagina Principale
 - **File**: `pages/Transactions.jsx`
-- **Scopo**: Lista e gestione transazioni
+- **Scopo**: Gestione transazioni con sub-tab Register/Planned
+- **Funzionalità**:
+  - **Tab Register**: Lista transazioni esistenti con filtri per periodo e categoria
+  - **Tab Planned**: Gestione transazioni pianificate e gruppi organizzativi
 
-#### Componenti
+#### Componenti Transazioni Regolari
 - **File**: `components/TransactionModal.jsx`
   - **Scopo**: Modal per creare/editare transazioni
 - **File**: `components/TransactionTable.jsx`
   - **Scopo**: Tabella con filtri e sorting
+
+#### Componenti Transazioni Pianificate
+- **File**: `components/PlannedTransactionsTab.jsx`
+  - **Scopo**: Interfaccia principale per transazioni pianificate
+  - **Features**: Statistiche, gruppi personalizzati, alert scadenze
+- **File**: `components/PlannedTransactionModal.jsx`
+  - **Scopo**: Modal per creare/editare transazioni pianificate
+- **File**: `components/TransactionGroupModal.jsx`
+  - **Scopo**: Modal per gestire gruppi di transazioni
+- **File**: `components/PlannedTransactionCard.jsx`
+  - **Scopo**: Card per singola transazione pianificata
+- **File**: `components/TransactionGroupCard.jsx`
+  - **Scopo**: Card per gruppi con statistiche aggregate
+- **File**: `components/DueTransactionsAlert.jsx`
+  - **Scopo**: Alert per transazioni in scadenza
+
+#### Hooks Specializzati
+- **File**: `usePlannedTransactions.js`
+  - **Scopo**: State management per transazioni pianificate
+  - **Features**: CRUD, materializzazione, gestione gruppi
 
 ### 🏷️ Gestione Categorie
 **Directory**: `src/features/categories/`
@@ -175,26 +198,30 @@ Finance WebApp/
 | Auth | `auth.js` | `/api/auth/*` | Login, register |
 | Categories | `categories.js` | `/api/categories/*` | CRUD categorie |
 | Transactions | `transactions.js` | `/api/transactions/*` | CRUD transazioni |
+| Planned Transactions | `plannedTransactions.js` | `/api/planned-transactions/*` | CRUD transazioni pianificate, gruppi, materializzazione |
 | Budgets | `budgets.js` | `/api/budgets/*` | CRUD budget, operazioni batch |
 
 ### 🎮 Controllers
 **Directory**: `server/src/controllers/`
 
 | Controller | File | Responsabilità |
-|------------|------|----------------|
+|------------|------|---------|
 | Auth | `authController.js` | Gestione autenticazione |
 | Categories | `categoriesController.js` | Gestione categorie |
 | Transactions | `transactionsController.js` | Gestione transazioni |
+| Planned Transactions | `plannedTransactionsController.js` | Gestione transazioni pianificate e gruppi |
 | Budgets | `budgetsController.js` | Gestione budget e pianificazione |
 
 ### 🔧 Services (Business Logic)
 **Directory**: `server/src/services/`
 
 | Service | File | Responsabilità |
-|---------|------|----------------|
+|---------|------|---------|
 | Auth | `authService.js` | Logica autenticazione e JWT |
 | Categories | `categoryService.js` | Logica categorie e validazione |
 | Transactions | `transactionService.js` | Logica transazioni e calcoli |
+| Planned Transactions | `plannedTransactionService.js` | Logica transazioni pianificate, schedulazione, materializzazione |
+| Scheduler | `schedulerService.js` | Auto-materializzazione transazioni pianificate |
 | Budgets | `budgetService.js` | Logica budget e validazione stili |
 
 ### 🛡️ Middleware
@@ -213,10 +240,12 @@ Finance WebApp/
 
 | Tabella | Scopo | Relazioni |
 |---------|-------|-----------|
-| `users` | Utenti registrati | → categories, transactions, budgets |
+| `users` | Utenti registrati | → categories, transactions, budgets, planned_transactions, transaction_groups |
 | `categories` | Categorie principali | → subcategories |
-| `subcategories` | Sottocategorie | → transactions, budgets |
+| `subcategories` | Sottocategorie | → transactions, budgets, planned_transactions |
 | `transactions` | Transazioni finanziarie | ← users, subcategories |
+| `planned_transactions` | Transazioni pianificate | ← users, subcategories, transaction_groups |
+| `transaction_groups` | Gruppi per organizzare transazioni pianificate | ← users, → planned_transactions |
 | `budgets` | Budget pianificati | ← users, subcategories |
 
 ---
@@ -238,6 +267,7 @@ Finance WebApp/
 |------|------|---------|-------|
 | useCategories | `features/categories/useCategories.js` | Categories | Gestione CRUD categorie |
 | useTransactions | `features/transactions/useTransactions.js` | Transactions | Gestione CRUD transazioni |
+| usePlannedTransactions | `features/transactions/usePlannedTransactions.js` | Planned Transactions | Gestione CRUD transazioni pianificate e gruppi |
 
 ---
 

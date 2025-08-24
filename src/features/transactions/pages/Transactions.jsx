@@ -1,11 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { Card, CardContent, NativeSelect } from '../../ui';
+import { Card, CardContent, NativeSelect, Button } from '../../ui';
 import TransactionTable from '../components/TransactionTable.jsx';
+import PlannedTransactionsTab from '../components/PlannedTransactionsTab.jsx';
 import { MAIN_CATS, months } from '../../../lib/constants.js';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 
 /**
  * Pagina Transazioni
+ * - Sub-tab Register: comportamento attuale con selettore periodo e tabella
+ * - Sub-tab Planned: gestione transazioni pianificate con gruppi e schedulazione
  * - Intestazione: selettore periodo ← DATO → con menu (OGGI, SETTIMANA, MESE, ANNO, DA–A)
  * - Frecce mai nel futuro: il blocco avviene se l'INIZIO del prossimo periodo è > oggi.
  * - Filtro categoria MAIN a destra.
@@ -13,6 +16,8 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
  */
 
 export default function Transactions({ state, updateTx, delTx, openTxEditor }) {
+  /* ===== Sub-tab state ===== */
+  const [activeTab, setActiveTab] = useState('register');
   /* ===== Filtro macro-categoria ===== */
   const [filterMain, setFilterMain] = useState('all');
 
@@ -138,9 +143,52 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor }) {
 
   /* ===== UI ===== */
   return (
-    <div className="grid lg:grid-cols-1 gap-4">
-      <Card className="lg:col-span-1">
-        <CardContent>
+    <div className="space-y-6">
+      {/* Header con tab navigation e CTA contestualizzata */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveTab('register')}
+            className={`px-3 py-2 rounded-xl text-sm transition
+              ${activeTab === 'register'
+                ? 'bg-gradient-to-tr from-sky-600 to-indigo-600 text-white'
+                : 'border border-slate-300 dark:border-slate-700 hover:bg-white/60 dark:hover:bg-slate-900/60'}`}
+          >
+            Register
+          </button>
+          <button
+            onClick={() => setActiveTab('planned')}
+            className={`px-3 py-2 rounded-xl text-sm transition
+              ${activeTab === 'planned'
+                ? 'bg-gradient-to-tr from-sky-600 to-indigo-600 text-white'
+                : 'border border-slate-300 dark:border-slate-700 hover:bg-white/60 dark:hover:bg-slate-900/60'}`}
+          >
+            Planned
+          </button>
+        </div>
+        
+        {/* CTA contestualizzata */}
+        <Button
+          onClick={() => {
+            if (activeTab === 'register') {
+              if (typeof openTxEditor === 'function') openTxEditor();
+            } else {
+              // Per ora placeholder - implementeremo nella prossima iterazione
+              console.log('Open planned transaction modal');
+            }
+          }}
+          className="flex items-center gap-2 bg-gradient-to-tr from-sky-600 to-indigo-600"
+        >
+          <Plus className="h-4 w-4" />
+          {activeTab === 'register' ? 'Nuova Transazione' : 'Nuova Pianificata'}
+        </Button>
+      </div>
+
+      {/* Tab content */}
+      {activeTab === 'register' ? (
+        <div className="grid lg:grid-cols-1 gap-4">
+          <Card className="lg:col-span-1">
+            <CardContent>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             {/* Selettore periodo */}
             <div className="flex items-center gap-2">
@@ -236,17 +284,21 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor }) {
             />
           </div>
 
-          {/* Tabella transazioni */}
-          <div className="-mx-2 md:mx-0 overflow-x-hidden">
-            <TransactionTable
-              rows={rows}
-              state={state}
-              onEdit={(t) => { if (typeof openTxEditor === 'function') openTxEditor(t); }}
-              onDelete={(t) => delTx(t.id)}
-            />
-          </div>
-        </CardContent>
-      </Card>
+              {/* Tabella transazioni */}
+              <div className="-mx-2 md:mx-0 overflow-x-hidden">
+                <TransactionTable
+                  rows={rows}
+                  state={state}
+                  onEdit={(t) => { if (typeof openTxEditor === 'function') openTxEditor(t); }}
+                  onDelete={(t) => delTx(t.id)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <PlannedTransactionsTab state={state} />
+      )}
     </div>
   );
 }

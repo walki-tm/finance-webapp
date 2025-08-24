@@ -228,4 +228,133 @@ export const api = {
    */
   getBudgetsByCategory: (token, main, year) =>
     request(`/api/budgets/category/${main}?year=${year}`, "GET", token),
+
+  // ---- Planned Transactions ----
+  /**
+   * Elenca transazioni pianificate.
+   * @param {string} token Token di accesso JWT.
+   * @param {object} params Parametri di filtro (es. groupId).
+   * @returns {Promise<Array>} Lista di transazioni pianificate.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  listPlannedTransactions: (token, params = {}) => {
+    const query = new URLSearchParams(params).toString()
+    const path = query ? `/api/planned-transactions?${query}` : '/api/planned-transactions'
+    return request(path, "GET", token)
+  },
+  /**
+   * Crea una nuova transazione pianificata.
+   * @param {string} token Token di accesso JWT.
+   * @param {object} data Dettagli della transazione pianificata.
+   * @returns {Promise<object>} Transazione pianificata creata.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  addPlannedTransaction: (token, data) =>
+    request("/api/planned-transactions", "POST", token, data),
+  /**
+   * Aggiorna una transazione pianificata esistente.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} id Identificativo della transazione pianificata.
+   * @param {object} data Dati aggiornati.
+   * @returns {Promise<object>} Transazione pianificata aggiornata.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  updatePlannedTransaction: (token, id, data) =>
+    request(`/api/planned-transactions/${id}`, "PUT", token, data),
+  /**
+   * Elimina una transazione pianificata.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} id Identificativo della transazione pianificata.
+   * @returns {Promise<null>} Nessun contenuto in caso di successo.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  deletePlannedTransaction: (token, id) =>
+    request(`/api/planned-transactions/${id}`, "DELETE", token),
+  /**
+   * Materializza una transazione pianificata in transazione reale.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} id Identificativo della transazione pianificata.
+   * @returns {Promise<object>} Transazione creata.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  materializePlannedTransaction: (token, id) =>
+    request(`/api/planned-transactions/${id}/materialize`, "POST", token),
+  /**
+   * Ottiene transazioni pianificate in scadenza.
+   * @param {string} token Token di accesso JWT.
+   * @returns {Promise<Array>} Lista di transazioni in scadenza.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  getPlannedTransactionsDue: (token) =>
+    request("/api/planned-transactions/due", "GET", token),
+  /**
+   * Sposta una transazione pianificata in un gruppo.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} id Identificativo della transazione pianificata.
+   * @param {string|null} groupId ID del gruppo destinazione.
+   * @returns {Promise<object>} Transazione pianificata aggiornata.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  movePlannedTransaction: (token, id, groupId) =>
+    request(`/api/planned-transactions/${id}/move`, "PATCH", token, { groupId }),
+  /**
+   * Calcola le prossime occorrenze per una transazione pianificata.
+   * @param {string} token Token di accesso JWT.
+   * @param {string} startDate Data di inizio (ISO string).
+   * @param {string} frequency Frequenza ('ONE_TIME', 'MONTHLY', 'YEARLY').
+   * @param {number} count Numero di occorrenze da calcolare (default 5).
+   * @returns {Promise<Array>} Array di date delle prossime occorrenze.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  getNextOccurrences: (token, startDate, frequency, count = 5) => {
+    const params = new URLSearchParams({ startDate, frequency, count: count.toString() })
+    return request(`/api/planned-transactions/next-occurrences?${params}`, "GET", token)
+  },
+
+  // ---- Transaction Groups ----
+  /**
+   * Elenca gruppi di transazioni.
+   * @param {string} token Token di accesso JWT.
+   * @returns {Promise<Array>} Lista di gruppi.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  listTransactionGroups: (token) =>
+    request("/api/planned-transactions/groups", "GET", token),
+  /**
+   * Crea un nuovo gruppo di transazioni.
+   * @param {string} token Token di accesso JWT.
+   * @param {object} data Dati del gruppo.
+   * @returns {Promise<object>} Gruppo creato.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  addTransactionGroup: (token, data) =>
+    request("/api/planned-transactions/groups", "POST", token, data),
+  /**
+   * Aggiorna un gruppo di transazioni.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} id Identificativo del gruppo.
+   * @param {object} data Dati aggiornati.
+   * @returns {Promise<object>} Gruppo aggiornato.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  updateTransactionGroup: (token, id, data) =>
+    request(`/api/planned-transactions/groups/${id}`, "PUT", token, data),
+  /**
+   * Elimina un gruppo di transazioni.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} id Identificativo del gruppo.
+   * @returns {Promise<null>} Nessun contenuto in caso di successo.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  deleteTransactionGroup: (token, id) =>
+    request(`/api/planned-transactions/groups/${id}`, "DELETE", token),
+  /**
+   * Riordina gruppi di transazioni.
+   * @param {string} token Token di accesso JWT.
+   * @param {Array} groupIds Array di ID dei gruppi nell'ordine desiderato.
+   * @returns {Promise<null>} Nessun contenuto in caso di successo.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  reorderTransactionGroups: (token, groupIds) =>
+    request("/api/planned-transactions/groups/reorder", "PATCH", token, { groupIds }),
 };

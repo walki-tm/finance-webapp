@@ -6,8 +6,10 @@ import morgan from 'morgan'
 import authRoutes from './routes/auth.js'
 import categoryRoutes from './routes/categories.js'
 import transactionRoutes from './routes/transactions.js'
+import plannedTransactionRoutes from './routes/plannedTransactions.js'
 import budgetRoutes from './routes/budgets.js'
 import { errorMiddleware } from './middleware/error.js'
+import './services/schedulerService.js' // Inizializza scheduler automatico
 
 const app = express()
 
@@ -27,6 +29,7 @@ app.use('/api/auth', authRoutes)
 // protected
 app.use('/api/categories', categoryRoutes)
 app.use('/api/transactions', transactionRoutes)
+app.use('/api/planned-transactions', plannedTransactionRoutes)
 app.use('/api/budgets', budgetRoutes)
 
 app.use(errorMiddleware)

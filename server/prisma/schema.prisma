@@ -15,10 +15,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  categories    Category[]
-  subcategories Subcategory[]
-  transactions  Transaction[]
-  budgets       Budget[]
+  categories          Category[]
+  subcategories       Subcategory[]
+  transactions        Transaction[]
+  budgets             Budget[]
+  transactionGroups   TransactionGroup[]
+  plannedTransactions PlannedTransaction[]
 }
 
 model Category {
@@ -51,8 +53,9 @@ model Subcategory {
   User     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   Category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
-  transactions Transaction[]
-  budgets      Budget[]
+  transactions        Transaction[]
+  budgets             Budget[]
+  plannedTransactions PlannedTransaction[]
 
   @@unique([userId, categoryId, name])
   @@index([userId, categoryId, sortOrder])
@@ -103,4 +106,48 @@ model Transaction {
   @@index([userId, date])
   @@index([userId, main])
   @@index([subId])
+}
+
+// Gruppo per organizzare transazioni pianificate
+model TransactionGroup {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String   // nome definito dall'utente
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  User User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plannedTransactions PlannedTransaction[]
+
+  @@unique([userId, name])
+  @@index([userId, sortOrder])
+}
+
+// Transazioni pianificate
+model PlannedTransaction {
+  id              String   @id @default(cuid())
+  userId          String
+  groupId         String?  // collegamento al gruppo opzionale
+  main            String   @db.VarChar(32) // categoria principale
+  subId           String?  // sottocategoria
+  amount          Decimal  @db.Decimal(20, 2)
+  note            String?
+  payee           String?
+  frequency       String   // MONTHLY, YEARLY, ONE_TIME
+  startDate       DateTime // data di inizio
+  endDate         DateTime? // data di fine opzionale
+  confirmationMode String   @default("MANUAL") // MANUAL, AUTOMATIC
+  nextDueDate     DateTime // prossima data di scadenza
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  User    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group   TransactionGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  subcategory Subcategory?  @relation(fields: [subId], references: [id], onDelete: SetNull)
+
+  @@index([userId, nextDueDate])
+  @@index([userId, frequency])
+  @@index([groupId])
 }

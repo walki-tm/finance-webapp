@@ -47,7 +47,8 @@ export default function CategoryTableRow({
   onChangeColor,
   onToggleEnabled,
   onReset,
-  onDraftChange
+  onDraftChange,
+  onRemove
 }) {
   // 🔸 State locale per editing
   const [nameDraft, setNameDraft] = useState(category.name || '')
@@ -93,6 +94,13 @@ export default function CategoryTableRow({
   // 🔸 Handler per reset categoria core
   const handleReset = () => {
     onReset(category)
+  }
+
+  // 🔸 Handler per rimozione categoria
+  const handleRemove = async () => {
+    if (onRemove) {
+      await onRemove(category)
+    }
   }
 
   return (
@@ -171,10 +179,7 @@ export default function CategoryTableRow({
       <td className="px-2 py-3">
         <ActionsMenu
           onEdit={handleStartEdit}
-          onRemove={!isCore ? () => {
-            // TODO: implementare rimozione
-            toast.info('Funzionalità non ancora implementata in questo componente')
-          } : undefined}
+          onRemove={!isCore && onRemove ? handleRemove : undefined}
           onReset={isCore ? handleReset : undefined}
           disableRemove={isCore}
         />
