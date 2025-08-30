@@ -317,7 +317,7 @@ npx prisma generate
 
 ---
 
-**🔄 Ultimo aggiornamento**: 19 Gennaio 2025  
-**📝 Versione**: 1.0.0
+**🔄 Ultimo aggiornamento**: 30 Gennaio 2025  
+**📝 Versione**: 1.1.0
 
 > **Ricorda**: Questo progetto ha una struttura consolidata. Cambiamenti strutturali richiedono sempre approvazione esplicita dall'utente.
