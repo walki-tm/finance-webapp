@@ -33,7 +33,7 @@ function monthKey(date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-export default function Budgeting({ state, year, upsertBudget, batchUpsertBudgets }) {
+export default function Budgeting({ state, year, upsertBudget, batchUpsertBudgets, isManagedAutomatically }) {
   const [selMain, setSelMain] = useState('expense');
   const [mode, setMode] = useState('year'); // 'year' | 'month'
   const [viewMode, setViewMode] = useState('semester1'); // 'semester1' | 'semester2'
@@ -455,6 +455,7 @@ export default function Budgeting({ state, year, upsertBudget, batchUpsertBudget
                             upsertBudget={upsertBudget}
                             batchUpsertBudgets={batchUpsertBudgets}
                             mainMeta={mainMeta}
+                            isManagedAutomatically={isManagedAutomatically}
                             onClose={() => setExpandedCategory(null)}
                           />
                         )}

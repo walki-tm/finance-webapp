@@ -33,10 +33,10 @@ export default function PlannedTransactionModal({
     payee: initial?.payee || '',
     frequency: initial?.frequency || 'MONTHLY',
     startDate: initial?.startDate ? new Date(initial.startDate).toISOString().slice(0, 10) : '',
-    endDate: initial?.endDate ? new Date(initial.endDate).toISOString().slice(0, 10) : '',
     confirmationMode: initial?.confirmationMode || 'MANUAL',
     groupId: initial?.groupId || '',
     note: initial?.note || '',
+    applyToBudget: initial?.appliedToBudget || false,
   })
   
   const [showPreview, setShowPreview] = useState(false)
@@ -60,6 +60,7 @@ export default function PlannedTransactionModal({
       formData.amount && 
       Number(formData.amount) > 0 &&
       formData.main &&
+      formData.subId &&
       formData.startDate &&
       formData.frequency
     )
@@ -95,6 +96,42 @@ export default function PlannedTransactionModal({
   useEffect(() => {
     setFormData(prev => ({ ...prev, subId: '' }))
   }, [formData.main])
+  
+  // 🔸 Aggiorna formData quando cambia initial (per editing) - SOLO all'apertura del modal
+  useEffect(() => {
+    if (!open) return // Non fare nulla se il modal è chiuso
+    
+    if (initial) {
+      setFormData({
+        title: initial.title || '',
+        main: initial.main || 'expense',
+        subId: initial.subId || '',
+        amount: initial.amount || '',
+        payee: initial.payee || '',
+        frequency: initial.frequency || 'MONTHLY',
+        startDate: initial.startDate ? new Date(initial.startDate).toISOString().slice(0, 10) : '',
+        confirmationMode: initial.confirmationMode || 'MANUAL',
+        groupId: initial.groupId || '',
+        note: initial.note || '',
+        applyToBudget: initial.appliedToBudget || false,
+      })
+    } else {
+      // Reset per nuova transazione
+      setFormData({
+        title: '',
+        main: 'expense',
+        subId: '',
+        amount: '',
+        payee: '',
+        frequency: 'MONTHLY',
+        startDate: '',
+        confirmationMode: 'MANUAL',
+        groupId: '',
+        note: '',
+        applyToBudget: false,
+      })
+    }
+  }, [initial, open]) // Aggiungi 'open' come dipendenza
   
   // 🔸 Keyboard shortcuts
   useEffect(() => {
@@ -212,7 +249,7 @@ export default function PlannedTransactionModal({
                 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Sottocategoria
+                    Sottocategoria <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={formData.subId}
@@ -220,7 +257,7 @@ export default function PlannedTransactionModal({
                     disabled={filteredSubcats.length === 0}
                     className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <option value="">{filteredSubcats.length === 0 ? 'Nessuna sottocategoria' : 'Seleziona...'}</option>
+                    <option value="">{filteredSubcats.length === 0 ? 'Nessuna sottocategoria disponibile' : 'Seleziona sottocategoria...'}</option>
                     {filteredSubcats.map(sub => (
                       <option key={sub.id} value={sub.id}>{sub.name}</option>
                     ))}
@@ -242,8 +279,8 @@ export default function PlannedTransactionModal({
                 />
               </div>
               
-              {/* 🔸 Frequency + Dates */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* 🔸 Frequency + Date */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Frequenza <span className="text-red-500">*</span>
@@ -257,6 +294,11 @@ export default function PlannedTransactionModal({
                     <option value="YEARLY">Annuale</option>
                     <option value="ONE_TIME">Una volta</option>
                   </select>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {formData.frequency === 'MONTHLY' && 'Ripete ogni mese senza data di fine'}
+                    {formData.frequency === 'YEARLY' && 'Ripete ogni anno senza data di fine'}
+                    {formData.frequency === 'ONE_TIME' && 'Transazione singola, non ricorrente'}
+                  </p>
                 </div>
                 
                 <div>
@@ -269,22 +311,9 @@ export default function PlannedTransactionModal({
                     onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
                     className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Data fine <span className="text-slate-400">(opzionale)</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.endDate}
-                    onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
-                    disabled={formData.frequency === 'ONE_TIME'}
-                    min={formData.startDate}
-                    className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
                   <p className="text-xs text-slate-500 mt-1">
-                    Lascia vuoto se a tempo indeterminato
+                    {formData.frequency !== 'ONE_TIME' && 'Primo giorno di applicazione della transazione'}
+                    {formData.frequency === 'ONE_TIME' && 'Giorno in cui avverrà la transazione'}
                   </p>
                 </div>
               </div>
@@ -344,6 +373,30 @@ export default function PlannedTransactionModal({
                   </select>
                 </div>
               )}
+              
+              {/* 🔸 Applica a Budgeting */}
+              <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-700 rounded-xl">
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="applyToBudget"
+                    checked={formData.applyToBudget}
+                    onChange={(e) => setFormData(prev => ({ ...prev, applyToBudget: e.target.checked }))}
+                    className="mt-0.5 w-4 h-4 text-green-600 bg-white border-green-300 rounded focus:ring-green-500 dark:focus:ring-green-400"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="applyToBudget" className="block text-sm font-medium text-green-800 dark:text-green-200 cursor-pointer">
+                      Applica al budgeting generale
+                    </label>
+                    <p className="text-xs text-green-600 dark:text-green-300 mt-1">
+                      {formData.frequency === 'MONTHLY' && 'Applicherà €' + Math.abs(Number(formData.amount) || 0) + ' a tutti i mesi'}
+                      {formData.frequency === 'YEARLY' && 'Applicherà €' + ((Math.abs(Number(formData.amount) || 0)) / 12).toFixed(2) + ' al mese (diviso su 12 mesi)'}
+                      {formData.frequency === 'ONE_TIME' && 'Applicherà €' + Math.abs(Number(formData.amount) || 0) + ' al mese specifico'}
+                      {!formData.frequency && 'Seleziona una frequenza per vedere l\'anteprima'}
+                    </p>
+                  </div>
+                </div>
+              </div>
               
               {/* 🔸 Preview Occorrences */}
               {formData.frequency !== 'ONE_TIME' && formData.startDate && (

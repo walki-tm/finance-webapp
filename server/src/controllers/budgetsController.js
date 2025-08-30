@@ -40,6 +40,7 @@ const budgetSchema = z.object({
   capType: z.enum(['SOFT', 'HARD']).optional().nullable(),
   notes: z.string().optional().nullable(),
   overrideChildren: z.boolean().optional().default(false),
+  managedAutomatically: z.boolean().optional().default(false),
 })
 
 const batchBudgetSchema = z.object({

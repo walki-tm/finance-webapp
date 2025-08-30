@@ -12,6 +12,7 @@ const normalizeMainKey = (main) => {
 export default function useBudgets(year, initial = {}) {
   const { token } = useAuth();
   const [budgets, setBudgets] = useState(initial);
+  const [budgetMeta, setBudgetMeta] = useState({}); // stores managedAutomatically and other metadata
   const [subcatsMap, setSubcatsMap] = useState({}); // maps subName -> subcategoryId
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -57,7 +58,9 @@ export default function useBudgets(year, initial = {}) {
         setSubcatsMap(subcatsMapping);
         
         // Convert budget list to legacy format: {year: {"main:sub:month": value}}
+        // Also store metadata separately
         const converted = { [year]: {} };
+        const metadata = { [year]: {} };
         if (Array.isArray(budgetList)) {
           budgetList.forEach(budget => {
             const dbMainKey = budget.main.toLowerCase(); // from database
@@ -69,11 +72,21 @@ export default function useBudgets(year, initial = {}) {
               // Use normalized key for consistency with frontend
               const key = `${normalizedMainKey}:${budget.subcategory.name}:${monthIndex}`;
               converted[year][key] = parseFloat(budget.amount);
+              
+              // Store metadata including managedAutomatically
+              metadata[year][key] = {
+                managedAutomatically: budget.managedAutomatically || false,
+                style: budget.style,
+                notes: budget.notes,
+                createdAt: budget.createdAt,
+                updatedAt: budget.updatedAt
+              };
             }
           });
         }
         
         setBudgets(converted);
+        setBudgetMeta(metadata);
       } catch (err) {
         console.error('Error loading budgets:', err);
         setError(err);
@@ -145,7 +158,7 @@ export default function useBudgets(year, initial = {}) {
     
     const mainKeyMapping = subcatsMap.__mainKeyMapping || {};
     
-    const apiUpdates = budgetUpdates.map(({ main, keyWithMonth, value }) => {
+    const apiUpdates = budgetUpdates.map(({ main, keyWithMonth, value, managedAutomatically = false }) => {
       const [subName, monthIndexStr] = keyWithMonth.split(':');
       const monthIndex = parseInt(monthIndexStr, 10);
       const period = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
@@ -167,6 +180,7 @@ export default function useBudgets(year, initial = {}) {
         period,
         amount: parseFloat(value) || 0,
         style: 'FIXED',
+        managedAutomatically,
         originalKey: subcategoryKey // for debugging
       };
     });
@@ -188,13 +202,21 @@ export default function useBudgets(year, initial = {}) {
       
       // Optimistic update to local state - only for successful updates
       const updates = {};
-      budgetUpdates.forEach(({ main, keyWithMonth, value }) => {
+      const metaUpdates = {};
+      budgetUpdates.forEach(({ main, keyWithMonth, value, managedAutomatically = false }) => {
         const [subName] = keyWithMonth.split(':');
         const subcategoryKey = `${main.toLowerCase()}:${subName}`;
         // Only update local state if the subcategory was found
         if (subcatsMap[subcategoryKey]) {
           const legacyKey = `${main}:${keyWithMonth}`;
           updates[legacyKey] = parseFloat(value) || 0;
+          
+          // Update metadata
+          metaUpdates[legacyKey] = {
+            ...budgetMeta[year]?.[legacyKey],
+            managedAutomatically,
+            updatedAt: new Date().toISOString()
+          };
         }
       });
       
@@ -203,16 +225,81 @@ export default function useBudgets(year, initial = {}) {
         [year]: { ...(b[year] || {}), ...updates },
       }));
       
+      // Update metadata
+      setBudgetMeta(m => ({
+        ...m,
+        [year]: { ...(m[year] || {}), ...metaUpdates }
+      }));
+      
     } catch (err) {
       console.error('Error batch upserting budgets:', err);
       throw err;
     }
-  }, [year, token, subcatsMap]);
+  }, [year, token, subcatsMap, budgetMeta]);
+
+  // Funzione per refresh manuale dei budgets
+  const refreshBudgets = useCallback(async () => {
+    if (!token || !year) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Ricarica budgets dal backend
+      const budgetList = await api.listBudgets(token, parseInt(year, 10));
+      
+      // Convert budget list to legacy format: {year: {"main:sub:month": value}}
+      // Also reload metadata separately
+      const converted = { [year]: {} };
+      const metadata = { [year]: {} };
+      if (Array.isArray(budgetList)) {
+        budgetList.forEach(budget => {
+          const dbMainKey = budget.main.toLowerCase(); // from database
+          const normalizedMainKey = normalizeMainKey(budget.main); // normalized for frontend
+          const period = budget.period; // YYYY-MM format
+          const monthIndex = parseInt(period.split('-')[1], 10) - 1; // 0-11
+          
+          if (budget.subcategory) {
+            // Use normalized key for consistency with frontend
+            const key = `${normalizedMainKey}:${budget.subcategory.name}:${monthIndex}`;
+            converted[year][key] = parseFloat(budget.amount);
+            
+            // Store metadata including managedAutomatically
+            metadata[year][key] = {
+              managedAutomatically: budget.managedAutomatically || false,
+              style: budget.style,
+              notes: budget.notes,
+              createdAt: budget.createdAt,
+              updatedAt: budget.updatedAt
+            };
+          }
+        });
+      }
+      
+      setBudgets(converted);
+      setBudgetMeta(metadata);
+      console.log('Budgets refreshed successfully');
+    } catch (err) {
+      console.error('Error refreshing budgets:', err);
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, year, subcatsMap]);
+  
+  // Funzione helper per controllare se un budget è gestito automaticamente
+  const isManagedAutomatically = useCallback((main, subName, monthIndex) => {
+    const key = `${main}:${subName}:${monthIndex}`;
+    return budgetMeta[year]?.[key]?.managedAutomatically || false;
+  }, [budgetMeta, year]);
 
   return { 
     budgets, 
+    budgetMeta,
+    isManagedAutomatically,
     upsertBudget, 
     batchUpsertBudgets,
+    refreshBudgets,
     loading,
     error
   };

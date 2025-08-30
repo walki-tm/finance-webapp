@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
 
-export default function ActionsMenu({ onEdit, onRemove, onReset, disableRemove = false }) {
+export default function ActionsMenu({ onEdit, onRemove, onReset, customActions = [], disableRemove = false }) {
   const btnRef = useRef(null);
   const menuRef = useRef(null);
   const [open, setOpen] = useState(false);
@@ -12,7 +12,48 @@ export default function ActionsMenu({ onEdit, onRemove, onReset, disableRemove =
     function place() {
       if (!btnRef.current) return;
       const r = btnRef.current.getBoundingClientRect();
-      setPos({ top: r.bottom + 6, left: Math.max(8, r.right - 176) });
+      const viewport = { width: window.innerWidth, height: window.innerHeight };
+      
+      // Verifica se il pulsante è effettivamente visibile nel viewport
+      const isVisible = r.top >= 0 && r.left >= 0 && r.bottom <= viewport.height && r.right <= viewport.width;
+      if (!isVisible) {
+        // Se il pulsante è fuori dal viewport, chiudi il menu
+        setOpen(false);
+        return;
+      }
+      
+      const menuWidth = 176; // w-44 = 176px
+      // Calcola altezza approssimativa del menu basata sul numero di azioni
+      const actionCount = (customActions?.length || 0) + (onEdit ? 1 : 0) + (onReset ? 1 : 0) + (onRemove ? 1 : 0);
+      const menuHeight = Math.min(300, actionCount * 40 + 16); // 40px per azione + padding
+      
+      // Calcola posizione preferita (sotto a destra del pulsante)
+      let top = r.bottom + 6;
+      let left = r.right - menuWidth;
+      
+      // Assicurati che il menu non esca dal viewport a sinistra
+      if (left < 8) {
+        left = Math.max(8, r.left); // Allinea a sinistra del pulsante se necessario
+      }
+      
+      // Assicurati che il menu non esca dal viewport a destra
+      if (left + menuWidth > viewport.width - 8) {
+        left = viewport.width - menuWidth - 8;
+      }
+      
+      // Se il menu esce dal viewport in basso, posizionalo sopra il pulsante
+      if (top + menuHeight > viewport.height - 8) {
+        top = r.top - menuHeight - 6;
+        // Se anche sopra esce, trova la migliore posizione verticale
+        if (top < 8) {
+          // Posiziona il menu nel centro dello spazio disponibile
+          const availableSpace = viewport.height - 16; // margini 8px top/bottom
+          const buttonCenter = r.top + r.height / 2;
+          top = Math.max(8, Math.min(buttonCenter - menuHeight / 2, availableSpace - menuHeight));
+        }
+      }
+      
+      setPos({ top, left });
     }
     if (open) {
       place();
@@ -35,7 +76,7 @@ export default function ActionsMenu({ onEdit, onRemove, onReset, disableRemove =
         document.removeEventListener("keydown", onKey);
       };
     }
-  }, [open]);
+  }, [open, customActions, onEdit, onReset, onRemove]);
 
   const baseItem = "w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800";
   const item = baseItem + " text-slate-700 dark:text-slate-100";
@@ -86,6 +127,21 @@ export default function ActionsMenu({ onEdit, onRemove, onReset, disableRemove =
               Ripristina
             </button>
           )}
+          {customActions.map((action, index) => (
+            <button
+              key={index}
+              type="button"
+              disabled={action.disabled}
+              className={`${action.variant === 'danger' ? removeItem : action.variant === 'primary' ? baseItem + ' text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/10' : item} ${action.disabled ? "opacity-40 cursor-not-allowed" : ""}`}
+              onMouseDown={() => {
+                if (action.disabled) return;
+                setOpen(false);
+                setTimeout(() => action.onClick(), 0);
+              }}
+            >
+              {action.label}
+            </button>
+          ))}
           {onRemove && (
             <button
               type="button"

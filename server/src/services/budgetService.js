@@ -146,6 +146,118 @@ export async function batchUpsertBudgets(userId, budgets) {
   return await prisma.$transaction(operations)
 }
 
+// Nuova funzione per accumulare budget invece di sovrascrivere - OTTIMIZZATA
+export async function batchAccumulateBudgets(userId, budgets) {
+  if (!budgets || budgets.length === 0) return []
+  
+  // 🚀 OTTIMIZZAZIONE 1: Batch validation delle sottocategorie
+  const uniqueSubcategoryIds = [...new Set(budgets.map(b => b.subcategoryId).filter(Boolean))]
+  
+  let subcategoryValidation = {}
+  if (uniqueSubcategoryIds.length > 0) {
+    const subcategories = await prisma.subcategory.findMany({
+      where: {
+        id: { in: uniqueSubcategoryIds },
+        userId
+      },
+      include: {
+        Category: {
+          select: { main: true }
+        }
+      }
+    })
+    
+    // Crea mappa per validazione veloce
+    subcategoryValidation = subcategories.reduce((acc, sub) => {
+      acc[sub.id] = sub.Category.main
+      return acc
+    }, {})
+    
+    // Valida che tutte le sottocategorie richieste esistano
+    for (const budgetData of budgets) {
+      if (budgetData.subcategoryId && !subcategoryValidation[budgetData.subcategoryId]) {
+        throw httpError(404, `Subcategory ${budgetData.subcategoryId} not found`)
+      }
+      if (budgetData.subcategoryId && subcategoryValidation[budgetData.subcategoryId] !== budgetData.main) {
+        throw httpError(400, 'Subcategory does not match main category')
+      }
+    }
+  }
+  
+  // 🚀 OTTIMIZZAZIONE 2: Batch fetch dei budget esistenti
+  const budgetKeys = budgets.map(b => ({
+    userId,
+    main: b.main,
+    subcategoryId: b.subcategoryId || null,
+    period: b.period
+  }))
+  
+  const existingBudgets = await prisma.budget.findMany({
+    where: {
+      userId,
+      OR: budgetKeys.map(key => ({
+        main: key.main,
+        subcategoryId: key.subcategoryId,
+        period: key.period
+      }))
+    }
+  })
+  
+  // Crea mappa per lookup veloce
+  const existingBudgetsMap = existingBudgets.reduce((acc, budget) => {
+    const key = `${budget.main}-${budget.subcategoryId || 'null'}-${budget.period}`
+    acc[key] = budget
+    return acc
+  }, {})
+  
+  // 🚀 OTTIMIZZAZIONE 3: Prepara operations senza query aggiuntive
+  const operations = budgets.map(budgetData => {
+    const { main, subcategoryId, period, amount, style = 'FIXED', managedAutomatically = false, ...rest } = budgetData
+    
+    // Lookup veloce del budget esistente
+    const key = `${main}-${subcategoryId || 'null'}-${period}`
+    const existingBudget = existingBudgetsMap[key]
+    
+    let finalAmount = amount
+    if (existingBudget) {
+      // Accumula con l'importo esistente
+      finalAmount = parseFloat(existingBudget.amount) + parseFloat(amount)
+    }
+
+    return prisma.budget.upsert({
+      where: {
+        userId_main_subcategoryId_period: {
+          userId,
+          main,
+          subcategoryId: subcategoryId || null,
+          period
+        }
+      },
+      update: {
+        amount: finalAmount,
+        style,
+        // Solo aggiorna managedAutomatically se viene esplicitamente fornito E non è undefined
+        ...(budgetData.hasOwnProperty('managedAutomatically') ? { managedAutomatically } : {}),
+        ...rest,
+        updatedAt: new Date()
+      },
+      create: {
+        userId,
+        main,
+        subcategoryId: subcategoryId || null,
+        period,
+        amount: finalAmount,
+        style,
+        managedAutomatically: managedAutomatically || false,
+        ...rest
+      }
+    })
+  })
+
+  // 🚀 Una singola transazione database invece di N+1 queries
+  return await prisma.$transaction(operations)
+}
+
 export async function deleteBudget(userId, id) {
   const budget = await prisma.budget.findFirst({ where: { id, userId } })
   if (!budget) throw httpError(404, 'Budget not found')

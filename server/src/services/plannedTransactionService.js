@@ -116,7 +116,7 @@ export async function listPlannedTransactions(userId, { groupId } = {}) {
  * 🎯 SERVICE: Crea transazione pianificata
  */
 export async function createPlannedTransaction(userId, data) {
-  const { main, subId, subName, amount, note, payee, frequency, startDate, endDate, confirmationMode, groupId } = data
+  const { title, main, subId, subName, amount, note, payee, frequency, startDate, confirmationMode, groupId, appliedToBudget } = data
   const finalSubId = await resolveSubId(userId, subId, subName)
   
   // Calcola nextDueDate basandosi su frequency e startDate
@@ -131,6 +131,7 @@ export async function createPlannedTransaction(userId, data) {
   return prisma.plannedTransaction.create({
     data: {
       userId,
+      title: title || null,  // ✅ Aggiungi title mancante
       main,
       subId: finalSubId,
       amount,
@@ -138,9 +139,9 @@ export async function createPlannedTransaction(userId, data) {
       payee: payee || null,
       frequency,
       startDate: new Date(startDate),
-      endDate: endDate ? new Date(endDate) : null,
       confirmationMode,
       groupId: groupId || null,
+      appliedToBudget: appliedToBudget || false,
       nextDueDate,
     },
     include: { 
@@ -157,7 +158,7 @@ export async function updatePlannedTransaction(userId, id, data) {
   const exists = await prisma.plannedTransaction.findFirst({ where: { id, userId } })
   if (!exists) throw httpError(404, 'Not found')
 
-  const { main, subId, subName, amount, note, payee, frequency, startDate, endDate, confirmationMode, groupId, isActive } = data
+  const { title, main, subId, subName, amount, note, payee, frequency, startDate, confirmationMode, groupId, isActive, appliedToBudget, budgetApplicationMode, budgetTargetMonth } = data
   
   let finalSubId = undefined
   if (subId !== undefined || subName !== undefined) {
@@ -181,6 +182,7 @@ export async function updatePlannedTransaction(userId, id, data) {
   return prisma.plannedTransaction.update({
     where: { id },
     data: {
+      ...(title !== undefined ? { title } : {}),  // ✅ Aggiungi title per update
       ...(main !== undefined ? { main } : {}),
       ...(finalSubId !== undefined ? { subId: finalSubId } : {}),
       ...(amount !== undefined ? { amount } : {}),
@@ -188,10 +190,12 @@ export async function updatePlannedTransaction(userId, id, data) {
       ...(payee !== undefined ? { payee } : {}),
       ...(frequency !== undefined ? { frequency } : {}),
       ...(startDate !== undefined ? { startDate: new Date(startDate) } : {}),
-      ...(endDate !== undefined ? { endDate: endDate ? new Date(endDate) : null } : {}),
       ...(confirmationMode !== undefined ? { confirmationMode } : {}),
       ...(groupId !== undefined ? { groupId } : {}),
       ...(isActive !== undefined ? { isActive } : {}),
+      ...(appliedToBudget !== undefined ? { appliedToBudget } : {}),
+      ...(budgetApplicationMode !== undefined ? { budgetApplicationMode } : {}),
+      ...(budgetTargetMonth !== undefined ? { budgetTargetMonth } : {}),
       ...(nextDueDate !== undefined ? { nextDueDate } : {}),
     },
     include: { 
@@ -205,8 +209,98 @@ export async function updatePlannedTransaction(userId, id, data) {
  * 🎯 SERVICE: Elimina transazione pianificata
  */
 export async function deletePlannedTransaction(userId, id) {
-  const exists = await prisma.plannedTransaction.findFirst({ where: { id, userId } })
+  const exists = await prisma.plannedTransaction.findFirst({ 
+    where: { id, userId },
+    include: { subcategory: true }
+  })
   if (!exists) throw httpError(404, 'Not found')
+  
+  // 🔸 Se la transazione era applicata al budgeting, la rimuoviamo automaticamente
+  if (exists.appliedToBudget) {
+    const { removeTransactionFromBudget } = await import('../lib/budgetingIntegration.js')
+    const { batchAccumulateBudgets } = await import('./budgetService.js')
+    
+    try {
+      // Funzione per controllare se ci sono altre transazioni attive per la stessa sottocategoria/mese
+      const checkOtherActiveTransactions = async (main, subcategoryName, monthIndex, excludeTransactionId) => {
+        try {
+          // Trova la sottocategoria by nome
+          const subcategory = await prisma.subcategory.findFirst({
+            where: {
+              userId,
+              name: { equals: subcategoryName, mode: 'insensitive' }
+            }
+          })
+          
+          if (!subcategory) return false
+          
+          // Cerca altre transazioni pianificate attive per la stessa sottocategoria
+          const otherTransactions = await prisma.plannedTransaction.findMany({
+            where: {
+              userId,
+              subId: subcategory.id,
+              main: main.toUpperCase(),
+              isActive: true,
+              appliedToBudget: true,
+              id: { not: excludeTransactionId } // Escludi la transazione che stiamo eliminando
+            }
+          })
+          
+          // Verifica se qualcuna di queste transazioni contribuisce al mese specificato
+          const currentYear = new Date().getFullYear()
+          
+          for (const tx of otherTransactions) {
+            if (tx.frequency === 'MONTHLY') {
+              // Transazioni mensili contribuiscono a tutti i mesi
+              return true
+            } else if (tx.frequency === 'YEARLY') {
+              if (tx.budgetApplicationMode === 'divide') {
+                // Transazioni annuali divise contribuiscono a tutti i mesi
+                return true
+              } else if (tx.budgetApplicationMode === 'specific') {
+                // Verifica se il mese target corrisponde
+                if (tx.budgetTargetMonth === monthIndex) {
+                  return true
+                }
+              } else {
+                // Fallback: verifica il mese della startDate
+                const startDate = new Date(tx.startDate)
+                if (startDate.getMonth() === monthIndex) {
+                  return true
+                }
+              }
+            } else if (tx.frequency === 'ONE_TIME') {
+              // Verifica se la one-time è nello stesso mese
+              const startDate = new Date(tx.startDate)
+              if (startDate.getMonth() === monthIndex && startDate.getFullYear() === currentYear) {
+                return true
+              }
+            }
+          }
+          
+          return false
+        } catch (error) {
+          console.error('Errore nel controllo altre transazioni:', error)
+          return false
+        }
+      }
+      
+      // Calcola i budget da sottrarre
+      const currentYear = new Date().getFullYear()
+      const budgetsToRemove = await removeTransactionFromBudget(exists, {
+        mode: exists.budgetApplicationMode || 'divide',
+        targetMonth: exists.budgetTargetMonth,
+        year: currentYear
+      }, {}, checkOtherActiveTransactions)
+      
+      // Sottrai dal budgeting
+      await batchAccumulateBudgets(userId, budgetsToRemove)
+    } catch (error) {
+      console.error('Errore rimuovendo transazione dal budgeting:', error)
+      // Non blocchiamo l'eliminazione della transazione per questo errore
+    }
+  }
+  
   await prisma.plannedTransaction.delete({ where: { id } })
 }
 
@@ -229,7 +323,7 @@ export async function listTransactionGroups(userId) {
  * 🎯 SERVICE: Crea gruppo transazioni
  */
 export async function createTransactionGroup(userId, data) {
-  const { name, sortOrder } = data
+  const { name, color, sortOrder } = data
   
   // Se non specificato sortOrder, metti alla fine
   let finalSortOrder = sortOrder
@@ -245,6 +339,7 @@ export async function createTransactionGroup(userId, data) {
     data: {
       userId,
       name,
+      color,
       sortOrder: finalSortOrder,
     },
     include: { 
@@ -363,25 +458,20 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
   if (plannedTx.frequency !== 'ONE_TIME') {
     const newNextDueDate = calculateNextDueDate(plannedTx.startDate, plannedTx.frequency, plannedTx.nextDueDate)
     
-    // Controlla se ha raggiunto endDate
-    let shouldDeactivate = false
-    if (plannedTx.endDate && newNextDueDate > plannedTx.endDate) {
-      shouldDeactivate = true
-    }
-    
     await prisma.plannedTransaction.update({
       where: { id: plannedTxId },
       data: {
-        nextDueDate: shouldDeactivate ? plannedTx.nextDueDate : newNextDueDate,
-        isActive: !shouldDeactivate
+        nextDueDate: newNextDueDate
       }
     })
+    
   } else {
     // One-time: disattiva dopo materializzazione
     await prisma.plannedTransaction.update({
       where: { id: plannedTxId },
       data: { isActive: false }
     })
+    
   }
   
   return transaction
@@ -448,4 +538,120 @@ export async function autoMaterializeDueTransactions() {
   }
   
   return results
+}
+
+/**
+ * 🎯 SERVICE: Attiva/Disattiva transazione pianificata con gestione budgeting automatica
+ */
+export async function togglePlannedTransactionActive(userId, id, isActive) {
+  const exists = await prisma.plannedTransaction.findFirst({ 
+    where: { id, userId },
+    include: { subcategory: true }
+  })
+  if (!exists) throw httpError(404, 'Not found')
+  
+  // 🔸 Se la transazione era applicata al budgeting, gestiamo automaticamente la rimozione/applicazione
+  if (exists.appliedToBudget && exists.frequency === 'MONTHLY') {
+    const { removeTransactionFromBudget, applyTransactionToBudget } = await import('../lib/budgetingIntegration.js')
+    const { batchAccumulateBudgets } = await import('./budgetService.js')
+    
+    try {
+      const currentYear = new Date().getFullYear()
+      const budgetOptions = {
+        mode: exists.budgetApplicationMode || 'divide',
+        targetMonth: exists.budgetTargetMonth,
+        year: currentYear
+      }
+      
+      if (!isActive && exists.isActive) {
+        // 🔸 Disattivazione: rimuovi dal budgeting con controllo altre transazioni
+        // Funzione per controllare se ci sono altre transazioni attive per la stessa sottocategoria/mese
+        const checkOtherActiveTransactions = async (main, subcategoryName, monthIndex, excludeTransactionId) => {
+          try {
+            // Trova la sottocategoria by nome
+            const subcategory = await prisma.subcategory.findFirst({
+              where: {
+                userId,
+                name: { equals: subcategoryName, mode: 'insensitive' }
+              }
+            })
+            
+            if (!subcategory) return false
+            
+            // Cerca altre transazioni pianificate attive per la stessa sottocategoria
+            const otherTransactions = await prisma.plannedTransaction.findMany({
+              where: {
+                userId,
+                subId: subcategory.id,
+                main: main.toUpperCase(),
+                isActive: true,
+                appliedToBudget: true,
+                id: { not: excludeTransactionId } // Escludi la transazione che stiamo disattivando
+              }
+            })
+            
+            // Verifica se qualcuna di queste transazioni contribuisce al mese specificato
+            const currentYear = new Date().getFullYear()
+            
+            for (const tx of otherTransactions) {
+              if (tx.frequency === 'MONTHLY') {
+                // Transazioni mensili contribuiscono a tutti i mesi
+                return true
+              } else if (tx.frequency === 'YEARLY') {
+                if (tx.budgetApplicationMode === 'divide') {
+                  // Transazioni annuali divise contribuiscono a tutti i mesi
+                  return true
+                } else if (tx.budgetApplicationMode === 'specific') {
+                  // Verifica se il mese target corrisponde
+                  if (tx.budgetTargetMonth === monthIndex) {
+                    return true
+                  }
+                } else {
+                  // Fallback: verifica il mese della startDate
+                  const startDate = new Date(tx.startDate)
+                  if (startDate.getMonth() === monthIndex) {
+                    return true
+                  }
+                }
+              } else if (tx.frequency === 'ONE_TIME') {
+                // Verifica se la one-time è nello stesso mese
+                const startDate = new Date(tx.startDate)
+                if (startDate.getMonth() === monthIndex && startDate.getFullYear() === currentYear) {
+                  return true
+                }
+              }
+            }
+            
+            return false
+          } catch (error) {
+            console.error('Errore nel controllo altre transazioni:', error)
+            return false
+          }
+        }
+        
+        const budgetsToRemove = await removeTransactionFromBudget(exists, budgetOptions, {}, checkOtherActiveTransactions)
+        await batchAccumulateBudgets(userId, budgetsToRemove)
+      } else if (isActive && !exists.isActive) {
+        // 🔸 Attivazione: NON riapplica automaticamente al budgeting
+        // L'utente dovrà farlo manualmente tramite il pulsante
+        console.log('Transazione riattivata. L\'utente dovrà riapplicarla manualmente al budgeting.')
+      }
+    } catch (error) {
+      console.error('Errore gestendo budgeting per attivazione/disattivazione:', error)
+      // Non blocchiamo l'operazione per questo errore
+    }
+  }
+  
+  return prisma.plannedTransaction.update({
+    where: { id },
+    data: { 
+      isActive,
+      // Se viene disattivata e era applicata al budgeting, rimuoviamo il flag
+      ...((!isActive && exists.appliedToBudget) ? { appliedToBudget: false } : {})
+    },
+    include: { 
+      subcategory: true,
+      group: true
+    }
+  })
 }

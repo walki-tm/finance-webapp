@@ -288,16 +288,6 @@ export const api = {
   getPlannedTransactionsDue: (token) =>
     request("/api/planned-transactions/due", "GET", token),
   /**
-   * Sposta una transazione pianificata in un gruppo.
-   * @param {string} token Token di accesso JWT.
-   * @param {string|number} id Identificativo della transazione pianificata.
-   * @param {string|null} groupId ID del gruppo destinazione.
-   * @returns {Promise<object>} Transazione pianificata aggiornata.
-   * @throws {Error} Se la richiesta fallisce.
-   */
-  movePlannedTransaction: (token, id, groupId) =>
-    request(`/api/planned-transactions/${id}/move`, "PATCH", token, { groupId }),
-  /**
    * Calcola le prossime occorrenze per una transazione pianificata.
    * @param {string} token Token di accesso JWT.
    * @param {string} startDate Data di inizio (ISO string).
@@ -348,13 +338,59 @@ export const api = {
    */
   deleteTransactionGroup: (token, id) =>
     request(`/api/planned-transactions/groups/${id}`, "DELETE", token),
+
+  // ---- Budgeting Integration ----
   /**
-   * Riordina gruppi di transazioni.
+   * Applica una singola transazione pianificata al budgeting.
    * @param {string} token Token di accesso JWT.
-   * @param {Array} groupIds Array di ID dei gruppi nell'ordine desiderato.
-   * @returns {Promise<null>} Nessun contenuto in caso di successo.
+   * @param {string|number} transactionId Identificativo della transazione pianificata.
+   * @param {object} options Opzioni per l'applicazione (month, year, mode).
+   * @returns {Promise<object>} Risultato dell'applicazione.
    * @throws {Error} Se la richiesta fallisce.
    */
-  reorderTransactionGroups: (token, groupIds) =>
-    request("/api/planned-transactions/groups/reorder", "PATCH", token, { groupIds }),
+  applyTransactionToBudget: (token, transactionId, options = {}) =>
+    request(`/api/planned-transactions/${transactionId}/apply-to-budget`, "POST", token, options),
+  /**
+   * Applica tutte le transazioni di un gruppo al budgeting.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} groupId Identificativo del gruppo.
+   * @param {object} options Opzioni per l'applicazione (year, mode).
+   * @returns {Promise<object>} Risultato dell'applicazione di massa.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  applyGroupToBudget: (token, groupId, options = {}) =>
+    request(`/api/planned-transactions/groups/${groupId}/apply-to-budget`, "POST", token, options),
+  
+  /**
+   * Applica una transazione pianificata al budgeting (nuovo endpoint).
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} transactionId Identificativo della transazione pianificata.
+   * @param {object} options Opzioni per l'applicazione (year, mode, targetMonth).
+   * @returns {Promise<object>} Risultato dell'applicazione.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  applyToBudgeting: (token, transactionId, options = {}) =>
+    request(`/api/planned-transactions/${transactionId}/apply-to-budgeting`, "POST", token, options),
+  
+  /**
+   * Rimuove una transazione pianificata dal budgeting.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} transactionId Identificativo della transazione pianificata.
+   * @param {object} options Opzioni per la rimozione (year, mode, targetMonth).
+   * @returns {Promise<object>} Risultato della rimozione.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  removeFromBudgeting: (token, transactionId, options = {}) =>
+    request(`/api/planned-transactions/${transactionId}/apply-to-budgeting`, "DELETE", token, options),
+  
+  /**
+   * Attiva o disattiva una transazione pianificata.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} transactionId Identificativo della transazione pianificata.
+   * @param {boolean} isActive Stato desiderato (true = attiva, false = disattiva).
+   * @returns {Promise<object>} Transazione aggiornata.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  togglePlannedTransactionActive: (token, transactionId, isActive) =>
+    request(`/api/planned-transactions/${transactionId}/toggle-active`, "PATCH", token, { isActive }),
 };

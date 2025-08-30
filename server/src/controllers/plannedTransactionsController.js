@@ -33,8 +33,16 @@ import {
   getNextOccurrences as getNextOccurrencesService,
 } from '../services/plannedTransactionService.js'
 
+// Import per integrazione budgeting
+import { batchUpsertBudgets as batchUpsertBudgetsService, batchAccumulateBudgets as batchAccumulateBudgetsService } from '../services/budgetService.js'
+import { 
+  applyTransactionToBudget, 
+  removeTransactionFromBudget 
+} from '../lib/budgetingIntegration.js'
+
 // 🔸 Validation schemas
 const plannedTxSchema = z.object({
+  title: z.string().optional().nullable(),  // ✅ Aggiungi title mancante
   main: z.string().min(1).max(32).transform(s => s.toUpperCase()),
   subId: z.string().optional().nullable(),
   subName: z.string().optional().nullable(),
@@ -43,12 +51,13 @@ const plannedTxSchema = z.object({
   payee: z.string().optional().nullable(),
   frequency: z.enum(['MONTHLY', 'YEARLY', 'ONE_TIME']),
   startDate: z.coerce.date(),
-  endDate: z.coerce.date().optional().nullable(),
   confirmationMode: z.enum(['MANUAL', 'AUTOMATIC']).default('MANUAL'),
   groupId: z.string().optional().nullable(),
+  appliedToBudget: z.boolean().optional().default(false),
 })
 
 const plannedTxPatchSchema = z.object({
+  title: z.string().nullable().optional(),  // ✅ Aggiungi title per modifiche
   main: z.string().min(1).max(32).transform(s => s.toUpperCase()).optional(),
   subId: z.string().nullable().optional(),
   subName: z.string().nullable().optional(),
@@ -57,19 +66,21 @@ const plannedTxPatchSchema = z.object({
   payee: z.string().nullable().optional(),
   frequency: z.enum(['MONTHLY', 'YEARLY', 'ONE_TIME']).optional(),
   startDate: z.coerce.date().optional(),
-  endDate: z.coerce.date().nullable().optional(),
   confirmationMode: z.enum(['MANUAL', 'AUTOMATIC']).optional(),
   groupId: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
+  appliedToBudget: z.boolean().optional(),
 })
 
 const groupSchema = z.object({
   name: z.string().min(1).max(255),
+  color: z.string().nullable().optional(),
   sortOrder: z.number().optional(),
 })
 
 const groupPatchSchema = z.object({
   name: z.string().min(1).max(255).optional(),
+  color: z.string().nullable().optional(),
   sortOrder: z.number().optional(),
 })
 
@@ -225,4 +236,220 @@ export async function getNextOccurrences(req, res, next) {
     
     res.json(occurrences)
   } catch (e) { next(e) }
+}
+
+/**
+ * 🎯 CONTROLLER: Applica transazione pianificata al budgeting
+ */
+export async function applyToBudgeting(req, res, next) {
+  try {
+    // Recupera la transazione pianificata
+    const plannedTransactions = await listPlannedTransactionsService(req.user.id)
+    const transaction = plannedTransactions.find(t => t.id === req.params.id)
+    
+    if (!transaction) {
+      return res.status(404).json({ error: 'Transazione pianificata non trovata' })
+    }
+    
+    if (transaction.appliedToBudget) {
+      return res.status(400).json({ error: 'Transazione già applicata al budgeting' })
+    }
+    
+    // Opzioni per l'applicazione
+    const { year, mode = 'divide', targetMonth } = req.body
+    const currentYear = year || new Date().getFullYear()
+    
+    // Recupera le sottocategorie (per ora usiamo un oggetto vuoto - verrà gestito dalla funzione)
+    const subcats = {}
+    
+    // Applica al budgeting
+    const budgetUpdates = applyTransactionToBudget(
+      transaction, 
+      { year: currentYear, mode, targetMonth }, 
+      subcats
+    )
+    
+    // Applica i budget (usa accumulo per non sovrascrivere)
+    await batchAccumulateBudgetsService(req.user.id, budgetUpdates)
+    
+    // Salva i parametri di applicazione
+    const budgetUpdateData = {
+      appliedToBudget: true
+    }
+    
+    // Per le transazioni annuali, salva la modalità usata
+    if (transaction.frequency === 'YEARLY') {
+      budgetUpdateData.budgetApplicationMode = mode
+      if (mode === 'specific' && targetMonth !== undefined) {
+        budgetUpdateData.budgetTargetMonth = targetMonth
+      }
+    }
+    
+    // Aggiorna la transazione pianificata
+    const updated = await updatePlannedTransactionService(req.user.id, req.params.id, budgetUpdateData)
+    
+    res.json({ 
+      message: 'Transazione applicata al budgeting con successo', 
+      transaction: updated,
+      budgetUpdates: budgetUpdates.length
+    })
+  } catch (e) { 
+    next(e) 
+  }
+}
+
+/**
+ * 🎯 CONTROLLER: Rimuovi transazione pianificata dal budgeting
+ */
+export async function removeFromBudgeting(req, res, next) {
+  try {
+    // Recupera la transazione pianificata
+    const plannedTransactions = await listPlannedTransactionsService(req.user.id)
+    const transaction = plannedTransactions.find(t => t.id === req.params.id)
+    
+    if (!transaction) {
+      return res.status(404).json({ error: 'Transazione pianificata non trovata' })
+    }
+    
+    if (!transaction.appliedToBudget) {
+      return res.status(400).json({ error: 'Transazione non applicata al budgeting' })
+    }
+    
+    // Opzioni per la rimozione (usa le modalità salvate o default)
+    const { year } = req.body
+    const currentYear = year || new Date().getFullYear()
+    
+    // Usa la modalità salvata per le transazioni annuali
+    let mode = 'divide'
+    let targetMonth = null
+    
+    if (transaction.frequency === 'YEARLY') {
+      mode = transaction.budgetApplicationMode || 'divide'
+      targetMonth = transaction.budgetTargetMonth
+    }
+    
+    // Recupera le sottocategorie
+    const subcats = {}
+    
+    // Funzione per controllare se ci sono altre transazioni attive per la stessa sottocategoria/mese
+    const checkOtherActiveTransactions = async (main, subcategoryName, monthIndex, excludeTransactionId) => {
+      try {
+        const { prisma } = await import('../lib/prisma.js')
+        
+        // Trova la sottocategoria by nome
+        const subcategory = await prisma.subcategory.findFirst({
+          where: {
+            userId: req.user.id,
+            name: { equals: subcategoryName, mode: 'insensitive' }
+          }
+        })
+        
+        if (!subcategory) return false
+        
+        // Cerca altre transazioni pianificate attive per la stessa sottocategoria
+        const otherTransactions = await prisma.plannedTransaction.findMany({
+          where: {
+            userId: req.user.id,
+            subId: subcategory.id,
+            main: main.toUpperCase(),
+            isActive: true,
+            appliedToBudget: true,
+            id: { not: excludeTransactionId } // Escludi la transazione che stiamo rimuovendo
+          }
+        })
+        
+        // Verifica se qualcuna di queste transazioni contribuisce al mese specificato
+        const currentYear = new Date().getFullYear()
+        
+        for (const tx of otherTransactions) {
+          if (tx.frequency === 'MONTHLY') {
+            // Transazioni mensili contribuiscono a tutti i mesi
+            return true
+          } else if (tx.frequency === 'YEARLY') {
+            if (tx.budgetApplicationMode === 'divide') {
+              // Transazioni annuali divise contribuiscono a tutti i mesi
+              return true
+            } else if (tx.budgetApplicationMode === 'specific') {
+              // Verifica se il mese target corrisponde
+              if (tx.budgetTargetMonth === monthIndex) {
+                return true
+              }
+            } else {
+              // Fallback: verifica il mese della startDate
+              const startDate = new Date(tx.startDate)
+              if (startDate.getMonth() === monthIndex) {
+                return true
+              }
+            }
+          } else if (tx.frequency === 'ONE_TIME') {
+            // Verifica se la one-time è nello stesso mese
+            const startDate = new Date(tx.startDate)
+            if (startDate.getMonth() === monthIndex && startDate.getFullYear() === currentYear) {
+              return true
+            }
+          }
+        }
+        
+        return false
+      } catch (error) {
+        console.error('Errore nel controllo altre transazioni:', error)
+        return false
+      }
+    }
+    
+    // Rimuovi dal budgeting con controllo delle altre transazioni
+    const budgetUpdates = await removeTransactionFromBudget(
+      transaction, 
+      { year: currentYear, mode, targetMonth }, 
+      subcats,
+      checkOtherActiveTransactions
+    )
+    
+    // Applica le rimozioni (usa accumulo con valori negativi)
+    await batchAccumulateBudgetsService(req.user.id, budgetUpdates)
+    
+    // Aggiorna la transazione pianificata
+    const updated = await updatePlannedTransactionService(req.user.id, req.params.id, {
+      appliedToBudget: false
+    })
+    
+    res.json({ 
+      message: 'Transazione rimossa dal budgeting con successo', 
+      transaction: updated,
+      budgetUpdates: budgetUpdates.length
+    })
+  } catch (e) { 
+    next(e) 
+  }
+}
+
+/**
+ * 🎯 CONTROLLER: Attiva/Disattiva transazione pianificata
+ */
+export async function toggleActive(req, res, next) {
+  try {
+    const { id } = req.params
+    const { isActive } = req.body
+    
+    // Validazione input
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({ error: 'isActive deve essere un booleano' })
+    }
+    
+    // Importa la nuova funzione dal service
+    const { togglePlannedTransactionActive } = await import('../services/plannedTransactionService.js')
+    
+    const transaction = await togglePlannedTransactionActive(
+      req.user.id, 
+      id, 
+      isActive
+    )
+    
+    res.json({
+      message: isActive ? 'Transazione riattivata con successo' : 'Transazione disattivata con successo',
+      transaction
+    })
+  } catch (error) {
+    next(error)
+  }
 }

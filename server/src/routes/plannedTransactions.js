@@ -28,6 +28,9 @@ import {
   materializePlannedTransaction,
   getPlannedTransactionsDue,
   getNextOccurrences,
+  applyToBudgeting,
+  removeFromBudgeting,
+  toggleActive,
 } from '../controllers/plannedTransactionsController.js'
 
 const router = Router()
@@ -48,6 +51,13 @@ router.patch('/:id/move', movePlannedTransaction)
 
 // 🔸 Route per calcolo prossime occorrenze
 router.get('/next-occurrences', getNextOccurrences)
+
+// 🔸 Routes per integrazione budgeting
+router.post('/:id/apply-to-budgeting', applyToBudgeting)
+router.delete('/:id/apply-to-budgeting', removeFromBudgeting)
+
+// 🔸 Route per attivazione/disattivazione
+router.patch('/:id/toggle-active', toggleActive)
 
 // 🔸 Routes per gruppi di transazioni
 router.get('/groups', listTransactionGroups)

@@ -207,9 +207,13 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
 
   return (
     <div className="space-y-4">
-      <div className="text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
+          <div className="text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
         In <b>Modifica</b> generale confermi con <b>Salva</b> in alto. In modifica singola: <b>Enter</b> salva, <b>Esc</b> annulla.
         I nomi vengono sempre in <b>Title Case</b>.
+      </div>
+      
+      <div className="mb-3 px-3 py-2 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-lg">
+        Suggerimento: trascina le carte per riordinare (disponibile fuori da "Modifica" generale).
       </div>
 
       <Card>
@@ -270,9 +274,6 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
             </div>
           </div>
 
-          <div className="mb-3 px-3 py-2 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-lg">
-            Suggerimento: trascina le carte per riordinare (disponibile fuori da "Modifica" generale).
-          </div>
           
           {/* Modern card-style layout */}
           <div className="space-y-3">

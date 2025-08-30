@@ -7,6 +7,7 @@ import TotalCell from './TotalCell.jsx';
 import BudgetRowActions from './BudgetRowActions.jsx';
 import { months } from '../../../lib/constants.js';
 import { nice } from '../../../lib/utils.js';
+import { useToast } from '../../toast';
 
 const MONTH_INDEXES = Array.from({ length: 12 }, (_, i) => i); // 0..11
 
@@ -29,9 +30,11 @@ export default function CategoryConfigSection({
   visibleMonths, 
   upsertBudget, 
   batchUpsertBudgets, 
-  mainMeta, 
+  mainMeta,
+  isManagedAutomatically,
   onClose 
 }) {
+  const toast = useToast();
   const meta = mainMeta(categoryKey);
   const subs = state.subcats?.[categoryKey] || [];
   const planFor = (sub, i) => Number(state.budgets[year]?.[`${categoryKey}:${sub}:${i}`] || 0);
@@ -189,6 +192,7 @@ export default function CategoryConfigSection({
                               <EditableCell
                                 value={planFor(sc.name, i)}
                                 color={color}
+                                disabled={isManagedAutomatically && isManagedAutomatically(categoryKey, sc.name, i)}
                                 onSave={async (newValue) => {
                                   await upsertBudget(categoryKey, `${sc.name}:${i}`, newValue);
                                 }}
@@ -254,14 +258,32 @@ export default function CategoryConfigSection({
                       
                       const handleSetAllMonths = async (value) => {
                         if (batchUpsertBudgets) {
-                          const updates = MONTH_INDEXES.map(monthIdx => ({
+                          const updates = MONTH_INDEXES.filter(monthIdx => {
+                            // Solo celle non gestite automaticamente
+                            return !isManagedAutomatically || !isManagedAutomatically(categoryKey, sc.name, monthIdx);
+                          }).map(monthIdx => ({
                             main: categoryKey,
                             keyWithMonth: `${sc.name}:${monthIdx}`,
                             value
                           }));
+                          
+                          if (updates.length === 0) {
+                            toast.error('Tutte le celle di questa riga sono gestite automaticamente dalle transazioni pianificate.');
+                            return;
+                          }
+                          
                           batchUpsertBudgets(updates).catch(console.error);
                         } else {
-                          MONTH_INDEXES.forEach(monthIdx => {
+                          const editableMonnths = MONTH_INDEXES.filter(monthIdx => {
+                            return !isManagedAutomatically || !isManagedAutomatically(categoryKey, sc.name, monthIdx);
+                          });
+                          
+                          if (editableMonnths.length === 0) {
+                            toast.error('Tutte le celle di questa riga sono gestite automaticamente dalle transazioni pianificate.');
+                            return;
+                          }
+                          
+                          editableMonnths.forEach(monthIdx => {
                             upsertBudget(categoryKey, `${sc.name}:${monthIdx}`, value).catch(console.error);
                           });
                         }
@@ -269,14 +291,32 @@ export default function CategoryConfigSection({
                       
                       const handleResetAll = async () => {
                         if (batchUpsertBudgets) {
-                          const updates = MONTH_INDEXES.map(monthIdx => ({
+                          const updates = MONTH_INDEXES.filter(monthIdx => {
+                            // Solo celle non gestite automaticamente
+                            return !isManagedAutomatically || !isManagedAutomatically(categoryKey, sc.name, monthIdx);
+                          }).map(monthIdx => ({
                             main: categoryKey,
                             keyWithMonth: `${sc.name}:${monthIdx}`,
                             value: 0
                           }));
+                          
+                          if (updates.length === 0) {
+                            toast.error('Tutte le celle di questa riga sono gestite automaticamente dalle transazioni pianificate.');
+                            return;
+                          }
+                          
                           batchUpsertBudgets(updates).catch(console.error);
                         } else {
-                          MONTH_INDEXES.forEach(monthIdx => {
+                          const editableMonths = MONTH_INDEXES.filter(monthIdx => {
+                            return !isManagedAutomatically || !isManagedAutomatically(categoryKey, sc.name, monthIdx);
+                          });
+                          
+                          if (editableMonths.length === 0) {
+                            toast.error('Tutte le celle di questa riga sono gestite automaticamente dalle transazioni pianificate.');
+                            return;
+                          }
+                          
+                          editableMonths.forEach(monthIdx => {
                             upsertBudget(categoryKey, `${sc.name}:${monthIdx}`, 0).catch(console.error);
                           });
                         }
@@ -323,14 +363,32 @@ export default function CategoryConfigSection({
             
             const handleSetAllMonths = async (value) => {
               if (batchUpsertBudgets) {
-                const updates = MONTH_INDEXES.map(monthIdx => ({
+                const updates = MONTH_INDEXES.filter(monthIdx => {
+                  // Solo celle non gestite automaticamente
+                  return !isManagedAutomatically || !isManagedAutomatically(categoryKey, sc.name, monthIdx);
+                }).map(monthIdx => ({
                   main: categoryKey,
                   keyWithMonth: `${sc.name}:${monthIdx}`,
                   value
                 }));
+                
+                if (updates.length === 0) {
+                  toast.error('Tutte le celle di questa riga sono gestite automaticamente dalle transazioni pianificate.');
+                  return;
+                }
+                
                 batchUpsertBudgets(updates).catch(console.error);
               } else {
-                MONTH_INDEXES.forEach(monthIdx => {
+                const editableMonths = MONTH_INDEXES.filter(monthIdx => {
+                  return !isManagedAutomatically || !isManagedAutomatically(categoryKey, sc.name, monthIdx);
+                });
+                
+                if (editableMonths.length === 0) {
+                  toast.error('Tutte le celle di questa riga sono gestite automaticamente dalle transazioni pianificate.');
+                  return;
+                }
+                
+                editableMonths.forEach(monthIdx => {
                   upsertBudget(categoryKey, `${sc.name}:${monthIdx}`, value).catch(console.error);
                 });
               }
@@ -338,14 +396,32 @@ export default function CategoryConfigSection({
             
             const handleResetAll = async () => {
               if (batchUpsertBudgets) {
-                const updates = MONTH_INDEXES.map(monthIdx => ({
+                const updates = MONTH_INDEXES.filter(monthIdx => {
+                  // Solo celle non gestite automaticamente
+                  return !isManagedAutomatically || !isManagedAutomatically(categoryKey, sc.name, monthIdx);
+                }).map(monthIdx => ({
                   main: categoryKey,
                   keyWithMonth: `${sc.name}:${monthIdx}`,
                   value: 0
                 }));
+                
+                if (updates.length === 0) {
+                  toast.error('Tutte le celle di questa riga sono gestite automaticamente dalle transazioni pianificate.');
+                  return;
+                }
+                
                 batchUpsertBudgets(updates).catch(console.error);
               } else {
-                MONTH_INDEXES.forEach(monthIdx => {
+                const editableMonths = MONTH_INDEXES.filter(monthIdx => {
+                  return !isManagedAutomatically || !isManagedAutomatically(categoryKey, sc.name, monthIdx);
+                });
+                
+                if (editableMonths.length === 0) {
+                  toast.error('Tutte le celle di questa riga sono gestite automaticamente dalle transazioni pianificate.');
+                  return;
+                }
+                
+                editableMonths.forEach(monthIdx => {
                   upsertBudget(categoryKey, `${sc.name}:${monthIdx}`, 0).catch(console.error);
                 });
               }
@@ -383,6 +459,7 @@ export default function CategoryConfigSection({
                       <EditableCell
                         value={planFor(sc.name, i)}
                         color={color}
+                        disabled={isManagedAutomatically && isManagedAutomatically(categoryKey, sc.name, i)}
                         onSave={async (newValue) => {
                           await upsertBudget(categoryKey, `${sc.name}:${i}`, newValue);
                         }}

@@ -167,21 +167,18 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor }) {
           </button>
         </div>
         
-        {/* CTA contestualizzata */}
-        <Button
-          onClick={() => {
-            if (activeTab === 'register') {
+        {/* CTA solo per Register */}
+        {activeTab === 'register' && (
+          <Button
+            onClick={() => {
               if (typeof openTxEditor === 'function') openTxEditor();
-            } else {
-              // Per ora placeholder - implementeremo nella prossima iterazione
-              console.log('Open planned transaction modal');
-            }
-          }}
-          className="flex items-center gap-2 bg-gradient-to-tr from-sky-600 to-indigo-600"
-        >
-          <Plus className="h-4 w-4" />
-          {activeTab === 'register' ? 'Nuova Transazione' : 'Nuova Pianificata'}
-        </Button>
+            }}
+            className="flex items-center gap-2 bg-gradient-to-tr from-sky-600 to-indigo-600"
+          >
+            <Plus className="h-4 w-4" />
+            Nuova Transazione
+          </Button>
+        )}
       </div>
 
       {/* Tab content */}

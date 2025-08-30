@@ -74,6 +74,7 @@ model Budget {
   capType        String?  // SOFT, HARD
   notes          String?
   overrideChildren Boolean @default(false)
+  managedAutomatically Boolean @default(false) // indica se il budget è gestito automaticamente dalle transazioni pianificate
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -83,6 +84,7 @@ model Budget {
   @@unique([userId, main, subcategoryId, period])
   @@index([userId, period])
   @@index([userId, main])
+  @@index([userId, managedAutomatically])
 }
 
 model Transaction {
@@ -113,6 +115,7 @@ model TransactionGroup {
   id        String   @id @default(cuid())
   userId    String
   name      String   // nome definito dall'utente
+  color     String?  // colore personalizzato del gruppo (hex)
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -128,6 +131,7 @@ model TransactionGroup {
 model PlannedTransaction {
   id              String   @id @default(cuid())
   userId          String
+  title           String?  // titolo opzionale della transazione
   groupId         String?  // collegamento al gruppo opzionale
   main            String   @db.VarChar(32) // categoria principale
   subId           String?  // sottocategoria
@@ -136,10 +140,12 @@ model PlannedTransaction {
   payee           String?
   frequency       String   // MONTHLY, YEARLY, ONE_TIME
   startDate       DateTime // data di inizio
-  endDate         DateTime? // data di fine opzionale
   confirmationMode String   @default("MANUAL") // MANUAL, AUTOMATIC
   nextDueDate     DateTime // prossima data di scadenza
   isActive        Boolean  @default(true)
+  appliedToBudget Boolean  @default(false) // indica se è applicata al budgeting generale
+  budgetApplicationMode String? // modalità usata per applicazione budgeting: 'divide' o 'specific'
+  budgetTargetMonth Int? // mese target per modalità 'specific' (0-11)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

@@ -63,6 +63,12 @@ UI: Custom components + Lucide Icons
 - **Context**: `src/context/AuthContext.jsx`
 - **⚠️ Non modificare** senza esplicita richiesta
 
+### ⚡ Performance e Ottimizzazioni
+- **Database**: Ottimizzazioni query N+1 implementate in `batchAccumulateBudgets`
+- **Toast System**: Feedback UI immediato per operazioni budgeting
+- **Real-time Sync**: Refresh automatico dati budgeting per tutte le operazioni CRUD
+- **Background Processing**: Operazioni async ottimizzate per UX fluida
+
 ### 📊 State Management
 - **Pattern**: Custom hooks per feature
 - **Hook globali**: `src/features/app/`

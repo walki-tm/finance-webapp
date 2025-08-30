@@ -246,32 +246,48 @@ export default function EditableCell({
           handleStartEdit();
         }
       }}
-      className={`group relative w-full h-full px-3 py-2 text-center cursor-pointer transition-all duration-200 ${
+      className={`group relative w-full h-full px-3 py-2 text-center transition-all duration-200 ${
         disabled 
-          ? 'opacity-50 cursor-not-allowed' 
-          : 'focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-blue-50 dark:focus:bg-blue-900/20'
+          ? 'opacity-75 cursor-not-allowed bg-orange-50/50 dark:bg-orange-900/20 border border-orange-200/40 dark:border-orange-700/40 rounded-lg' 
+          : 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-blue-50 dark:focus:bg-blue-900/20'
       } ${className}`}
-      title={disabled ? 'Campo non modificabile' : 'Clicca per modificare • Tab per navigare'}
+      title={disabled ? 'Campo gestito automaticamente dalle transazioni pianificate' : 'Clicca per modificare • Tab per navigare'}
       tabIndex={disabled ? -1 : tabIndex}
       role="button"
-      aria-label={`Valore budget: ${formatDisplayValue(value)}. Clicca per modificare.`}
+      aria-label={`Valore budget: ${formatDisplayValue(value)}. ${disabled ? 'Gestito automaticamente.' : 'Clicca per modificare.'}`}
     >
-      {/* Badge hover con bordi arrotondati */}
+      {/* Badge hover con bordi arrotondati - solo se non disabled */}
       {!disabled && (
         <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 -m-0.5"></div>
       )}
       
-      {/* Indicatore di interattività più sottile */}
+      {/* Indicatore gestione automatica */}
+      {disabled && (
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-orange-400 dark:bg-orange-500 rounded-full shadow-sm"></div>
+      )}
+      
+      {/* Indicatore di interattività più sottile - solo se non disabled */}
       {!disabled && (
         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-0 group-hover:h-6 bg-blue-400 dark:bg-blue-500 rounded-full transition-all duration-200 shadow-sm"></div>
       )}
       
       {/* Valore con formattazione consistente */}
-      <span className="relative z-10 text-base font-medium text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-slate-100 transition-colors duration-200">
+      <span className={`relative z-10 text-base font-medium transition-colors duration-200 ${
+        disabled 
+          ? 'text-orange-700 dark:text-orange-300' 
+          : 'text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-slate-100'
+      }`}>
         {formatDisplayValue(value)}
       </span>
       
-      {/* Indicatore editabilità */}
+      {/* Icona automatica per celle gestite */}
+      {disabled && (
+        <div className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 dark:bg-orange-400 rounded-full shadow-sm flex items-center justify-center">
+          <span className="text-white text-xs font-bold">🔧</span>
+        </div>
+      )}
+      
+      {/* Indicatore editabilità - solo se non disabled */}
       {!disabled && (
         <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-400 dark:bg-blue-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 shadow-sm"></div>
       )}

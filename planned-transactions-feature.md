@@ -1,7 +1,8 @@
 # 📅 Planned Transactions - Documentazione Feature
 
 > **Implementato**: 23 Agosto 2025  
-> **Versione**: 1.0.0
+> **Aggiornato**: 27 Agosto 2025 - Rimossa dipendenza da endDate  
+> **Versione**: 1.1.0
 
 ## 🎯 Panoramica Funzionalità
 
@@ -36,6 +37,7 @@ La funzionalità **Planned Transactions** aggiunge al sistema Finance WebApp la 
 - id: String (Primary Key)
 - userId: String (Foreign Key → users)
 - groupId: String? (Foreign Key → transaction_groups)
+- title: String? (titolo opzionale)
 - main: String (categoria principale)
 - subId: String? (Foreign Key → subcategories)
 - amount: Decimal
@@ -43,10 +45,10 @@ La funzionalità **Planned Transactions** aggiunge al sistema Finance WebApp la 
 - payee: String?
 - frequency: String (MONTHLY|YEARLY|ONE_TIME)
 - startDate: DateTime
-- endDate: DateTime?
 - confirmationMode: String (MANUAL|AUTOMATIC)
 - nextDueDate: DateTime (calcolato automaticamente)
 - isActive: Boolean
+- appliedToBudget: Boolean (indica se applicata al budgeting)
 ```
 
 ### Tabella `transaction_groups`
@@ -108,7 +110,8 @@ La funzionalità **Planned Transactions** aggiunge al sistema Finance WebApp la 
 ### Logica Auto-Materializzazione
 - **Scheduler**: Controllo ogni ora per transazioni in scadenza
 - **Calcolo nextDueDate**: Automatico basato su frequency e startDate
-- **Gestione endDate**: Disattivazione automatica al raggiungimento
+- **Gestione ricorrenza**: Transazioni mensili e annuali continuano indefinitamente, una tantum vengono disattivate dopo l'esecuzione
+- **Integrazione budgeting**: Possibilità di applicare automaticamente le transazioni al budgeting generale
 - **Logging**: Tracciamento completo operazioni scheduler
 
 ---
@@ -162,6 +165,25 @@ npm run build             # Test build produzione
 
 ---
 
+## 📊 Integrazione Budgeting
+
+### Logica di Applicazione
+Le transazioni pianificate possono essere applicate automaticamente al budgeting generale tramite checkbox dedicata nel modal di creazione:
+
+- **MONTHLY**: Applica l'importo a tutti i 12 mesi dell'anno indefinitamente (dal mese di inizio in poi)
+- **YEARLY**: Offre due modalità:
+  - Applica l'intero importo al mese specifico (mese della startDate)
+  - Dividi l'importo su tutti i 12 mesi (importo/12)
+- **ONE_TIME**: Applica l'importo solo al mese di riferimento della transazione
+
+### Comportamento Senza Data di Fine
+Tutte le transazioni pianificate non hanno più data di fine:
+- Le **mensili** e **annuali** continuano indefinitamente finché non vengono eliminate o rese inattive
+- Le **una tantum** vengono automaticamente disattivate dopo la materializzazione
+- Questo semplifica la gestione e riduce la complessità dell'interfaccia utente
+
+---
+
 ## 🚀 Stato Implementazione
 
 ### ✅ Completato
@@ -198,7 +220,7 @@ npm run build             # Test build produzione
 
 ---
 
-**🔄 Ultimo aggiornamento**: 23 Agosto 2025  
-**📝 Versione documentazione**: 1.0.0
+**🔄 Ultimo aggiornamento**: 27 Agosto 2025  
+**📝 Versione documentazione**: 1.1.0
 
 > Questa feature estende significativamente le capacità del sistema finanziario, introducendo la dimensione temporale e la pianificazione automatica.
