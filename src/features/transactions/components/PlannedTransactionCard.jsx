@@ -35,9 +35,16 @@ export default function PlannedTransactionCard({
   onMaterialize,
   onApplyToBudgeting,
   onToggleActive,
+  onSkipLoanPayment,
   subcats = {},
   mains = []
 }) {
+  // Debug per vedere se loanId è presente
+    console.log('🔧 DEBUG PlannedTransaction:', transaction?.title, 'loanId:', transaction?.loanId)
+    if (transaction?.loanId) {
+      console.log('🔧 DEBUG - NextDueDate:', transaction?.nextDueDate)
+      console.log('🔧 DEBUG - Amount:', transaction?.amount)
+    }
   const { token } = useAuth()
   const [showOccurrences, setShowOccurrences] = useState(false)
   const [nextOccurrences, setNextOccurrences] = useState([])
@@ -100,6 +107,35 @@ export default function PlannedTransactionCard({
   }
 
   const isDue = transaction.nextDueDate && new Date(transaction.nextDueDate) <= new Date()
+
+  // 🔸 Helper function per saltare al prossimo mese
+  const handleSkipLoanPayment = async () => {
+    if (!transaction.loanId) return
+    
+    try {
+      console.log('🔄 Starting skip loan payment for:', transaction.loanId)
+      console.log('📅 Current transaction nextDueDate:', transaction.nextDueDate)
+      
+      // Chiama l'endpoint specifico del loan per saltare la rata
+      const result = await api.skipLoanPayment(token, transaction.loanId)
+      
+      console.log('✅ Skip loan payment API response:', result)
+      console.log('📅 Updated planned transaction:', result.data?.updatedPlannedTransaction)
+      
+      if (result.data?.updatedPlannedTransaction) {
+        console.log('📅 New nextDueDate:', result.data.updatedPlannedTransaction.nextDueDate)
+      }
+      
+      // Callback per notificare il componente padre di fare solo refresh (skip già completato)
+      if (onSkipLoanPayment) {
+        onSkipLoanPayment(transaction, { skipCompleted: true, refreshOnly: true })
+      }
+      
+    } catch (error) {
+      console.error('❌ Errore nel saltare la rata:', error)
+      alert('Errore nel saltare la rata: ' + (error.message || 'Riprova.'))
+    }
+  }
 
   return (
     <Card className={`group transition-all duration-200 rounded-xl ${dueDateColors.card} ${dueDateColors.cardShadow} overflow-hidden`}>
@@ -178,17 +214,42 @@ export default function PlannedTransactionCard({
 
           {/* Riga 5: Azioni rapide (menu azioni e anteprima) */}
           <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
+              {/* Badge per transazioni prestiti */}
+              {transaction.loanId && (
+                <div className="px-2 py-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-xs font-medium">
+                  🏦 Rata Prestito
+                </div>
+              )}
+              
+              {/* Pulsante Paga sempre visibile per transazioni attive */}
+              {transaction.isActive && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onMaterialize()
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-colors flex items-center gap-1"
+                  title="Paga questa transazione ora"
+                >
+                  💰 Paga
+                </button>
+              )}
+              
+              {/* Menu azioni - limitato per transazioni prestiti */}
               <ActionsMenu
-                onEdit={() => onEdit()}
-                onRemove={() => onDelete(transaction.id)}
+                // Per transazioni prestiti: NO edit, NO remove
+                onEdit={transaction.loanId ? undefined : () => onEdit()}
+                onRemove={transaction.loanId ? undefined : () => onDelete(transaction.id)}
                 customActions={[
-                  ...(isDue && transaction.isActive ? [{
-                    label: '💸 Paga ora',
-                    onClick: () => onMaterialize(),
-                    variant: 'primary'
+                  // Salta Rata solo per transazioni prestiti attive
+                  ...(transaction.loanId && transaction.isActive ? [{
+                    label: '⏭️ Salta Rata',
+                    onClick: handleSkipLoanPayment,
+                    variant: 'warning'
                   }] : []),
-                  ...(transaction.frequency === 'MONTHLY' ? [{
+                  // Per transazioni prestiti: NO toggle attivo/inattivo
+                  ...(transaction.frequency === 'MONTHLY' && !transaction.loanId ? [{
                     label: transaction.isActive ? '🚫 Disattiva' : '▶️ Attiva',
                     onClick: () => onToggleActive && onToggleActive(transaction, !transaction.isActive),
                     variant: transaction.isActive ? 'warning' : 'success'
@@ -212,7 +273,6 @@ export default function PlannedTransactionCard({
               </button>
             )}
           </div>
-          
           {/* Vista dettagliata espandibile - Dettagli accessibili su richiesta */}
           {showOccurrences && (
             <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border-t border-slate-200 dark:border-slate-700">

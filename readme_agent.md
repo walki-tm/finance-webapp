@@ -63,6 +63,20 @@ UI: Custom components + Lucide Icons
 - **Context**: `src/context/AuthContext.jsx`
 - **⚠️ Non modificare** senza esplicita richiesta
 
+### 📅 Planned Transactions (Sistema Avanzato)
+- **Feature**: Transazioni pianificate con auto-materializzazione
+- **Backend**: `plannedTransactionsController.js`, `schedulerService.js`
+- **Frontend**: `usePlannedTransactions.js`, sub-tab dedicato
+- **Database**: Tabelle `planned_transactions`, `transaction_groups`
+- **⚠️ Sistema critico** - Scheduler automatico attivo
+
+### 🏦 Loans System (Sistema Prestiti)
+- **Feature**: Gestione prestiti e mutui con ammortamento
+- **Calcoli**: Formule matematiche per ammortamento francese
+- **Backend**: `loanService.js`, `loanCalculationService.js`
+- **Database**: Tabelle `loans`, `loan_payments`
+- **⚠️ Sistema critico** - Calcoli finanziari accurati
+
 ### ⚡ Performance e Ottimizzazioni
 - **Database**: Ottimizzazioni query N+1 implementate in `batchAccumulateBudgets`
 - **Toast System**: Feedback UI immediato per operazioni budgeting
@@ -86,6 +100,8 @@ UI: Custom components + Lucide Icons
 - **Validation**: Zod schemas
 - **Error handling**: Middleware centralizzato
 - **Auth**: Bearer token JWT
+- **Advanced Features**: Scheduled transactions, loan management
+- **Background Jobs**: Auto-materialization scheduler
 
 ---
 
@@ -305,8 +321,10 @@ npx prisma generate
 - ✅ Gestione categorie/sottocategorie  
 - ✅ CRUD transazioni
 - ✅ Dashboard overview
-- 🔄 Sistema budgeting
-- 🔄 Report e analytics
+- ✅ Sistema budgeting completo
+- ✅ Transazioni pianificate (Planned Transactions)
+- ✅ Sistema prestiti/mutui (Loans)
+- 🔄 Report e analytics avanzati
 
 ### Principi Architetturali
 - **Modularità**: Feature-based organization
@@ -317,7 +335,7 @@ npx prisma generate
 
 ---
 
-**🔄 Ultimo aggiornamento**: 30 Gennaio 2025  
-**📝 Versione**: 1.1.0
+**🔄 Ultimo aggiornamento**: 31 Agosto 2025  
+**📝 Versione**: 2.0.0
 
 > **Ricorda**: Questo progetto ha una struttura consolidata. Cambiamenti strutturali richiedono sempre approvazione esplicita dall'utente.

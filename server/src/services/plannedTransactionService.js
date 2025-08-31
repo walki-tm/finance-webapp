@@ -116,7 +116,7 @@ export async function listPlannedTransactions(userId, { groupId } = {}) {
  * 🎯 SERVICE: Crea transazione pianificata
  */
 export async function createPlannedTransaction(userId, data) {
-  const { title, main, subId, subName, amount, note, payee, frequency, startDate, confirmationMode, groupId, appliedToBudget } = data
+  const { title, main, subId, subName, amount, note, payee, frequency, startDate, confirmationMode, groupId, appliedToBudget, loanId } = data
   const finalSubId = await resolveSubId(userId, subId, subName)
   
   // Calcola nextDueDate basandosi su frequency e startDate
@@ -126,6 +126,12 @@ export async function createPlannedTransaction(userId, data) {
   if (groupId) {
     const groupExists = await prisma.transactionGroup.findFirst({ where: { id: groupId, userId } })
     if (!groupExists) throw httpError(400, 'Invalid groupId')
+  }
+  
+  // Verifica che il prestito appartenga all'utente se specificato
+  if (loanId) {
+    const loanExists = await prisma.loan.findFirst({ where: { id: loanId, userId } })
+    if (!loanExists) throw httpError(400, 'Invalid loanId')
   }
   
   return prisma.plannedTransaction.create({
@@ -142,6 +148,7 @@ export async function createPlannedTransaction(userId, data) {
       confirmationMode,
       groupId: groupId || null,
       appliedToBudget: appliedToBudget || false,
+      loanId: loanId || null, // ✅ Aggiungi loanId mancante
       nextDueDate,
     },
     include: { 
@@ -440,7 +447,95 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
   })
   if (!plannedTx) throw httpError(404, 'Planned transaction not found')
   
-  // Crea la transazione reale
+  // Se è una transazione collegata a un loan, registra il pagamento nel loan
+  if (plannedTx.loanId) {
+    const { payLoan, syncLoanWithPaymentPlan } = await import('./loanService.js')
+    
+    // Usa il nuovo servizio ottimizzato payLoan che gestisce automaticamente la prossima rata
+    console.log('💰 DEBUG: Processing loan payment for planned transaction:', plannedTx.id, 'loan:', plannedTx.loanId)
+    
+    try {
+      // Registra il pagamento usando il nuovo servizio ottimizzato
+      const loanPaymentResult = await payLoan(
+        userId,
+        plannedTx.loanId,
+        {
+          actualAmount: Math.abs(plannedTx.amount),
+          paidDate: new Date().toISOString(),
+          notes: `Pagamento rata (${new Date().toLocaleDateString('it-IT')}) - ${plannedTx.title || 'Rata'}`
+        }
+      )
+      
+      console.log('💰 DEBUG: Loan payment completed:', loanPaymentResult)
+      
+      // 🔄 Sincronizza la transazione pianificata con il loan aggiornato
+      try {
+        console.log('🔄 DEBUG: Starting sync for planned transaction with loan payment plan...')
+        
+        await syncLoanWithPaymentPlan(userId, plannedTx.loanId)
+        
+        console.log('✅ Planned transaction synced with loan payment plan')
+      } catch (syncError) {
+        console.error('❌ Failed to sync planned transaction:', syncError.message)
+        // Non bloccare l'operazione, ma logga l'errore
+      }
+      
+      // Recupera il loan per ottenere il numero di rata appena pagata
+      const updatedLoan = await prisma.loan.findFirst({
+        where: { id: plannedTx.loanId, userId }
+      })
+      
+      const paymentNumber = updatedLoan?.paidPayments || 'N/A'
+      
+      // Crea la transazione reale con i dati del loan payment
+      const transaction = await prisma.transaction.create({
+        data: {
+          userId,
+          date: loanPaymentResult.payment.paidDate || new Date(),
+          amount: plannedTx.amount, // Mantieni il segno negativo per le spese
+          main: plannedTx.main,
+          subId: plannedTx.subId,
+          note: `Rata prestito #${paymentNumber} - ${plannedTx.title || 'Rata'} - Capitale: €${loanPaymentResult.payment.principalAmount?.toFixed(2) || '0.00'}, Interessi: €${loanPaymentResult.payment.interestAmount?.toFixed(2) || '0.00'}`,
+          payee: plannedTx.payee,
+        },
+        include: { subcategory: true }
+      })
+      
+      console.log('✅ Loan payment recorded and transaction created')
+      
+      // 📝 Per transazioni loan ricorrenti, aggiorna nextDueDate per allinearsi con il loan
+      if (plannedTx.frequency !== 'ONE_TIME') {
+        // Recupera il loan aggiornato per ottenere la prossima data di pagamento
+        const updatedLoan = await prisma.loan.findFirst({
+          where: { id: plannedTx.loanId, userId }
+        })
+        
+        if (updatedLoan) {
+          console.log('🔄 DEBUG: Updating loan planned transaction nextDueDate to match loan nextPaymentDate:', {
+            current: plannedTx.nextDueDate,
+            new: updatedLoan.nextPaymentDate
+          })
+          
+          await prisma.plannedTransaction.update({
+            where: { id: plannedTxId },
+            data: {
+              nextDueDate: updatedLoan.nextPaymentDate
+            }
+          })
+          
+          console.log('✅ Loan planned transaction nextDueDate synced with loan')
+        }
+      }
+      
+      return transaction
+      
+    } catch (loanError) {
+      console.error('❌ Error processing loan payment:', loanError.message)
+      throw httpError(500, `Failed to process loan payment: ${loanError.message}`)
+    }
+  }
+  
+  // Comportamento normale per transazioni non-loan
   const transaction = await prisma.transaction.create({
     data: {
       userId,

@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
+    "test": "vitest",
+    "test:run": "vitest run",
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "generate": "prisma generate",
@@ -24,6 +26,7 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10",
-    "prisma": "^5.18.0"
+    "prisma": "^5.18.0",
+    "vitest": "^3.2.4"
   }
 }

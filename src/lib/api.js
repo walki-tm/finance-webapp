@@ -238,8 +238,10 @@ export const api = {
    * @throws {Error} Se la richiesta fallisce.
    */
   listPlannedTransactions: (token, params = {}) => {
-    const query = new URLSearchParams(params).toString()
-    const path = query ? `/api/planned-transactions?${query}` : '/api/planned-transactions'
+    // Add cache buster timestamp to force fresh data
+    const cacheParams = { ...params, _t: Date.now() }
+    const query = new URLSearchParams(cacheParams).toString()
+    const path = query ? `/api/planned-transactions?${query}` : `/api/planned-transactions?_t=${Date.now()}`
     return request(path, "GET", token)
   },
   /**
@@ -393,4 +395,101 @@ export const api = {
    */
   togglePlannedTransactionActive: (token, transactionId, isActive) =>
     request(`/api/planned-transactions/${transactionId}/toggle-active`, "PATCH", token, { isActive }),
+
+  // ---- Loans ----
+  /**
+   * Crea un nuovo prestito/mutuo.
+   * @param {string} token Token di accesso JWT.
+   * @param {object} loanData Dati del prestito.
+   * @returns {Promise<object>} Prestito creato con piano ammortamento.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  createLoan: (token, loanData) =>
+    request("/api/loans", "POST", token, loanData),
+  /**
+   * Elenca tutti i prestiti dell'utente.
+   * @param {string} token Token di accesso JWT.
+   * @returns {Promise<object>} { loans: [...], summary: {...} }
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  getUserLoans: (token) =>
+    request("/api/loans", "GET", token),
+  /**
+   * Ottiene dettagli prestito specifico.
+   * @param {string} token Token di accesso JWT.
+   * @param {string} loanId ID del prestito.
+   * @returns {Promise<object>} Prestito con statistiche e schedule completo.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  getLoanDetails: (token, loanId) =>
+    request(`/api/loans/${loanId}`, "GET", token),
+  /**
+   * Aggiorna prestito esistente.
+   * @param {string} token Token di accesso JWT.
+   * @param {string} loanId ID del prestito.
+   * @param {object} updateData Dati da aggiornare.
+   * @returns {Promise<object>} Prestito aggiornato.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  updateLoan: (token, loanId, updateData) =>
+    request(`/api/loans/${loanId}`, "PUT", token, updateData),
+  /**
+   * Elimina prestito.
+   * @param {string} token Token di accesso JWT.
+   * @param {string} loanId ID del prestito.
+   * @returns {Promise<null>} Nessun contenuto in caso di successo.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  deleteLoan: (token, loanId) =>
+    request(`/api/loans/${loanId}`, "DELETE", token),
+  /**
+   * Piano di ammortamento completo.
+   * @param {string} token Token di accesso JWT.
+   * @param {string} loanId ID del prestito.
+   * @returns {Promise<object>} { loanId, loanName, schedule, statistics }
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  getLoanPayments: (token, loanId) =>
+    request(`/api/loans/${loanId}/payments`, "GET", token),
+  /**
+   * Registra pagamento di una rata.
+   * @param {string} token Token di accesso JWT.
+   * @param {string} loanId ID del prestito.
+   * @param {number} paymentNumber Numero rata.
+   * @param {object} paymentData Dati pagamento.
+   * @returns {Promise<object>} Risultato con payment, loan update e recalculation.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  recordLoanPayment: (token, loanId, paymentNumber, paymentData) =>
+    request(`/api/loans/${loanId}/payments/${paymentNumber}`, "PUT", token, paymentData),
+  /**
+   * Simulazione estinzione anticipata.
+   * @param {string} token Token di accesso JWT.
+   * @param {string} loanId ID del prestito.
+   * @param {number[]} targetMonths Mesi da simulare (opzionale).
+   * @returns {Promise<object>} Simulazioni per mesi richiesti.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  simulateLoanPayoff: (token, loanId, targetMonths = []) =>
+    request(`/api/loans/${loanId}/simulate-payoff`, "POST", token, { targetMonths }),
+  /**
+   * Salta la prossima rata del prestito.
+   * @param {string} token Token di accesso JWT.
+   * @param {string} loanId ID del prestito.
+   * @returns {Promise<object>} Risultato con skipped payment e next payment.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  skipLoanPayment: (token, loanId) =>
+    request(`/api/loans/${loanId}/skip-payment`, "POST", token),
+  
+  /**
+   * Paga automaticamente la prossima rata del prestito.
+   * (Usato per materializzare Planned Transactions)
+   * @param {string} token Token di accesso JWT.
+   * @param {string} loanId ID del prestito.
+   * @returns {Promise<object>} Risultato con payment e loan update.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  payNextLoan: (token, loanId) =>
+    request(`/api/loans/${loanId}/pay-next`, "POST", token),
 };

@@ -15,7 +15,7 @@ import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
  * - Tabella: ordinata per data desc e filtrata per periodo + categoria.
  */
 
-export default function Transactions({ state, updateTx, delTx, openTxEditor }) {
+export default function Transactions({ state, updateTx, delTx, openTxEditor, refreshTransactions }) {
   /* ===== Sub-tab state ===== */
   const [activeTab, setActiveTab] = useState('register');
   /* ===== Filtro macro-categoria ===== */
@@ -294,7 +294,7 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor }) {
           </Card>
         </div>
       ) : (
-        <PlannedTransactionsTab state={state} />
+        <PlannedTransactionsTab state={state} refreshTransactions={refreshTransactions} />
       )}
     </div>
   );

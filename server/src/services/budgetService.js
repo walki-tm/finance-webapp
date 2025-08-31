@@ -49,7 +49,15 @@ export async function upsertBudget(userId, data) {
       include: { Category: true }
     })
     if (!sub) throw httpError(404, 'Subcategory not found')
-    if (sub.Category.main !== main) throw httpError(400, 'Subcategory does not match main category')
+    
+    // ⚠️ SPECIAL CASE: Per planned transactions da prestiti, permettiamo flessibilità nella categoria
+    // Se la subcategoria non corrisponde al main, proviamo ad usare la categoria della subcategoria
+    if (sub.Category.main !== main) {
+      // Log per debugging
+      console.warn(`⚠️ Category mismatch: subcategory belongs to '${sub.Category.main}' but main is '${main}'. Using subcategory's main category.`)
+      // Aggiorna il main per usare quello della sottocategoria invece di fallire
+      main = sub.Category.main
+    }
   }
 
   try {
@@ -111,7 +119,15 @@ export async function batchUpsertBudgets(userId, budgets) {
         include: { Category: true }
       })
       if (!sub) throw httpError(404, `Subcategory ${subcategoryId} not found`)
-      if (sub.Category.main !== main) throw httpError(400, 'Subcategory does not match main category')
+      
+      // ⚠️ SPECIAL CASE: Per planned transactions da prestiti, permettiamo flessibilità nella categoria
+      // Se la subcategoria non corrisponde al main, proviamo ad usare la categoria della subcategoria
+      if (sub.Category.main !== budgetData.main) {
+        console.warn(`⚠️ Category mismatch: subcategory belongs to '${sub.Category.main}' but main is '${budgetData.main}'. Using subcategory's main category.`)
+        // Aggiorna il main per usare quello della sottocategoria
+        budgetData.main = sub.Category.main
+        main = sub.Category.main
+      }
     }
 
     operations.push(
@@ -173,13 +189,20 @@ export async function batchAccumulateBudgets(userId, budgets) {
       return acc
     }, {})
     
-    // Valida che tutte le sottocategorie richieste esistano
-    for (const budgetData of budgets) {
+    // Valida che tutte le sottocategorie richieste esistano e correggi le categorie se necessario
+    for (let i = 0; i < budgets.length; i++) {
+      const budgetData = budgets[i]
       if (budgetData.subcategoryId && !subcategoryValidation[budgetData.subcategoryId]) {
         throw httpError(404, `Subcategory ${budgetData.subcategoryId} not found`)
       }
       if (budgetData.subcategoryId && subcategoryValidation[budgetData.subcategoryId] !== budgetData.main) {
-        throw httpError(400, 'Subcategory does not match main category')
+        // ⚠️ SPECIAL CASE: Per planned transactions da prestiti, permettiamo flessibilità nella categoria
+        console.warn(`⚠️ Category mismatch in batch: subcategory belongs to '${subcategoryValidation[budgetData.subcategoryId]}' but main is '${budgetData.main}'. Using subcategory's main category.`)
+        // Correggi il main nell'array dei budget
+        budgets[i] = {
+          ...budgetData,
+          main: subcategoryValidation[budgetData.subcategoryId]
+        }
       }
     }
   }

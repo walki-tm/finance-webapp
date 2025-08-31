@@ -21,6 +21,7 @@ model User {
   budgets             Budget[]
   transactionGroups   TransactionGroup[]
   plannedTransactions PlannedTransaction[]
+  loans               Loan[]
 }
 
 model Category {
@@ -56,6 +57,7 @@ model Subcategory {
   transactions        Transaction[]
   budgets             Budget[]
   plannedTransactions PlannedTransaction[]
+  loans               Loan[]
 
   @@unique([userId, categoryId, name])
   @@index([userId, categoryId, sortOrder])
@@ -146,14 +148,116 @@ model PlannedTransaction {
   appliedToBudget Boolean  @default(false) // indica se è applicata al budgeting generale
   budgetApplicationMode String? // modalità usata per applicazione budgeting: 'divide' o 'specific'
   budgetTargetMonth Int? // mese target per modalità 'specific' (0-11)
+  loanId          String?  // collegamento diretto al prestito, se questa planned transaction rappresenta le rate del prestito
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   User    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   group   TransactionGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   subcategory Subcategory?  @relation(fields: [subId], references: [id], onDelete: SetNull)
+  loan    Loan?             @relation(fields: [loanId], references: [id], onDelete: SetNull)
 
   @@index([userId, nextDueDate])
   @@index([userId, frequency])
   @@index([groupId])
+  @@index([loanId])
+}
+
+// =============================================================================
+// 🏦 SISTEMA PRESTITI/MUTUI
+// =============================================================================
+
+// 🏦 Prestiti e mutui con gestione dinamica ottimizzata
+model Loan {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String   // nome del prestito (es: "Mutuo Casa", "Prestito Auto")
+  loanType    String   // MORTGAGE, PERSONAL_LOAN
+  lenderName  String   // nome banca/ente erogante
+  
+  // 💰 Parametri finanziari
+  principalAmount    Decimal  @db.Decimal(20, 2) // importo iniziale del prestito
+  currentBalance     Decimal  @db.Decimal(20, 2) // debito residuo attuale
+  interestRate       Decimal  @db.Decimal(5, 4)  // TAN (es: 0.0350 = 3.50%)
+  effectiveRate      Decimal? @db.Decimal(5, 4)  // TAEG opzionale
+  rateType           String   @default("FIXED")  // FIXED, VARIABLE
+  
+  // 📅 Gestione rate dinamica
+  totalPayments      Int      @default(1) // numero totale rate (es: 84)
+  paidPayments       Int      @default(0) // numero rate già pagate (es: 12)
+  startDate          DateTime // data erogazione prestito
+  nextPaymentDate    DateTime @default(now()) // prossima data di pagamento (dinamica)
+  
+  // 💳 Parametri rata
+  paymentFrequency   String   @default("MONTHLY") // MONTHLY, QUARTERLY, SEMIANNUAL
+  monthlyPayment     Decimal  @db.Decimal(20, 2)  // importo rata mensile
+  
+  // 📈 Costi aggiuntivi
+  additionalCosts    Decimal? @db.Decimal(20, 2)  // spese accessorie (notaio, perizie, etc.)
+  
+  // 📝 Informazioni aggiuntive
+  description        String?
+  notes              String?
+  
+  // 🏷️ Categorizzazione
+  categoryMain       String?  @db.VarChar(32) // categoria principale per budgeting
+  subcategoryId      String?  // sottocategoria specifica
+  
+  // ⚙️ Stati e configurazione
+  status             String   @default("ACTIVE") // ACTIVE, PAID_OFF, SUSPENDED, DEFAULTED
+  autoCreatePayments Boolean  @default(true)     // auto-genera planned transactions per le rate
+  
+  // 🕒 Audit
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // 🔗 Relazioni
+  User         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subcategory  Subcategory?        @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
+  transactions LoanTransaction[]   // solo le transazioni effettivamente pagate
+  plannedTransactions PlannedTransaction[] // planned transaction ricorrente per le rate
+
+  // 📈 Indici per performance
+  @@index([userId, status])
+  @@index([userId, loanType])
+  @@index([userId, nextPaymentDate])
+  @@index([subcategoryId])
+}
+
+// 💳 Transazioni effettive del prestito (solo pagamenti avvenuti)
+model LoanTransaction {
+  id                String   @id @default(cuid())
+  loanId            String
+  paymentNumber     Int      // numero progressivo della rata pagata (1, 2, 3, ...)
+  
+  // 📅 Date
+  paidDate          DateTime // data effettiva di pagamento
+  
+  // 💰 Importi effettivi pagati
+  totalAmount       Decimal  @db.Decimal(20, 2) // importo totale pagato per questa rata
+  principalAmount   Decimal  @db.Decimal(20, 2) // quota capitale pagata
+  interestAmount    Decimal  @db.Decimal(20, 2) // quota interessi pagata
+  lateFee           Decimal? @db.Decimal(20, 2) // penale per ritardo (se applicabile)
+  
+  // 📊 Stato del debito dopo questo pagamento
+  balanceAfterPayment Decimal @db.Decimal(20, 2) // debito residuo dopo questa rata
+  
+  // 📝 Informazioni aggiuntive
+  notes             String?
+  paymentMethod     String?  // contanti, bonifico, carta, ecc.
+  
+  // 🕒 Audit
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // 🔗 Relazioni
+  loan              Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  // 📈 Indici per performance
+  @@index([loanId, paymentNumber])
+  @@index([loanId, paidDate])
+  @@index([paidDate])
+  
+  // 🔒 Constraint: ogni prestito ha transazioni con numeri progressivi unici
+  @@unique([loanId, paymentNumber])
 }

@@ -251,20 +251,23 @@ export function usePlannedTransactions(token) {
   // 🔸 Materializzazione transazioni
   const materializePlannedTx = async (plannedTxId) => {
     try {
+      console.log('🎯 DEBUG: Starting materialize for transaction:', plannedTxId)
+      
       const newTransaction = await api.materializePlannedTransaction(token, plannedTxId)
       
-      // Aggiorna la transazione pianificata (può essere disattivata se ONE_TIME)
-      const updatedPlanned = await api.listPlannedTransactions(token)
-      const normalizedPlanned = updatedPlanned.map(t => ({
-        ...t,
-        main: normalizeMainKey(t.main),
-        sub: t.subcategory?.name || '',
-      }))
-      setPlannedTransactions(normalizedPlanned)
+      console.log('✅ DEBUG: Materialize response:', newTransaction)
+      
+      // Force full refresh to get updated data including nextDueDate changes
+      console.log('🔄 DEBUG: Forcing complete refresh after materialize...')
+      setRefreshTrigger(prev => {
+        const newVal = prev + 1
+        console.log('🔄 DEBUG: Refresh trigger incremented from', prev, 'to', newVal)
+        return newVal
+      })
       
       return newTransaction
     } catch (err) {
-      console.error('Errore materialize planned tx:', err.message)
+      console.error('❌ Errore materialize planned tx:', err.message)
       throw err
     }
   }

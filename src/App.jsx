@@ -88,6 +88,7 @@ function AppContent() {
     closeTxModal,
     delTx,
     saveTx,
+    refreshTransactions,
   } = useTransactions(token)
 
 
@@ -113,6 +114,7 @@ function AppContent() {
       state,
       delTx,
       openTxEditor: openEditTx,
+      refreshTransactions, // Aggiunta la funzione di refresh
     },
     categories: {
       state,
@@ -131,7 +133,11 @@ function AppContent() {
       batchUpsertBudgets,
       isManagedAutomatically,
     },
-  }), [state, year, dashDetail, delTx, openEditTx, addSubcat, updateSubcat, removeSubcat, updateMainCat, addMainCat, removeMainCat, upsertBudget, batchUpsertBudgets, isManagedAutomatically])
+    loans: {
+      // LoansPage gestisce il suo stato internamente via useLoans hook
+      // Potenzialmente aggiungere props comuni qui se necessario
+    },
+  }), [state, year, dashDetail, delTx, openEditTx, refreshTransactions, addSubcat, updateSubcat, removeSubcat, updateMainCat, addMainCat, removeMainCat, upsertBudget, batchUpsertBudgets, isManagedAutomatically])
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">

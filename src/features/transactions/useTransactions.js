@@ -11,6 +11,12 @@ export function useTransactions(token) {
   const [transactions, setTransactions] = useState([]);
   const [txModalOpen, setTxModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Funzione per refreshare le transazioni dall'esterno
+  const refreshTransactions = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
 
   // Caricamento iniziale: mese corrente (API richiede year+month)
   useEffect(() => {
@@ -35,7 +41,7 @@ export function useTransactions(token) {
     }
     load();
     return () => { active = false; };
-  }, [token]);
+  }, [token, refreshTrigger]); // Aggiunto refreshTrigger per riattivare il caricamento
 
   const openAddTx = () => { setEditingTx(null); setTxModalOpen(true); };
   const openEditTx = (tx) => { setEditingTx(tx); setTxModalOpen(true); };
@@ -90,6 +96,7 @@ export function useTransactions(token) {
     closeTxModal,
     delTx,
     saveTx,
+    refreshTransactions, // Nuova funzione per refresh
   };
 }
 

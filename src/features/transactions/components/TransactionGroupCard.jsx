@@ -30,6 +30,7 @@ export default function TransactionGroupCard({
   onApplyToBudgeting,
   onApplyGroupToBudgeting,
   onToggleActive,
+  onSkipLoanPayment,
   subcats = {},
   mains = []
 }) {
@@ -282,15 +283,23 @@ export default function TransactionGroupCard({
                           {/* Actions menu per transazione */}
                           <div className="ml-2">
                             <ActionsMenu
-                              onEdit={() => onEditTransaction(tx)}
-                              onRemove={() => onDeleteTransaction(tx.id)}
+                              // Per transazioni prestiti: NO edit, NO remove
+                              onEdit={tx.loanId ? undefined : () => onEditTransaction(tx)}
+                              onRemove={tx.loanId ? undefined : () => onDeleteTransaction(tx.id)}
                               customActions={[
+                                // Salta Rata solo per transazioni prestiti attive
+                                ...(tx.loanId && tx.isActive ? [{
+                                  label: '⏭️ Salta Rata',
+                                  onClick: () => onSkipLoanPayment && onSkipLoanPayment(tx),
+                                  variant: 'warning'
+                                }] : []),
                                 ...(daysUntil <= 0 && tx.isActive ? [{
                                   label: '💸 Paga ora',
                                   onClick: () => onMaterialize && onMaterialize(tx.id),
                                   variant: 'primary'
                                 }] : []),
-                                ...(tx.frequency === 'MONTHLY' ? [{
+                                // Per transazioni prestiti: NO toggle attivo/inattivo
+                                ...(tx.frequency === 'MONTHLY' && !tx.loanId ? [{
                                   label: tx.isActive ? '🚫 Disattiva' : '▶️ Attiva',
                                   onClick: () => onToggleActive && onToggleActive(tx, !tx.isActive),
                                   variant: tx.isActive ? 'warning' : 'success'

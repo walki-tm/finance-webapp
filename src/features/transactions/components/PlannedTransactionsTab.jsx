@@ -21,6 +21,7 @@ import React, { useMemo, useState } from 'react'
 import { Card, CardContent, Button } from '../../ui'
 import { Plus, Calendar, AlertCircle, Clock, Euro, Folder } from 'lucide-react'
 import usePlannedTransactions from '../usePlannedTransactions.js'
+import { useLoans } from '../../loans/useLoans.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import PlannedTransactionModal from './PlannedTransactionModal.jsx'
 import TransactionGroupModal from './TransactionGroupModal.jsx'
@@ -32,7 +33,7 @@ import { useBudgetContext } from '../../../context/BudgetContext.jsx'
 import { useToast } from '../../toast'
 import { api } from '../../../lib/api.js'
 
-export default function PlannedTransactionsTab({ state, onOpenAddPlannedTx }) {
+export default function PlannedTransactionsTab({ state, onOpenAddPlannedTx, refreshTransactions }) {
   const { token } = useAuth()
   const currentYear = new Date().getFullYear()
   
@@ -56,6 +57,9 @@ export default function PlannedTransactionsTab({ state, onOpenAddPlannedTx }) {
   
   // 🔸 Budgeting hook - use shared context
   const { batchUpsertBudgets, refreshBudgets } = useBudgetContext()
+  
+  // 💰 Loans hook per gestione prestiti
+  const { refreshLoanData, skipPayment } = useLoans(token)
   
   // 🎉 Toast hook per notifiche di successo
   const toast = useToast()
@@ -616,10 +620,83 @@ const handleBudgetApplication = async (options) => {
                 onDelete={() => deleteGroup(group.id)}
                 onEditTransaction={openEditPlannedTx}
                 onDeleteTransaction={deletePlannedTx}
-                onMaterialize={materializePlannedTx}
+                onMaterialize={async (txId) => {
+                  try {
+                    console.log('🎯 DEBUG: Starting materialize for transaction:', txId)
+                    
+                    // Get transaction details to check if it's a loan payment
+                    const transaction = plannedTransactions.find(tx => tx.id === txId)
+                    
+                    const result = await materializePlannedTx(txId)
+                    
+                    console.log('✅ DEBUG: Materialize completed, result:', result)
+                    
+                    // If this was a loan payment, refresh the loan data (payment already processed by materialize)
+                    if (transaction?.loanId && result) {
+                      console.log('💰 DEBUG: Triggering loan data refresh for loan:', transaction.loanId)
+                      await refreshLoanData(transaction.loanId)
+                    }
+                    
+                    // Small delay to ensure backend sync operations complete
+                    setTimeout(() => {
+                      console.log('🔄 DEBUG: Delayed refresh after materialize...')
+                      refresh()
+                      // ✨ REFRESH delle transazioni per mostrare la nuova transazione materializzata
+                      if (refreshTransactions) {
+                        refreshTransactions()
+                        console.log('🔄 DEBUG: Transactions refreshed after materialize')
+                      }
+                    }, 500) // Increased delay to allow backend sync
+                    
+                    toast.success(`💰 Transazione materializzata`, {
+                      description: `€${Math.abs(result?.amount || 0).toFixed(2)} registrata con successo`
+                    })
+                    
+                    return result
+                  } catch (error) {
+                    console.error('❌ Error in materialize:', error)
+                    toast.error('Errore nella materializzazione: ' + (error.message || 'Riprova.'))
+                    throw error
+                  }
+                }}
                 onApplyToBudgeting={(transaction) => openBudgetModal(transaction, 'single')}
                 onApplyGroupToBudgeting={(transactions) => openBudgetModal(null, 'group', transactions)}
                 onToggleActive={(transaction, isActive) => toggleTransactionActive(transaction, isActive, { refreshBudgets })}
+                onSkipLoanPayment={async (transaction, skipData) => {
+                  if (!transaction.loanId) return
+                  
+                  try {
+                    // Se il skip è già stato completato dal card, fai solo refresh
+                    if (skipData?.skipCompleted && skipData?.refreshOnly) {
+                      console.log('🔄 DEBUG: Skip already completed by card, doing refresh only...')
+                      
+                      // Solo refresh dei dati senza operazioni aggiuntive
+                      refresh()
+                      
+                      toast.success(`⏭️ Rata saltata per ${transaction.title || 'transazione'}`, {
+                        description: 'Il prossimo pagamento è stato spostato al mese successivo'
+                      })
+                      return
+                    }
+                    
+                    // Fallback: chiamata diretta API (non dovrebbe mai essere eseguita ora)
+                    console.log('🔄 DEBUG: Fallback - calling API directly...')
+                    const result = await api.skipLoanPayment(token, transaction.loanId)
+                    
+                    console.log('🔄 DEBUG: Skip completed, forcing refresh trigger increment...')
+                    
+                    // 🆕 FORZA REFRESH COMPLETO: Incrementa il trigger per bypassare completamente la cache
+                    refresh() // Questo chiama setRefreshTrigger(prev => prev + 1) internamente
+                    console.log('🔄 DEBUG: Refresh trigger incremented to bypass cache')
+                    
+                    toast.success(`⏭️ Rata saltata per ${transaction.title || 'transazione'}`, {
+                      description: 'Il prossimo pagamento è stato spostato al mese successivo'
+                    })
+                  } catch (error) {
+                    console.error('❌ Errore nel saltare la rata:', error)
+                    toast.error('Errore nel saltare la rata: ' + (error.message || 'Riprova.'))
+                  }
+                }}
                 subcats={state.subcats}
                 mains={state.mains}
               />
@@ -657,9 +734,86 @@ const handleBudgetApplication = async (options) => {
                 transaction={tx}
                 onEdit={() => openEditPlannedTx(tx)}
                 onDelete={() => deletePlannedTx(tx.id)}
-                onMaterialize={() => materializePlannedTx(tx.id)}
+                onMaterialize={async () => {
+                  try {
+                    console.log('🎯 DEBUG: Starting materialize for transaction:', tx.id)
+                    
+                    const result = await materializePlannedTx(tx.id)
+                    
+                    console.log('✅ DEBUG: Materialize completed, result:', result)
+                    
+                    // If this was a loan payment, refresh the loan data (payment already processed by materialize)
+                    if (tx.loanId && result) {
+                      console.log('💰 DEBUG: Triggering loan data refresh for loan:', tx.loanId)
+                      await refreshLoanData(tx.loanId)
+                    }
+                    
+                    // Small delay to ensure backend sync operations complete
+                    setTimeout(() => {
+                      console.log('🔄 DEBUG: Delayed refresh after materialize...')
+                      refresh()
+                      // ✨ REFRESH delle transazioni per mostrare la nuova transazione materializzata
+                      if (refreshTransactions) {
+                        refreshTransactions()
+                        console.log('🔄 DEBUG: Transactions refreshed after materialize')
+                      }
+                    }, 500) // Increased delay to allow backend sync
+                    
+                    toast.success(`💰 Transazione materializzata`, {
+                      description: `€${Math.abs(result?.amount || 0).toFixed(2)} registrata con successo`
+                    })
+                    
+                    return result
+                  } catch (error) {
+                    console.error('❌ Error in materialize:', error)
+                    toast.error('Errore nella materializzazione: ' + (error.message || 'Riprova.'))
+                    throw error
+                  }
+                }}
                 onApplyToBudgeting={(transaction) => openBudgetModal(transaction, 'single')}
                 onToggleActive={(transaction, isActive) => toggleTransactionActive(transaction, isActive, { refreshBudgets })}
+                onSkipLoanPayment={async (transaction, skipData) => {
+                  if (!transaction.loanId) return
+                  
+                  try {
+                    // Se il skip è già stato completato dal card, fai solo refresh
+                    if (skipData?.skipCompleted && skipData?.refreshOnly) {
+                      console.log('🔄 DEBUG: Skip already completed by card, doing refresh only...')
+                      
+                      // Solo refresh dei dati senza operazioni aggiuntive
+                      setTimeout(() => {
+                        console.log('🔄 DEBUG: Delayed refresh after skip payment...')
+                        refresh()
+                      }, 500) // Delay ridotto per refresh
+                      
+                      toast.success(`⏭️ Rata saltata per ${transaction.title || 'transazione'}`, {
+                        description: 'Il prossimo pagamento è stato spostato al mese successivo'
+                      })
+                      return
+                    }
+                    
+                    // Fallback: chiamata diretta API (non dovrebbe mai essere eseguita ora)
+                    console.log('🔄 DEBUG: Fallback - calling API directly...')
+                    const result = await api.skipLoanPayment(token, transaction.loanId)
+                    
+                    console.log('🔄 DEBUG: Skip completed, forcing refresh trigger increment...')
+                    
+                    // 🕰️ Aspetta un momento per permettere al database di aggiornarsi completamente
+                    setTimeout(() => {
+                      console.log('🔄 DEBUG: Delayed refresh after skip payment...')
+                      // 🆕 FORZA REFRESH COMPLETO: Incrementa il trigger per bypassare completamente la cache
+                      refresh() // Questo chiama setRefreshTrigger(prev => prev + 1) internamente
+                      console.log('🔄 DEBUG: Refresh trigger incremented to bypass cache')
+                    }, 1000) // Delay di 1 secondo per permettere al sync di completarsi
+                    
+                    toast.success(`⏭️ Rata saltata per ${transaction.title || 'transazione'}`, {
+                      description: 'Il prossimo pagamento è stato spostato al mese successivo'
+                    })
+                  } catch (error) {
+                    console.error('❌ Errore nel saltare la rata:', error)
+                    toast.error('Errore nel saltare la rata: ' + (error.message || 'Riprova.'))
+                  }
+                }}
                 subcats={state.subcats}
                 mains={state.mains}
               />

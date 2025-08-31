@@ -241,7 +241,7 @@ export default function PlannedTransactionModal({
                     onChange={(e) => setFormData(prev => ({ ...prev, main: e.target.value }))}
                     className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   >
-                    {MAIN_CATS.map(cat => (
+                    {MAIN_CATS.filter(cat => cat.key !== 'income').map(cat => (
                       <option key={cat.key} value={cat.key}>{cat.name}</option>
                     ))}
                   </select>

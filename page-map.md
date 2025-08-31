@@ -1,7 +1,7 @@
 # 📍 Finance WebApp - Mappa Pagine e Componenti
 
-> **Aggiornato**: 22 Agosto 2025  
-> **Versione**: 2.0.0
+> **Aggiornato**: 31 Agosto 2025  
+> **Versione**: 2.1.0
 
 ## 🗺️ Struttura Generale
 
@@ -77,7 +77,30 @@ Finance WebApp/
 #### Hooks Specializzati
 - **File**: `usePlannedTransactions.js`
   - **Scopo**: State management per transazioni pianificate
-  - **Features**: CRUD, materializzazione, gestione gruppi
+  - **Features**: CRUD completo, materializzazione automatica, gestione gruppi
+  - **Integration**: Budgeting system, scheduler, real-time updates
+
+#### Sistema di Schedulazione Automatica
+- **Frequenze**: MONTHLY (mensile), YEARLY (annuale), ONE_TIME (una tantum)
+- **Modalità**: MANUAL (richiede conferma utente), AUTOMATIC (auto-materializzazione)
+- **Scheduler**: Auto-controllo ogni ora, materializzazione transazioni in scadenza
+- **Integrazione Budgeting**: Applicazione automatica ai budget quando `appliedToBudget = true`
+
+#### Roadmap Enhancement (Priorità Future)
+**FASE 1 - Enhancement Immediate**:
+- Modal completo con tutti i campi (categoria, subcategoria, date picker)
+- Badge e filtri rapidi per visualizzazione (Mensili, Annuali, Auto, Manuali)
+- Anteprima prossime occorrenze nelle card
+
+**FASE 2 - UX Professional**:
+- Notifiche visual feedback e status indicators
+- Azioni rapide nelle cards (hover actions, quick buttons)
+- Colori personalizzati gruppi
+
+**FASE 3 - Advanced Features**:
+- Timeline/calendario view
+- Drag & drop avanzato con react-beautiful-dnd
+- Statistiche e analytics avanzate
 
 ### 🏷️ Gestione Categorie
 **Directory**: `src/features/categories/`
@@ -107,6 +130,62 @@ Finance WebApp/
   - **Scopo**: Menu azioni per singola categoria
 - **File**: `components/IconBrowserModal.jsx`
   - **Scopo**: Modal selezione icone
+
+### 🏦 Loans Management System ⭐ NUOVO
+**Directory**: `src/features/loans/`
+
+#### Sistema Completo Prestiti e Mutui
+- **File**: `pages/LoansPage.jsx`
+  - **Scopo**: Gestione completa prestiti, mutui e finanziamenti
+  - **Features**: Lista prestiti, dashboard statistiche, azioni rapide
+- **File**: `components/LoanCard.jsx`
+  - **Scopo**: Card prestito con progress bar e dettagli
+  - **Features**: Progresso pagamenti, rate rimanenti, azioni quick
+- **File**: `components/LoanModal.jsx`
+  - **Scopo**: Modal completo per creazione/modifica prestiti
+  - **Features**: Calcoli automatici, simulazioni, integrazione budgeting
+- **File**: `components/LoansDashboard.jsx`
+  - **Scopo**: Dashboard principale con overview prestiti
+  - **Features**: KPI totali, grafici progresso, scadenze rate
+- **File**: `components/PaymentModal.jsx`
+  - **Scopo**: Registrazione pagamenti rate
+  - **Features**: Calcolo automatico, pagamenti extra, ricalcoli saldo
+- **File**: `components/AmortizationTable.jsx`
+  - **Scopo**: Piano di ammortamento dettagliato
+  - **Features**: Schedule completo, calcoli interessi/capitale
+
+#### Hooks Specializzati Loans
+- **File**: `useLoans.js`
+  - **Scopo**: State management prestiti
+  - **Features**: CRUD, calcoli automatici, simulazioni estinzione
+- **File**: `useLoanDetails.js`
+  - **Scopo**: Dettagli prestito singolo
+  - **Features**: Piano ammortamento, pagamenti, statistiche
+- **File**: `useLoanPayments.js`
+  - **Scopo**: Gestione pagamenti rate
+  - **Features**: Registrazione, tracking, ricalcoli
+
+#### Backend Services Avanzati
+- **File**: `loanService.js`
+  - **Scopo**: Business logic prestiti
+  - **Features**: CRUD operations, integrazione budgeting
+- **File**: `loanCalculationService.js`
+  - **Scopo**: Calcoli matematici ammortamento
+  - **Features**: Formula francese, simulazioni, validazioni
+- **File**: `loanBudgetingService.js`
+  - **Scopo**: Integrazione con planned transactions
+  - **Features**: Auto-generazione rate, sincronizzazione
+
+#### Database Schema Loans
+- **Tabelle**: `loans`, `loan_payments`
+- **Relazioni**: User, Subcategory, PlannedTransaction
+- **Enums**: LoanType, RateType, PaymentFrequency, LoanStatus, PaymentStatus
+- **Features**: Calcoli automatici, tracking pagamenti, ammortamento
+
+#### Formule Matematiche
+- **Ammortamento Francese**: `P × [r × (1+r)^n] / [(1+r)^n - 1]`
+- **Calcolo Interessi**: `Debito_residuo × tasso_mensile`
+- **Simulazione Estinzione**: `(Rate_rimanenti × Rata_mensile) - Debito_attuale`
 
 ### 💰 Budgeting System
 **Directory**: `src/features/budgeting/`
@@ -199,6 +278,7 @@ Finance WebApp/
 | Categories | `categories.js` | `/api/categories/*` | CRUD categorie |
 | Transactions | `transactions.js` | `/api/transactions/*` | CRUD transazioni |
 | Planned Transactions | `plannedTransactions.js` | `/api/planned-transactions/*` | CRUD transazioni pianificate, gruppi, materializzazione |
+| Loans | `loans.js` | `/api/loans/*` | CRUD prestiti, calcoli ammortamento, pagamenti |
 | Budgets | `budgets.js` | `/api/budgets/*` | CRUD budget, operazioni batch |
 
 ### 🎮 Controllers
@@ -210,6 +290,7 @@ Finance WebApp/
 | Categories | `categoriesController.js` | Gestione categorie |
 | Transactions | `transactionsController.js` | Gestione transazioni |
 | Planned Transactions | `plannedTransactionsController.js` | Gestione transazioni pianificate e gruppi |
+| Loans | `loansController.js` | Gestione prestiti, calcoli e pagamenti |
 | Budgets | `budgetsController.js` | Gestione budget e pianificazione |
 
 ### 🔧 Services (Business Logic)
@@ -222,6 +303,9 @@ Finance WebApp/
 | Transactions | `transactionService.js` | Logica transazioni e calcoli |
 | Planned Transactions | `plannedTransactionService.js` | Logica transazioni pianificate, schedulazione, materializzazione |
 | Scheduler | `schedulerService.js` | Auto-materializzazione transazioni pianificate |
+| Loans | `loanService.js` | Business logic prestiti e integrazione budgeting |
+| Loan Calculations | `loanCalculationService.js` | Formule matematiche ammortamento francese |
+| Loan Budgeting | `loanBudgetingService.js` | Integrazione prestiti con planned transactions |
 | Budgets | `budgetService.js` | Logica budget e validazione stili |
 
 ### 🛡️ Middleware
@@ -244,8 +328,10 @@ Finance WebApp/
 | `categories` | Categorie principali | → subcategories |
 | `subcategories` | Sottocategorie | → transactions, budgets, planned_transactions |
 | `transactions` | Transazioni finanziarie | ← users, subcategories |
-| `planned_transactions` | Transazioni pianificate | ← users, subcategories, transaction_groups |
+| `planned_transactions` | Transazioni pianificate | ← users, subcategories, transaction_groups, loans |
 | `transaction_groups` | Gruppi per organizzare transazioni pianificate | ← users, → planned_transactions |
+| `loans` | Prestiti e mutui | ← users, subcategories, → loan_payments, planned_transactions |
+| `loan_payments` | Rate e pagamenti prestiti | ← loans |
 | `budgets` | Budget pianificati | ← users, subcategories |
 
 ---
@@ -268,6 +354,9 @@ Finance WebApp/
 | useCategories | `features/categories/useCategories.js` | Categories | Gestione CRUD categorie |
 | useTransactions | `features/transactions/useTransactions.js` | Transactions | Gestione CRUD transazioni |
 | usePlannedTransactions | `features/transactions/usePlannedTransactions.js` | Planned Transactions | Gestione CRUD transazioni pianificate e gruppi |
+| useLoans | `features/loans/useLoans.js` | Loans | Gestione CRUD prestiti e calcoli |
+| useLoanDetails | `features/loans/useLoanDetails.js` | Loans | Dettagli prestito e piano ammortamento |
+| useLoanPayments | `features/loans/useLoanPayments.js` | Loans | Gestione pagamenti e tracking rate |
 
 ---
 
@@ -294,9 +383,10 @@ User Action → Handler → State Update → Component Re-render
 
 ### Tab Principali
 1. **Dashboard** - Overview finanziario
-2. **Transactions** - Gestione transazioni
+2. **Transactions** - Gestione transazioni (Register + Planned)
 3. **Categories** - Gestione categorie
 4. **Budgeting** - Pianificazione budget
+5. **Loans** - Gestione prestiti e mutui
 
 ### Modali e Overlays
 - **Transaction Modal** - CRUD transazioni
