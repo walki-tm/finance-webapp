@@ -9,6 +9,7 @@ import transactionRoutes from './routes/transactions.js'
 import plannedTransactionRoutes from './routes/plannedTransactions.js'
 import budgetRoutes from './routes/budgets.js'
 import loanRoutes from './routes/loanRoutes.js'
+import balanceRoutes from './routes/balance.js'
 import { errorMiddleware } from './middleware/error.js'
 import './services/schedulerService.js' // Inizializza scheduler automatico
 
@@ -33,6 +34,7 @@ app.use('/api/transactions', transactionRoutes)
 app.use('/api/planned-transactions', plannedTransactionRoutes)
 app.use('/api/budgets', budgetRoutes)
 app.use('/api/loans', loanRoutes)
+app.use('/api/balance', balanceRoutes)
 
 app.use(errorMiddleware)
 

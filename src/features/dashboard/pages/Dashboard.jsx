@@ -1,8 +1,11 @@
 // src/features/dashboard/pages/Dashboard.jsx
 import React, { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, Badge, NativeSelect, Button } from '../../ui';
+import { useAuth } from '../../../context/AuthContext.jsx';
+import { api } from '../../../lib/api.js';
 import { months, MAIN_CATS } from '../../../lib/constants.js';
 import { nice, alpha } from '../../../lib/utils.js';
+import { formatDateForAPI, getTodayLocal, getTodayDate, parseLocalDate, getMonthBounds } from '../../../lib/dateUtils.js';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   AreaChart, Area, XAxis, YAxis, CartesianGrid
@@ -13,13 +16,29 @@ import { Plus } from 'lucide-react';
 import SvgIcon from '../../icons/components/SvgIcon.jsx';
 
 export default function Dashboard({ state, year, onSelectMain, detailMain, addTx }) {
+  const { token } = useAuth();
+  const [balance, setBalance] = useState(null);
+  const [balLoading, setBalLoading] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      try {
+        setBalLoading(true);
+        const res = await api.getBalance(token);
+        if (mounted) setBalance(res?.balance ?? 0);
+      } finally { setBalLoading(false); }
+    }
+    load();
+    return () => { mounted = false; }
+  }, [token, state.transactions]);
   const [range, setRange] = useState('year');
-  const [month, setMonth] = useState(new Date().getMonth());
+  const [month, setMonth] = useState(getTodayDate().getMonth());
 
   const txInRange = useMemo(() => {
-    const now = new Date();
+    const now = getTodayDate();
     return state.transactions.filter(t => {
-      const d = new Date(t.date);
+      const d = parseLocalDate(t.date);
       if (range === 'month') return d.getFullYear() === now.getFullYear() && d.getMonth() === month;
       if (range === 'last3') { const m = new Date(now); m.setMonth(now.getMonth() - 2); m.setDate(1); return d >= m && d <= now; }
       if (range === 'last6') { const m = new Date(now); m.setMonth(now.getMonth() - 5); m.setDate(1); return d >= m && d <= now; }
@@ -47,7 +66,7 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
   const monthly = useMemo(() => {
     const arr = months.map((m, i) => ({ m, income: 0, expense: 0, debt: 0, saving: 0 }));
     state.transactions.forEach(t => {
-      const d = new Date(t.date);
+      const d = parseLocalDate(t.date);
       if (d.getFullYear().toString() === year) { arr[d.getMonth()][t.main] += t.amount; }
     });
     return arr;
@@ -80,7 +99,17 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
         </CardContent>
       </Card>
 
+      {/* Balance Card */}
       <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <Card>
+          <CardContent>
+            <div className="font-medium mb-1">Saldo Attuale</div>
+            <div className={`text-2xl font-bold ${Number(balance) < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+              {balLoading ? '…' : (Number(balance || 0)).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
+            </div>
+            <div className="text-xs text-slate-500">Calcolato in tempo reale</div>
+          </CardContent>
+        </Card>
         {donutData.map(d => (
           <button key={d.key} onClick={() => onSelectMain(d.key)} className="text-left">
             <Card style={{ borderColor: alpha(d.color, .35) }}>
@@ -175,7 +204,7 @@ function DetailPanel({ mainKey, state, year, color, addTx }) {
       .filter(t =>
         t.main === mainKey &&
         t.sub === sc.name &&
-        new Date(t.date).getFullYear() === Number(year)
+        parseLocalDate(t.date).getFullYear() === Number(year)
       )
       .reduce((a, t) => a + t.amount, 0);
     const pct = budget ? Math.min(100, Math.round((eff / budget) * 100)) : 0;
@@ -187,7 +216,7 @@ function DetailPanel({ mainKey, state, year, color, addTx }) {
   const [qaOpen, setQaOpen] = useState(false);
   const [qaSub, setQaSub] = useState(subcats[0]?.name || '');
   const [qaAmt, setQaAmt] = useState(0);
-  const [qaDate, setQaDate] = useState(new Date().toISOString().slice(0, 10));
+  const [qaDate, setQaDate] = useState(formatDateForAPI(getTodayDate()));
   const [qaNote, setQaNote] = useState('');
 
   useEffect(() => { setQaSub(subcats[0]?.name || ''); }, [mainKey, state.subcats]);

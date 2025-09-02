@@ -143,15 +143,23 @@ export const api = {
 
   // ---- Transactions ----
   /**
-   * Elenca le transazioni di un dato mese e anno.
+   * Elenca le transazioni con filtri flessibili.
    * @param {string} token Token di accesso JWT.
-   * @param {number} year Anno di riferimento.
-   * @param {number} month Mese di riferimento (1-12).
+   * @param {object} filters Filtri: { year, month, fromDate, toDate, limit }
    * @returns {Promise<Array>} Lista di transazioni.
    * @throws {Error} Se la richiesta fallisce.
    */
-  listTransactions: (token, year, month) =>
-    request(`/api/transactions?year=${year}&month=${month}`, "GET", token),
+  listTransactions: (token, filters = {}) => {
+    const params = new URLSearchParams()
+    if (filters.year) params.append('year', filters.year)
+    if (filters.month) params.append('month', filters.month)
+    if (filters.fromDate) params.append('fromDate', filters.fromDate)
+    if (filters.toDate) params.append('toDate', filters.toDate)
+    if (filters.limit) params.append('limit', filters.limit)
+    
+    const queryString = params.toString()
+    return request(`/api/transactions${queryString ? '?' + queryString : ''}`, "GET", token)
+  },
   /**
    * Crea una nuova transazione.
    * @param {string} token Token di accesso JWT.
@@ -180,6 +188,12 @@ export const api = {
    */
   deleteTransaction: (token, id) =>
     request(`/api/transactions/${id}`, "DELETE", token),
+
+// ---- Balance ----
+  /**
+   * Recupera il saldo attuale calcolato in real-time.
+   */
+  getBalance: (token) => request('/api/balance', 'GET', token),
 
   // ---- Budgets ----
   /**
