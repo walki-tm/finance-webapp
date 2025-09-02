@@ -5,6 +5,40 @@ Tutte le modifiche importanti al progetto saranno documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/),
 e questo progetto segue il [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2025-09-02
+
+### 🔧 Technical (Miglioramenti Tecnici)
+- **Validazione Form Prestiti**: Resa obbligatoria selezione categoria e sottocategoria
+  - `categoryMain` ora obbligatorio nel form prestiti
+  - `subcategoryId` ora obbligatorio nel form prestiti
+  - Validazione con messaggi di errore specifici nell'UI
+  - Migliorata UX con evidenziazione errori (bordo rosso)
+
+### 🎨 UI/UX (Miglioramenti Interfaccia)
+- **Form Prestiti**: Maggiore chiarezza su campi obbligatori
+  - Indicatori visivi di errore per categoria principale e sottocategoria
+  - Messaggi di errore descrittivi e contestuali
+  - Clearance automatica errori alla selezione valori
+
+### 📚 Documentation (Documentazione)
+- **Specifiche Prestiti**: Aggiornate specifiche funzionali
+  - Marcati categoria e sottocategoria come campi OBBLIGATORI
+  - Chiarificazione integrazione con sistema budgeting
+
+### 💾 Database (Impatti)
+- Nessuna modifica schema database (validazione solo frontend)
+- Coerenza dati garantita tramite validazione form
+
+### 📋 Files Modified (File Modificati)
+#### Frontend
+- `src/features/loans/components/LoanFormModal.jsx` - Validazione obbligatoria categoria/sottocategoria
+
+#### Documentation
+- `docs/loans-specification.md` - Specifiche aggiornate con campi obbligatori
+- `CHANGELOG.md` - Documentazione modifiche (questo file)
+
+---
+
 ## [2.0.0] - 2025-08-31
 
 ### 🚀 Added (Novità)

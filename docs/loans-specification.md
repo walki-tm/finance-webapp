@@ -36,6 +36,8 @@ Gestire prestiti e mutui con calcolo automatico delle rate, integrazione con il 
 - Tipo tasso: FISSO | VARIABILE
 - Frequenza rate: MENSILE | TRIMESTRALE | SEMESTRALE
 - Data prima rata
+- **Categoria principale spesa** (per integrazione budgeting) *[OBBLIGATORIO]*
+- **Sottocategoria spesa** (per categorizzazione rate) *[OBBLIGATORIO]*
 
 **Dati Optional**:
 - Spese accessorie (perizie, notaio, etc.)

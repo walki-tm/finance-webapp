@@ -21,6 +21,7 @@ import { X, Calculator, AlertCircle, DollarSign, Calendar, Percent, ChevronDown 
 import { MAIN_CATS } from '../../../lib/constants.js'
 import { useCategories } from '../../categories/useCategories.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
+import { formatDateForAPI, parseLocalDate } from '../../../lib/dateUtils.js'
 
 export default function LoanFormModal({ 
   isOpen, 
@@ -36,6 +37,17 @@ export default function LoanFormModal({
   const { token } = useAuth()
   const { mains, subcats } = useCategories(token)
 
+  // Genera la data odierna in formato YYYY-MM-DD usando timezone-safe utilities
+  const getTodayDateString = useMemo(() => {
+    const today = new Date()
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const day = String(today.getDate()).padStart(2, '0')
+    const dateString = `${year}-${month}-${day}`
+    console.log('📅 Generated today date:', dateString)
+    return dateString
+  }, []) // Memorizza il valore così non viene ricalcolato ad ogni render
+
   const [formData, setFormData] = useState({
     name: '',
     lenderName: '',
@@ -43,7 +55,7 @@ export default function LoanFormModal({
     principalAmount: '',
     interestRate: '',
     termMonths: '',
-    startDate: new Date().toISOString().split('T')[0],
+    startDate: getTodayDateString,
     monthlyPayment: '',
     description: '',
     categoryMain: 'DEBT', // Default per prestiti
@@ -74,9 +86,14 @@ export default function LoanFormModal({
 
   // Initialize form with existing data when editing
   useEffect(() => {
+    if (!isOpen) return // Non inizializzare se il modal è chiuso
+    
+    // Ottieni sempre la data odierna fresca usando il valore memorizzato
+    const todayDate = getTodayDateString
+    console.log('🔄 useEffect - setting form data with todayDate:', todayDate)
+    
     if (initialData) {
-      console.log('🔧 DEBUG: Populating form with initialData:', initialData)
-      setFormData({
+      const newFormData = {
         name: initialData.name || '',
         lenderName: initialData.lenderName || '',
         loanType: initialData.loanType || 'PERSONAL_LOAN',
@@ -90,27 +107,31 @@ export default function LoanFormModal({
           ? new Date(initialData.firstPaymentDate).toISOString().split('T')[0]
           : initialData.startDate 
           ? new Date(initialData.startDate).toISOString().split('T')[0] 
-          : new Date().toISOString().split('T')[0],
+          : todayDate,
         monthlyPayment: initialData.monthlyPayment?.toString() || '',
         description: initialData.description || '',
         categoryMain: initialData.categoryMain || 'DEBT',
         subcategoryId: initialData.subcategoryId || ''
-      })
+      }
+      console.log('🔄 Setting form data for edit with startDate:', newFormData.startDate)
+      setFormData(newFormData)
     } else {
-      // Reset form for new loan
-      setFormData({
+      // Reset form for new loan - SEMPRE imposta data odierna
+      const newFormData = {
         name: '',
         lenderName: '',
         loanType: 'PERSONAL_LOAN',
         principalAmount: '',
         interestRate: '',
         termMonths: '',
-        startDate: new Date().toISOString().split('T')[0],
+        startDate: todayDate, // Usa la data odierna fresca
         monthlyPayment: '',
         description: '',
         categoryMain: 'DEBT', // Default per prestiti
         subcategoryId: ''
-      })
+      }
+      console.log('🔄 Setting form data for new loan with startDate:', newFormData.startDate)
+      setFormData(newFormData)
     }
     setErrors({})
   }, [initialData, isOpen])
@@ -179,6 +200,14 @@ export default function LoanFormModal({
       newErrors.monthlyPayment = 'Rata mensile richiesta'
     }
 
+    if (!formData.categoryMain) {
+      newErrors.categoryMain = 'Categoria principale richiesta'
+    }
+
+    if (!formData.subcategoryId) {
+      newErrors.subcategoryId = 'Sottocategoria richiesta'
+    }
+
     if (!formData.startDate) {
       newErrors.startDate = 'Data inizio richiesta'
     }
@@ -205,6 +234,14 @@ export default function LoanFormModal({
     setIsSubmitting(true)
     
     try {
+      console.log('🐛 [LoanFormModal] Submitting loan with formData.startDate:', formData.startDate)
+      const parsedStartDate = parseLocalDate(formData.startDate)
+      const apiFormattedDate = formatDateForAPI(parsedStartDate)
+      console.log('🐛 [LoanFormModal] Date conversion:')
+      console.log('  - Original formData.startDate:', formData.startDate)
+      console.log('  - Parsed local date:', parsedStartDate)
+      console.log('  - API formatted date:', apiFormattedDate)
+      
       const submitData = {
         name: formData.name.trim(),
         lenderName: formData.lenderName.trim(),
@@ -212,18 +249,19 @@ export default function LoanFormModal({
         principalAmount: parseFloat(formData.principalAmount),
         interestRate: parseFloat(formData.interestRate) / 100, // Convert percentage to decimal for API
         durationMonths: parseInt(formData.termMonths), // API usa durationMonths
-        firstPaymentDate: new Date(formData.startDate).toISOString(), // API usa firstPaymentDate
+        firstPaymentDate: apiFormattedDate, // API usa firstPaymentDate
         monthlyPayment: parseFloat(formData.monthlyPayment),
         categoryMain: formData.categoryMain,
         subcategoryId: formData.subcategoryId
       }
+      
+      console.log('🐛 [LoanFormModal] Final submitData:', submitData)
 
       // Only include description if it has a value (avoid sending null)
       if (formData.description.trim()) {
         submitData.description = formData.description.trim()
       }
 
-      console.log('📝 DEBUG: Form submit data:', JSON.stringify(submitData, null, 2))
 
       await onSubmit(submitData)
       onClose()
