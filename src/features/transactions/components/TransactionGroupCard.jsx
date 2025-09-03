@@ -283,31 +283,43 @@ export default function TransactionGroupCard({
                           {/* Actions menu per transazione */}
                           <div className="ml-2">
                             <ActionsMenu
-                              // Per transazioni prestiti: NO edit, NO remove
-                              onEdit={tx.loanId ? undefined : () => onEditTransaction(tx)}
-                              onRemove={tx.loanId ? undefined : () => onDeleteTransaction(tx.id)}
+                              // NON usare onEdit e onRemove per controllare l'ordine
                               customActions={[
+                                // 1. Applica a Budgeting (per transazioni attive)
+                                ...(tx.isActive ? [{
+                                  label: tx.appliedToBudget ? '📉 Rimuovi da Budgeting' : '📈 Applica a Budgeting',
+                                  onClick: () => onApplyToBudgeting && onApplyToBudgeting(tx),
+                                  variant: tx.appliedToBudget ? 'warning' : 'default'
+                                }] : []),
+                                // 2. Paga (per transazioni NON-mensili o mensili da prestiti)
+                                ...(tx.isActive && (tx.frequency !== 'MONTHLY' || tx.loanId) ? [{
+                                  label: '💰 Paga',
+                                  onClick: () => onMaterialize && onMaterialize(tx.id),
+                                  variant: 'default'
+                                }] : []),
+                                // 3. Disattiva (per transazioni mensili non-prestiti)
+                                ...(tx.frequency === 'MONTHLY' && !tx.loanId ? [{
+                                  label: tx.isActive ? '🚫 Disattiva' : '▶️ Attiva',
+                                  onClick: () => onToggleActive && onToggleActive(tx, !tx.isActive),
+                                  variant: tx.isActive ? 'warning' : 'success'
+                                }] : []),
                                 // Salta Rata solo per transazioni prestiti attive
                                 ...(tx.loanId && tx.isActive ? [{
                                   label: '⏭️ Salta Rata',
                                   onClick: () => onSkipLoanPayment && onSkipLoanPayment(tx),
                                   variant: 'warning'
                                 }] : []),
-                                ...(daysUntil <= 0 && tx.isActive ? [{
-                                  label: '💸 Paga ora',
-                                  onClick: () => onMaterialize && onMaterialize(tx.id),
-                                  variant: 'primary'
+                                // 4. Modifica (per transazioni non-prestiti) - PENULTIMO
+                                ...(!tx.loanId ? [{
+                                  label: '✏️ Modifica',
+                                  onClick: () => onEditTransaction(tx),
+                                  variant: 'default'
                                 }] : []),
-                                // Per transazioni prestiti: NO toggle attivo/inattivo
-                                ...(tx.frequency === 'MONTHLY' && !tx.loanId ? [{
-                                  label: tx.isActive ? '🚫 Disattiva' : '▶️ Attiva',
-                                  onClick: () => onToggleActive && onToggleActive(tx, !tx.isActive),
-                                  variant: tx.isActive ? 'warning' : 'success'
-                                }] : []),
-                                ...(tx.isActive ? [{
-                                  label: tx.appliedToBudget ? '📉 Rimuovi da Budgeting' : '📈 Applica a Budgeting',
-                                  onClick: () => onApplyToBudgeting && onApplyToBudgeting(tx),
-                                  variant: tx.appliedToBudget ? 'warning' : 'default'
+                                // 5. Rimuovi (per transazioni non-prestiti) - ULTIMO
+                                ...(!tx.loanId ? [{
+                                  label: '🗑️ Rimuovi',
+                                  onClick: () => onDeleteTransaction(tx.id),
+                                  variant: 'danger'
                                 }] : [])
                               ]}
                               size="sm"

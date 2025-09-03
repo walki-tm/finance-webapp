@@ -39,17 +39,16 @@ export default function PlannedTransactionCard({
   subcats = {},
   mains = []
 }) {
-  // Debug per vedere se loanId è presente
-    console.log('🔧 DEBUG PlannedTransaction:', transaction?.title, 'loanId:', transaction?.loanId)
-    if (transaction?.loanId) {
-      console.log('🔧 DEBUG - NextDueDate:', transaction?.nextDueDate)
-      console.log('🔧 DEBUG - Amount:', transaction?.amount)
-    }
   const { token } = useAuth()
   const [showOccurrences, setShowOccurrences] = useState(false)
   const [nextOccurrences, setNextOccurrences] = useState([])
   const [loadingOccurrences, setLoadingOccurrences] = useState(false)
   const [showQuickActions, setShowQuickActions] = useState(false)
+  
+  // Reset occurrences cache when transaction nextDueDate changes
+  React.useEffect(() => {
+    setNextOccurrences([])
+  }, [transaction.nextDueDate])
 
   // 🔸 Trova main category per colori e icone
   const selectedMainCat = useMemo(() => {
@@ -90,7 +89,11 @@ export default function PlannedTransactionCard({
     
     setLoadingOccurrences(true)
     try {
-      const result = await api.getNextOccurrences(token, transaction.startDate, transaction.frequency, 5)
+      // Per le transazioni prestiti, usa nextDueDate come punto di partenza
+      // Per le transazioni normali, usa startDate
+      const startingDate = transaction.loanId ? transaction.nextDueDate : transaction.startDate
+      
+      const result = await api.getNextOccurrences(token, startingDate, transaction.frequency, 5)
       setNextOccurrences(result.data || result)
     } catch (error) {
       console.error('Error loading next occurrences:', error)
@@ -113,18 +116,8 @@ export default function PlannedTransactionCard({
     if (!transaction.loanId) return
     
     try {
-      console.log('🔄 Starting skip loan payment for:', transaction.loanId)
-      console.log('📅 Current transaction nextDueDate:', transaction.nextDueDate)
-      
       // Chiama l'endpoint specifico del loan per saltare la rata
       const result = await api.skipLoanPayment(token, transaction.loanId)
-      
-      console.log('✅ Skip loan payment API response:', result)
-      console.log('📅 Updated planned transaction:', result.data?.updatedPlannedTransaction)
-      
-      if (result.data?.updatedPlannedTransaction) {
-        console.log('📅 New nextDueDate:', result.data.updatedPlannedTransaction.nextDueDate)
-      }
       
       // Callback per notificare il componente padre di fare solo refresh (skip già completato)
       if (onSkipLoanPayment) {
@@ -161,8 +154,8 @@ export default function PlannedTransactionCard({
             } ${dueDateColors.textOpacity}`}>
               €{Math.abs(Number(transaction.amount)).toFixed(2)}
             </span>
-            {/* Action button compatto se necessario */}
-            {isDue && transaction.isActive && (
+            {/* Action button compatto se necessario - Solo per transazioni MANUAL */}
+            {isDue && transaction.isActive && transaction.confirmationMode === 'MANUAL' && (
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -172,6 +165,13 @@ export default function PlannedTransactionCard({
               >
                 ✓ Conferma
               </button>
+            )}
+            {/* Indicatore per transazioni automatiche scadute */}
+            {isDue && transaction.isActive && transaction.confirmationMode === 'AUTOMATIC' && (
+              <div className="px-2 py-1 rounded-md text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 flex items-center gap-1 flex-shrink-0">
+                <span className="animate-pulse">🤖</span>
+                <span>Auto-pagamento</span>
+              </div>
             )}
           </div>
 
@@ -222,42 +222,47 @@ export default function PlannedTransactionCard({
                 </div>
               )}
               
-              {/* Pulsante Paga sempre visibile per transazioni attive */}
-              {transaction.isActive && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onMaterialize()
-                  }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-colors flex items-center gap-1"
-                  title="Paga questa transazione ora"
-                >
-                  💰 Paga
-                </button>
-              )}
+              {/* Nessun pulsante Paga diretto - tutto nel menu azioni */}
               
               {/* Menu azioni - limitato per transazioni prestiti */}
               <ActionsMenu
-                // Per transazioni prestiti: NO edit, NO remove
-                onEdit={transaction.loanId ? undefined : () => onEdit()}
-                onRemove={transaction.loanId ? undefined : () => onDelete(transaction.id)}
+                // NON usare onEdit e onRemove per controllare l'ordine
                 customActions={[
+                  // 1. Applica a Budgeting (per transazioni attive)
+                  ...(transaction.isActive ? [{
+                    label: transaction.appliedToBudget ? '📉 Rimuovi da Budgeting' : '📈 Applica a Budgeting',
+                    onClick: () => onApplyToBudgeting && onApplyToBudgeting(transaction),
+                    variant: transaction.appliedToBudget ? 'warning' : 'default'
+                  }] : []),
+                  // 2. Paga (per transazioni NON-mensili o mensili da prestiti)
+                  ...(transaction.isActive && (transaction.frequency !== 'MONTHLY' || transaction.loanId) ? [{
+                    label: '💰 Paga',
+                    onClick: () => onMaterialize(),
+                    variant: 'default'
+                  }] : []),
+                  // 3. Disattiva (per transazioni mensili non-prestiti)
+                  ...(transaction.frequency === 'MONTHLY' && !transaction.loanId ? [{
+                    label: transaction.isActive ? '🚫 Disattiva' : '▶️ Attiva',
+                    onClick: () => onToggleActive && onToggleActive(transaction, !transaction.isActive),
+                    variant: transaction.isActive ? 'warning' : 'success'
+                  }] : []),
                   // Salta Rata solo per transazioni prestiti attive
                   ...(transaction.loanId && transaction.isActive ? [{
                     label: '⏭️ Salta Rata',
                     onClick: handleSkipLoanPayment,
                     variant: 'warning'
                   }] : []),
-                  // Per transazioni prestiti: NO toggle attivo/inattivo
-                  ...(transaction.frequency === 'MONTHLY' && !transaction.loanId ? [{
-                    label: transaction.isActive ? '🚫 Disattiva' : '▶️ Attiva',
-                    onClick: () => onToggleActive && onToggleActive(transaction, !transaction.isActive),
-                    variant: transaction.isActive ? 'warning' : 'success'
+                  // 4. Modifica (per transazioni non-prestiti) - PENULTIMO
+                  ...(!transaction.loanId ? [{
+                    label: '✏️ Modifica',
+                    onClick: () => onEdit(),
+                    variant: 'default'
                   }] : []),
-                  ...(transaction.isActive ? [{
-                    label: transaction.appliedToBudget ? '📉 Rimuovi da Budgeting' : '📈 Applica a Budgeting',
-                    onClick: () => onApplyToBudgeting && onApplyToBudgeting(transaction),
-                    variant: transaction.appliedToBudget ? 'warning' : 'default'
+                  // 5. Rimuovi (per transazioni non-prestiti) - ULTIMO
+                  ...(!transaction.loanId ? [{
+                    label: '🗑️ Rimuovi',
+                    onClick: () => onDelete(transaction.id),
+                    variant: 'danger'
                   }] : [])
                 ]}
               />

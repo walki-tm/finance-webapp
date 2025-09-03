@@ -100,105 +100,48 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
       </Card>
 
       <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
-        {donutData.map(d => {
-          // Card speciale per il SALDO (sostituisce la card "Reddito")
-          if (d.key === 'income') {
-            // Calcola outflows nel range corrente includendo anche categorie custom
-            const incomeInRange = txInRange.filter(t => t.main === 'income').reduce((a, t) => a + t.amount, 0)
-            const outflowsInRange = txInRange.filter(t => t.main !== 'income').reduce((a, t) => a + t.amount, 0)
-            const ringData = [
-              { name: 'Entrate', value: incomeInRange },
-              { name: 'Uscite', value: outflowsInRange }
-            ]
-            return (
-              <Card key="balance" style={{ borderColor: alpha('#10B981', .35) }}>
-                <CardContent>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium flex items-center gap-2">
-                      <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: '#10B981' }} />
-                      Saldo
-                    </div>
-                    <div className="text-xs text-slate-500">Real-time</div>
+        {donutData.map(d => (
+          <button key={d.key} onClick={() => onSelectMain(d.key)} className="text-left">
+            <Card style={{ borderColor: alpha(d.color, .35) }}>
+              <CardContent>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium flex items-center gap-2">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: d.color }} />
+                    {d.name}
                   </div>
-                  <div className="h-40 relative">
-                    <ResponsiveContainer>
-                      <PieChart>
-                        <defs>
-                          <linearGradient id="g-balance-in" x1="0" y1="0" x2="1" y2="1">
-                            <stop offset="0%" stopColor={alpha('#10B981', .35)} />
-                            <stop offset="100%" stopColor={'#10B981'} />
-                          </linearGradient>
-                        </defs>
-                        <Pie
-                          isAnimationActive
-                          data={ringData}
-                          dataKey="value"
-                          innerRadius={45}
-                          outerRadius={70}
-                          paddingAngle={2}
-                        >
-                          <Cell fill={`url(#g-balance-in)`} />
-                          <Cell fill={alpha('#ef4444', .35)} />
-                        </Pie>
-                        <Tooltip formatter={(v, n) => nice(v)} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    {/* Label centrale con il saldo */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <div className={`text-xl font-bold ${Number(balance) < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                        {balLoading ? '…' : (Number(balance || 0)).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
-                      </div>
-                      <div className="text-xs text-slate-500">as of oggi</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          }
-          // Card standard per le altre categorie
-          return (
-            <button key={d.key} onClick={() => onSelectMain(d.key)} className="text-left">
-              <Card style={{ borderColor: alpha(d.color, .35) }}>
-                <CardContent>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium flex items-center gap-2">
-                      <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: d.color }} />
-                      {d.name}
-                    </div>
-                    <div className="text-xs text-slate-500">{nice(d.value)} / {nice(d.budget)}</div>
-                  </div>
-                  <div className="h-40">
-                    <ResponsiveContainer>
-                      <PieChart>
-                        <defs>
-                          <linearGradient id={`g-${d.key}`} x1="0" y1="0" x2="1" y2="1">
-                            <stop offset="0%" stopColor={alpha(d.color, .35)} />
-                            <stop offset="100%" stopColor={d.color} />
-                          </linearGradient>
-                        </defs>
-                        <Pie
-                          isAnimationActive
-                          data={[
-                            { name: 'done', value: d.value },
-                            { name: 'left', value: Math.max((d.budget || 0) - d.value, 0) }
-                          ]}
-                          dataKey="value"
-                          innerRadius={45}
-                          outerRadius={70}
-                          paddingAngle={2}
-                        >
-                          <Cell fill={`url(#g-${d.key})`} />
-                          <Cell fill={alpha(d.color, .18)} />
-                        </Pie>
-                        <Tooltip formatter={(v) => nice(v)} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-            </button>
-          )
-        })}
+                  <div className="text-xs text-slate-500">{nice(d.value)} / {nice(d.budget)}</div>
+                </div>
+                <div className="h-40">
+                  <ResponsiveContainer>
+                    <PieChart>
+                      <defs>
+                        <linearGradient id={`g-${d.key}`} x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stopColor={alpha(d.color, .35)} />
+                          <stop offset="100%" stopColor={d.color} />
+                        </linearGradient>
+                      </defs>
+                      <Pie
+                        isAnimationActive
+                        data={[
+                          { name: 'done', value: d.value },
+                          { name: 'left', value: Math.max((d.budget || 0) - d.value, 0) }
+                        ]}
+                        dataKey="value"
+                        innerRadius={45}
+                        outerRadius={70}
+                        paddingAngle={2}
+                      >
+                        <Cell fill={`url(#g-${d.key})`} />
+                        <Cell fill={alpha(d.color, .18)} />
+                      </Pie>
+                      <Tooltip formatter={(v) => nice(v)} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </button>
+        ))}
       </div>
 
       {detailMain && (

@@ -98,10 +98,29 @@ export async function listPlannedTransactions(req, res, next) {
  * 🎯 CONTROLLER: Crea transazione pianificata
  */
 export async function createPlannedTransaction(req, res, next) {
+  // 🔸 DEBUG: Log dei dati ricevuti nel controller
+  console.log('🐛 DEBUG plannedTransactionsController - createPlannedTransaction:')
+  console.log('- req.body.startDate (raw):', req.body.startDate)
+  console.log('- typeof req.body.startDate:', typeof req.body.startDate)
+  
   const parsed = plannedTxSchema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid body', details: parsed.error.errors })
+  
+  if (!parsed.success) {
+    console.log('🔸 DEBUG - Validation failed:', parsed.error.errors)
+    return res.status(400).json({ error: 'Invalid body', details: parsed.error.errors })
+  }
+  
+  // 🔸 DEBUG: Log dei dati dopo parsing Zod
+  console.log('- parsed.data.startDate (after Zod):', parsed.data.startDate)
+  console.log('- parsed.data.startDate instanceof Date:', parsed.data.startDate instanceof Date)
+  console.log('- parsed.data.startDate.toISOString():', parsed.data.startDate.toISOString())
+  
   try {
     const created = await createPlannedTransactionService(req.user.id, parsed.data)
+    
+    // 🔸 DEBUG: Log del risultato salvato
+    console.log('- created.startDate (saved):', created.startDate)
+    
     res.status(201).json(created)
   } catch (e) { next(e) }
 }

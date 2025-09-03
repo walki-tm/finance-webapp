@@ -19,7 +19,8 @@ import { useAuth } from '../../../context/AuthContext.jsx'
 import { useLoans } from '../useLoans.js'
 import LoansDashboard from '../components/LoansDashboard.jsx'
 import LoanFormModal from '../components/LoanFormModal.jsx'
-// import LoanDetailsModal from '../components/LoanDetailsModal.jsx'
+import PayoffLoanModal from '../components/PayoffLoanModal.jsx'
+import LoanDetailsModal from '../components/LoanDetailsModal.jsx'
 // import PaymentRecordModal from '../components/PaymentRecordModal.jsx'
 // import PayoffSimulatorModal from '../components/PayoffSimulatorModal.jsx'
 // import DeleteLoanModal from '../components/DeleteLoanModal.jsx'
@@ -47,6 +48,7 @@ export default function LoansPage() {
     deleteLoan,
     recordPayment,
     simulatePayoff,
+    payoffLoan,
     
     // Modal management
     openModal,
@@ -116,6 +118,17 @@ export default function LoansPage() {
       // Toast error
       console.error('❌ Errore simulazione:', err.message)
       throw err
+    }
+  }
+
+  const handlePayoffLoan = async (loanId, payoffData) => {
+    try {
+      await payoffLoan(loanId, payoffData)
+      // Toast success
+      console.log('✅ Prestito estinto con successo')
+    } catch (err) {
+      // Toast error
+      console.error('❌ Errore estinzione prestito:', err.message)
     }
   }
 
@@ -225,18 +238,29 @@ export default function LoansPage() {
           </div>
         </div>
       )}
-      
-      {/* Altri modal - da implementare */}
-      {/*
 
+      {/* Modal estinzione prestito */}
+      {modalStates.payoffLoan && selectedLoan && (
+        <PayoffLoanModal
+          isOpen={modalStates.payoffLoan}
+          onClose={() => closeModal('payoffLoan')}
+          onConfirm={(loan, payoffData) => handlePayoffLoan(loan.id, payoffData)}
+          loan={selectedLoan}
+          formatCurrency={formatCurrency}
+        />
+      )}
+      
+      {/* Modal dettagli prestito */}
       {modalStates.loanDetails && selectedLoan && (
         <LoanDetailsModal
           isOpen={modalStates.loanDetails}
           onClose={() => closeModal('loanDetails')}
-          loan={loanDetails}
-          schedule={amortizationSchedule}
+          loan={selectedLoan}
         />
       )}
+      
+      {/* Altri modal - da implementare */}
+      {/*
 
       {modalStates.paymentRecord && selectedPayment && (
         <PaymentRecordModal
@@ -273,33 +297,6 @@ export default function LoansPage() {
       )}
       */}
 
-      {/* Debug info - development only */}
-      {import.meta.env.DEV && (
-        <div className="mt-8 p-4 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs">
-          <details>
-            <summary className="cursor-pointer font-semibold text-slate-700 dark:text-slate-300">
-              🔧 Debug Info (Dev Only)
-            </summary>
-            <div className="mt-2 space-y-2 text-slate-600 dark:text-slate-400">
-              <div>
-                <strong>Loans Count:</strong> {loans.length}
-              </div>
-              <div>
-                <strong>Loading:</strong> {loading.toString()}
-              </div>
-              <div>
-                <strong>Error:</strong> {error || 'None'}
-              </div>
-              <div>
-                <strong>Modal States:</strong> {JSON.stringify(modalStates)}
-              </div>
-              <div>
-                <strong>Summary:</strong> {JSON.stringify(summary)}
-              </div>
-            </div>
-          </details>
-        </div>
-      )}
     </div>
   )
 }

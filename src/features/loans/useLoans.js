@@ -42,7 +42,8 @@ export function useLoans(token) {
     deleteLoan: false,
     loanDetails: false,
     paymentRecord: false,
-    simulatePayoff: false
+    simulatePayoff: false,
+    payoffLoan: false
   })
   
   // Form state
@@ -65,7 +66,12 @@ export function useLoans(token) {
   // =============================================================================
 
   const openModal = useCallback((modalType, data = null) => {
-    setModalStates(prev => ({ ...prev, [modalType]: true }))
+    console.log('🔥 [useLoans] openModal called:', modalType, data?.name || data)
+    setModalStates(prev => {
+      const newState = { ...prev, [modalType]: true }
+      console.log('🔥 [useLoans] New modal states:', newState)
+      return newState
+    })
     
     switch (modalType) {
       case 'editLoan':
@@ -79,6 +85,10 @@ export function useLoans(token) {
         break
       case 'paymentRecord':
         setSelectedPayment(data)
+        break
+      case 'payoffLoan':
+        console.log('🔥 [useLoans] Setting selectedLoan for payoff:', data.name)
+        setSelectedLoan(data)
         break
       default:
         break
@@ -172,7 +182,6 @@ export function useLoans(token) {
       setLoading(true)
       setError(null)
 
-      console.log('🚀 DEBUG: Hook createLoan called with:', JSON.stringify(loanData, null, 2))
 
       // Prepara dati per backend (il form ha già convertito i valori)
       const backendData = {
@@ -187,7 +196,6 @@ export function useLoans(token) {
           : loanData.effectiveRate
       }
 
-      console.log('🚀 DEBUG: Backend data prepared:', JSON.stringify(backendData, null, 2))
 
       const result = await loansApi.createLoan(token, backendData)
       
@@ -317,14 +325,11 @@ export function useLoans(token) {
     if (!token || !loanId) throw new Error('Parametri mancanti')
 
     try {
-      console.log('💰 DEBUG: Starting loan payment for:', loanId)
       setLoading(true)
       setError(null)
       
       // Chiama l'endpoint specifico per pagare la prossima rata automaticamente
       const result = await loansApi.payNextLoan(token, loanId)
-      
-      console.log('💰 DEBUG: Payment completed, result:', result)
       
       // Force refresh completo dei dati loan
       await loadUserLoans()
@@ -333,8 +338,6 @@ export function useLoans(token) {
       if (loanDetails && loanDetails.id === loanId) {
         await loadLoanDetails(loanId)
       }
-      
-      console.log('✅ DEBUG: Loan data refresh completed')
       
       return result
 
@@ -354,8 +357,6 @@ export function useLoans(token) {
     if (!token || !loanId) throw new Error('Parametri mancanti')
 
     try {
-      console.log('🔄 DEBUG: Refreshing loan data for:', loanId)
-      
       // Solo refresh, senza registrare pagamenti
       await loadUserLoans()
       
@@ -363,8 +364,6 @@ export function useLoans(token) {
       if (loanDetails && loanDetails.id === loanId) {
         await loadLoanDetails(loanId)
       }
-      
-      console.log('✅ DEBUG: Loan data refresh completed')
 
     } catch (err) {
       console.error('❌ Error refreshing loan data:', err.message)
@@ -374,23 +373,53 @@ export function useLoans(token) {
   }, [token, loadUserLoans, loadLoanDetails, loanDetails])
 
   /**
+   * 🎯 Estingue completamente un prestito
+   */
+  const payoffLoan = useCallback(async (loanId, payoffData) => {
+    if (!token || !loanId) throw new Error('Parametri mancanti')
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      const result = await loansApi.payoffLoan(token, loanId, payoffData)
+      
+      // Force refresh completo dei dati con piccolo delay per sicurezza
+      await new Promise(resolve => setTimeout(resolve, 100)) // 100ms delay
+      await loadUserLoans()
+      
+      // Se stiamo visualizzando i dettagli di questo prestito, ricarica anche quelli
+      if (loanDetails && loanDetails.id === loanId) {
+        await loadLoanDetails(loanId)
+      }
+      
+      // Chiudi modale payoff
+      closeModal('payoffLoan')
+      
+      return result
+
+    } catch (err) {
+      console.error('❌ Error paying off loan:', err.message)
+      setError(err.message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [token, loadUserLoans, loadLoanDetails, loanDetails, closeModal])
+
+  /**
    * 🎯 Salta prossima rata
    */
   const skipPayment = useCallback(async (loanId) => {
     if (!token || !loanId) throw new Error('Parametri mancanti')
 
     try {
-      console.log('⏭️ DEBUG: Starting skip payment for loan:', loanId)
       setLoading(true)
       setError(null)
 
       const result = await loansApi.skipLoanPayment(token, loanId)
       
-      console.log('⏭️ DEBUG: Skip payment completed, result:', result)
-      
       // Force refresh completo dei dati
-      console.log('🔄 DEBUG: Forcing complete refresh after skip...')
-      
       // Refresh immediato
       await loadUserLoans()
       
@@ -400,11 +429,7 @@ export function useLoans(token) {
       }
       
       // Trigger refresh per sicurezza
-      setRefreshTrigger(prev => {
-        const newVal = prev + 1
-        console.log('🔄 DEBUG: Refresh trigger incremented from', prev, 'to', newVal)
-        return newVal
-      })
+      setRefreshTrigger(prev => prev + 1)
       
       return result
 
@@ -523,6 +548,7 @@ export function useLoans(token) {
     recordPayment,
     simulatePayoff,
     payLoan,
+    payoffLoan,
     refreshLoanData,
     skipPayment,
     

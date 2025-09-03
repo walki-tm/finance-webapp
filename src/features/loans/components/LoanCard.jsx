@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import ActionsMenu from '../../categories/components/ActionsMenu.jsx'
 import { loansApi } from '../services/loans.api.js'
+import { parseLocalDate, formatDateForDisplay } from '../../../lib/dateUtils.js'
 
 export default function LoanCard({ 
   loan, 
@@ -38,7 +39,8 @@ export default function LoanCard({
   onSimulatePayoff, 
   onEdit, 
   onDelete,
-  onSkipPayment
+  onSkipPayment,
+  onPayoff
 }) {
   // =============================================================================
   // 🔸 COMPUTED VALUES
@@ -49,21 +51,27 @@ export default function LoanCard({
   }, [loan])
 
   const nextPaymentInfo = useMemo(() => {
-    console.log('🔧 DEBUG: LoanCard calculating nextPaymentInfo for loan:', loan.name)
-    console.log('🔧 DEBUG: loan object keys:', Object.keys(loan))
-    console.log('🔧 DEBUG: loan.nextPayment:', loan.nextPayment)
-    console.log('🔧 DEBUG: loan.nextPayment.dueDate:', loan.nextPayment?.dueDate)
-    console.log('🔧 DEBUG: loan.plannedTransactions:', loan.plannedTransactions)
-    console.log('🔧 DEBUG: loan.firstPaymentDate:', loan.firstPaymentDate)
-    console.log('🔧 DEBUG: loan.currentBalance:', loan.currentBalance)
+    console.log('🐛 [LoanCard] Processing loan:', loan.name)
+    console.log('🐛 [LoanCard] Loan data:', {
+      id: loan.id,
+      name: loan.name,
+      nextPayment: loan.nextPayment,
+      firstPaymentDate: loan.firstPaymentDate,
+      plannedTransactions: loan.plannedTransactions
+    })
     
     if (!loan.nextPayment?.dueDate) {
+      console.log('🐛 [LoanCard] No nextPayment.dueDate, trying fallbacks')
+      
       // Fallback 1: cerca la prossima rata nei plannedTransactions
       if (loan.plannedTransactions && loan.plannedTransactions.length > 0) {
+        console.log('🐛 [LoanCard] Checking plannedTransactions:', loan.plannedTransactions)
         const nextPlanned = loan.plannedTransactions.find(pt => pt.nextDueDate)
         if (nextPlanned?.nextDueDate) {
+          console.log('🐛 [LoanCard] Found nextDueDate in plannedTransactions:', nextPlanned.nextDueDate)
           const dueDate = new Date(nextPlanned.nextDueDate)
           const today = new Date()
+          console.log('🐛 [LoanCard] Calculated dueDate from plannedTransactions:', dueDate.toISOString())
           const diffTime = dueDate - today
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
           
@@ -136,13 +144,16 @@ export default function LoanCard({
   }, [loan.nextPayment, loan.monthlyPayment, loan.plannedTransactions])
 
   const statusInfo = useMemo(() => {
+    // Se il progresso è al 100%, considera il prestito come terminato
+    const isCompleted = progress.percentage >= 100;
+    
     const statusMap = {
       'ACTIVE': {
-        text: 'Attivo',
+        text: isCompleted ? 'Terminato' : 'Attivo',
         icon: CheckCircle2,
-        color: 'text-emerald-600 dark:text-emerald-400',
-        bgColor: 'bg-emerald-100 dark:bg-emerald-900/30',
-        dotColor: 'bg-emerald-500 dark:bg-emerald-400'
+        color: isCompleted ? 'text-green-800 dark:text-green-300' : 'text-emerald-600 dark:text-emerald-400',
+        bgColor: isCompleted ? 'bg-green-100 dark:bg-green-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30',
+        dotColor: isCompleted ? 'bg-green-600 dark:bg-green-400' : 'bg-emerald-500 dark:bg-emerald-400'
       },
       'PAID_OFF': {
         text: 'Estinto',
@@ -300,37 +311,53 @@ export default function LoanCard({
 
       {/* Payment info section */}
       <div className="px-4 pb-4">
-        <div className="flex items-center justify-between mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200/50 dark:border-slate-600/50">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-            <div>
+        {/* Nasconde la sezione prossima rata se il prestito è completato al 100% */}
+        {progress.percentage < 100 && (
+          <div className="flex items-center justify-between mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200/50 dark:border-slate-600/50">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+              <div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Prossima rata
+                </p>
+                {nextPaymentInfo ? (
+                  <p className={`text-sm font-medium ${getNextPaymentStyle()}`}>
+                    {(() => {
+                      // PROBLEMA: La data dal backend ha timezone issues
+                      // Usiamo la data locale direttamente per evitare conversioni UTC problematiche
+                      const year = nextPaymentInfo.date.getFullYear()
+                      const month = String(nextPaymentInfo.date.getMonth() + 1).padStart(2, '0')
+                      const day = String(nextPaymentInfo.date.getDate()).padStart(2, '0')
+                      const dateString = `${year}-${month}-${day}`
+                      const parsedDate = parseLocalDate(dateString)
+                      const formatted = formatDateForDisplay(parsedDate, 'it-IT')
+                      
+                      // Date rendering con gestione timezone-safe
+                      
+                      return formatted
+                    })()} 
+                    {nextPaymentInfo.isOverdue && ' (Scaduta)'}
+                    {nextPaymentInfo.isDueToday && ' (Oggi)'}
+                    {nextPaymentInfo.isDueSoon && ` (${nextPaymentInfo.daysUntil}g)`}
+                  </p>
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    Non disponibile
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            <div className="text-right">
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Prossima rata
+                Importo
               </p>
-              {nextPaymentInfo ? (
-                <p className={`text-sm font-medium ${getNextPaymentStyle()}`}>
-                  {nextPaymentInfo.date.toLocaleDateString('it-IT')}
-                  {nextPaymentInfo.isOverdue && ' (Scaduta)'}
-                  {nextPaymentInfo.isDueToday && ' (Oggi)'}
-                  {nextPaymentInfo.isDueSoon && ` (${nextPaymentInfo.daysUntil}g)`}
-                </p>
-              ) : (
-                <p className="text-sm text-slate-500">
-                  Non disponibile
-                </p>
-              )}
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {loansApi.formatCurrency(loan.monthlyPayment)}
+              </p>
             </div>
           </div>
-          
-          <div className="text-right">
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Importo
-            </p>
-            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-              {loansApi.formatCurrency(loan.monthlyPayment)}
-            </p>
-          </div>
-        </div>
+        )}
 
         {/* Actions */}
         <div className="flex items-center justify-between">
@@ -347,6 +374,18 @@ export default function LoanCard({
 
           <ActionsMenu
             customActions={[
+              // Solo per prestiti attivi e non completati
+              ...(loan.status === 'ACTIVE' && progress.percentage < 100 ? [
+                {
+                  label: '💳 Estingui',
+                  onClick: () => {
+                    console.log('🔥 [LoanCard] Payoff clicked for loan:', loan.name)
+                    console.log('🔥 [LoanCard] onPayoff function:', typeof onPayoff)
+                    onPayoff?.(loan)
+                  },
+                  icon: 'payoff'
+                }
+              ] : []),
               {
                 label: '📊 Simula estinzione',
                 onClick: handleSimulatePayoff,

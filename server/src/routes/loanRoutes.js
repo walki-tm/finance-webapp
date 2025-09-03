@@ -20,7 +20,8 @@ import {
   deleteLoanController,
   getLoanPaymentsController,
   skipLoanPaymentController,
-  payNextLoanController
+  payNextLoanController,
+  payoffLoanController
 } from '../controllers/loanController.js'
 
 const router = Router()
@@ -141,6 +142,27 @@ router.post('/:id/skip-payment', skipLoanPaymentController)
  * }
  */
 router.post('/:id/pay-next', payNextLoanController)
+
+/**
+ * 🎯 POST /api/loans/:id/payoff
+ * Estingue completamente un prestito
+ * 
+ * Params: id = loanId
+ * 
+ * Body: {
+ *   payoffAmount?: number,  // Se non fornito, usa il debito residuo
+ *   payoffDate?: string (ISO),  // Se non fornita, usa data corrente
+ *   notes?: string,
+ *   paymentMethod?: string
+ * }
+ * 
+ * Response: {
+ *   loan: {...},
+ *   payoffTransaction: {...},
+ *   summary: { finalBalance: 0, status: 'PAID_OFF', ... }
+ * }
+ */
+router.post('/:id/payoff', payoffLoanController)
 
 // =============================================================================
 // 📍 SIMULATION ROUTES

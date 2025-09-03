@@ -1,9 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Card, CardContent, NativeSelect, Button } from '../../ui';
 import TransactionTable from '../components/TransactionTable.jsx';
 import PlannedTransactionsTab from '../components/PlannedTransactionsTab.jsx';
 import { MAIN_CATS, months } from '../../../lib/constants.js';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { useTransactions } from '../useTransactions.js';
+import { api } from '../../../lib/api.js';
+import { formatDateForAPI, getTodayDate } from '../../../lib/dateUtils.js';
 
 /**
  * Pagina Transazioni
@@ -15,7 +18,8 @@ import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
  * - Tabella: ordinata per data desc e filtrata per periodo + categoria.
  */
 
-export default function Transactions({ state, updateTx, delTx, openTxEditor, refreshTransactions }) {
+export default function Transactions({ state, updateTx, delTx, openTxEditor, refreshTransactions, token }) {
+  console.log('🏪 Transactions props:', { updateTx, delTx, refreshTransactions });
   /* ===== Sub-tab state ===== */
   const [activeTab, setActiveTab] = useState('register');
   /* ===== Filtro macro-categoria ===== */
@@ -23,9 +27,13 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
 
   /* ===== Stato selettore periodo ===== */
   // mode: 'day' | 'week' | 'month' | 'year' | 'range'
-  const today = new Date();
+  const today = getTodayDate();
   const [mode, setMode] = useState('month');           // default: mese corrente
-  const [pointer, setPointer] = useState(new Date());  // puntatore temporale
+  const [pointer, setPointer] = useState(() => {
+    const currentDate = getTodayDate();
+    console.log('🗺 [INIT] Initializing pointer with today:', currentDate);
+    return currentDate;
+  });  // puntatore temporale
   const [panelOpen, setPanelOpen] = useState(false);   // dropdown opzioni
   // range custom
   const [fromDate, setFromDate] = useState('');
@@ -63,7 +71,91 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
     return endOfToday; // range non naviga
   };
 
-  /* ===== Calcolo range + etichetta ===== */
+  /* ===== Calcolo filtri API in base al periodo selezionato ===== */
+  const apiFilters = useMemo(() => {
+    
+    let result;
+    
+    if (mode === 'month') {
+      // Per mese, usa year/month per compatibilità
+      result = {
+        year: pointer.getFullYear(),
+        month: pointer.getMonth() + 1,
+        limit: 200
+      };
+    } else {
+      // Per tutti gli altri modi, usa fromDate/toDate
+      let start, end;
+      
+      if (mode === 'day') {
+        start = atStart(pointer);
+        end = atEnd(pointer);
+      } else if (mode === 'week') {
+        start = mondayOfWeek(pointer);
+        const tmpEnd = new Date(start); 
+        tmpEnd.setDate(start.getDate() + 6);
+        end = atEnd(tmpEnd);
+      } else if (mode === 'year') {
+        start = new Date(pointer.getFullYear(), 0, 1);
+        end = new Date(pointer.getFullYear(), 11, 31, 23, 59, 59, 999);
+      } else if (mode === 'range') {
+        start = fromDate ? atStart(new Date(fromDate)) : atStart(today);
+        end = toDate ? atEnd(new Date(toDate)) : atEnd(today);
+      }
+      
+      result = {
+        fromDate: formatDateForAPI(start),
+        toDate: formatDateForAPI(end),
+        limit: 200
+      };
+    }
+    
+    console.log('📅 Transactions.jsx: apiFilters calculated:', { mode, pointer, result });
+    return result;
+  }, [mode, pointer, fromDate, toDate, today]);
+
+  /* ===== Hook per caricare transazioni con filtri dinamici ===== */
+  const transactionState = useTransactions(token, apiFilters);
+  
+  // Wrapper per operazioni che richiedono refresh
+  const handleDelete = useCallback(async (id) => {
+    console.log('🗑️ Local delete wrapper:', id);
+    await delTx(id); // Chiama la funzione globale
+    // Refresh dei dati locali dopo l'operazione
+    setTimeout(() => {
+      console.log('🔄 Refreshing local transactions after delete');
+      transactionState.refreshTransactions();
+    }, 200);
+  }, [delTx, transactionState]);
+  
+  // Listener per refresh globale (quando si aggiunge transazione dalla modale)
+  React.useEffect(() => {
+    const handleGlobalRefresh = () => {
+      console.log('🌍 Global refresh event received, refreshing local transactions');
+      setTimeout(() => {
+        transactionState.refreshTransactions();
+      }, 100);
+    };
+    
+    window.addEventListener('transactionRefresh', handleGlobalRefresh);
+    return () => window.removeEventListener('transactionRefresh', handleGlobalRefresh);
+  }, [transactionState]);
+  
+  console.log('🏪 Transactions component: transactionState =', {
+    transactions: transactionState.transactions,
+    length: transactionState.transactions?.length,
+    loading: transactionState.loading
+  });
+
+  /* ===== Helper per normalizzare le transazioni ===== */
+  const normalizeMainKey = (main) => {
+    const u = String(main || 'EXPENSE').toUpperCase();
+    const map = { INCOME: 'income', EXPENSE: 'expense', DEBT: 'debt', SAVINGS: 'saving', SAVING: 'saving' };
+    return map[u] || u.toLowerCase();
+  };
+
+
+  /* ===== Calcolo range + etichetta per UI ===== */
   const { rangeStart, rangeEnd, label } = useMemo(() => {
     let start, end, lbl;
 
@@ -84,6 +176,12 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
       start = new Date(pointer.getFullYear(), pointer.getMonth(), 1);
       end   = new Date(pointer.getFullYear(), pointer.getMonth() + 1, 0, 23, 59, 59, 999);
       lbl   = `${months[pointer.getMonth()].toUpperCase()} ${pointer.getFullYear()}`;
+      
+      console.log('📅 [DEBUG] Month label calculation:');
+      console.log('  - pointer:', pointer);
+      console.log('  - pointer.getMonth():', pointer.getMonth());
+      console.log('  - months[pointer.getMonth()]:', months[pointer.getMonth()]);
+      console.log('  - final label:', lbl);
     }
 
     if (mode === 'year') {
@@ -110,6 +208,8 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
     if (mode === 'month') p.setMonth(p.getMonth() - 1);
     if (mode === 'year')  p.setFullYear(p.getFullYear() - 1);
     setPointer(p);
+    
+    // I nuovi filtri verranno applicati automaticamente tramite apiFilters
   };
 
   const goNext = () => {
@@ -124,22 +224,36 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
     if (mode === 'month') p.setMonth(p.getMonth() + 1);
     if (mode === 'year')  p.setFullYear(p.getFullYear() + 1);
     setPointer(p);
+    
+    // I nuovi filtri verranno applicati automaticamente tramite apiFilters
   };
 
   // Disabilita freccia destra quando l'inizio del prossimo periodo è nel futuro
   const disableNext = mode !== 'range' && nextPeriodStart(pointer, mode) > endOfToday;
 
-  /* ===== Filtraggio & Ordinamento ===== */
+  /* ===== Filtraggio solo per categoria (il range è già gestito dall'API) ===== */
   const rows = useMemo(() => {
-    const filtered = state.transactions.filter((t) => {
-      const d = new Date(t.date);
-      const inRange = d >= rangeStart && d <= rangeEnd;
-      const mainOk = filterMain === 'all' ? true : t.main === filterMain;
-      return inRange && mainOk;
+    console.log('🔍 Transactions component: processing transactions', {
+      rawTransactions: transactionState.transactions,
+      length: transactionState.transactions?.length || 0,
+      filterMain
     });
-    filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    if (!transactionState.transactions) return [];
+    
+    const filtered = transactionState.transactions.filter((t) => {
+      const mainOk = filterMain === 'all' ? true : t.main === filterMain;
+      return mainOk;
+    });
+    
+    console.log('✅ Filtered transactions for display:', {
+      filteredCount: filtered.length,
+      firstFew: filtered.slice(0, 3)
+    });
+    
+    // Le transazioni dall'API sono già ordinate per data desc
     return filtered;
-  }, [state.transactions, filterMain, rangeStart, rangeEnd]);
+  }, [transactionState.transactions, filterMain]);
 
   /* ===== UI ===== */
   return (
@@ -247,7 +361,7 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
                     className="px-3 py-2 rounded-xl text-sm bg-gradient-to-tr from-sky-600 to-indigo-600 text-white hover:opacity-90 disabled:opacity-50"
                     onClick={() => {
                       if (!fromDate || !toDate) { setMode('month'); setPointer(today); return; }
-                      // useMemo ricalcola range/label
+                      // I nuovi filtri verranno applicati automaticamente tramite apiFilters
                     }}
                     disabled={!fromDate || !toDate}
                   >
@@ -287,7 +401,7 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
                   rows={rows}
                   state={state}
                   onEdit={(t) => { if (typeof openTxEditor === 'function') openTxEditor(t); }}
-                  onDelete={(t) => delTx(t.id)}
+                  onDelete={(t) => handleDelete(t.id)}
                 />
               </div>
             </CardContent>

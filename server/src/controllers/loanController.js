@@ -15,9 +15,11 @@ import {
   getLoanDetails,
   simulateLoanPayoff,
   payLoan, // Nuova funzione per pagamenti
+  payoffLoan, // Funzione per estinzione anticipata
   updateLoan,
   deleteLoan,
-  skipLoanPayment
+  skipLoanPayment,
+  cleanupCompletedLoanPlannedTransactions
 } from '../services/loanService.js'
 
 // =============================================================================
@@ -79,6 +81,25 @@ const simulatePayoffSchema = z.object({
   targetMonths: z.array(z.number().int().min(1)).optional()
 })
 
+const payoffLoanSchema = z.object({
+  payoffType: z.enum(['TOTAL', 'PARTIAL'], {
+    errorMap: () => ({ message: 'Payoff type must be TOTAL or PARTIAL' })
+  }),
+  payoffAmount: z.number().min(0, 'Payoff amount cannot be negative'),
+  payoffDate: z.string()
+    .refine(date => !isNaN(Date.parse(date)), 'Invalid date format')
+    .optional()
+    .default(() => new Date().toISOString().split('T')[0]),
+  penaltyAmount: z.number().min(0, 'Penalty amount cannot be negative').optional().default(0),
+  penaltyType: z.enum(['PERCENTAGE', 'FIXED']).optional().default('PERCENTAGE'),
+  totalAmount: z.number().min(0, 'Total amount cannot be negative'),
+  notes: z.string().max(500).optional(),
+  paymentMethod: z.string().max(50).optional().default('BANK_TRANSFER'),
+  recalculationType: z.enum(['RECALCULATE_PAYMENT', 'RECALCULATE_DURATION'], {
+    errorMap: () => ({ message: 'Recalculation type must be RECALCULATE_PAYMENT or RECALCULATE_DURATION' })
+  }).optional().default('RECALCULATE_PAYMENT')
+})
+
 // =============================================================================
 // 🎯 CONTROLLER FUNCTIONS
 // =============================================================================
@@ -89,13 +110,8 @@ const simulatePayoffSchema = z.object({
  */
 export async function createLoanController(req, res, next) {
   try {
-    console.log('🔧 DEBUG: Create loan request received')
-    console.log('🔧 DEBUG: Request body:', JSON.stringify(req.body, null, 2))
-    console.log('🔧 DEBUG: User ID:', req.user?.id)
-    
     // 🔸 Validazione input
     const validatedData = createLoanSchema.parse(req.body)
-    console.log('🔧 DEBUG: Validation passed, validated data:', JSON.stringify(validatedData, null, 2))
     
     const userId = req.user.id
 
@@ -125,7 +141,6 @@ export async function createLoanController(req, res, next) {
 
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.log('🔴 DEBUG: Zod validation error:', JSON.stringify(error.errors, null, 2))
       return res.status(400).json({
         success: false,
         message: 'Validation error',
@@ -148,6 +163,15 @@ export async function createLoanController(req, res, next) {
 export async function getUserLoansController(req, res, next) {
   try {
     const userId = req.user.id
+    
+    // 🔸 Prima pulisce le planned transactions dei prestiti completati
+    try {
+      await cleanupCompletedLoanPlannedTransactions(userId)
+    } catch (cleanupError) {
+      console.warn('⚠️ Planned transaction cleanup failed:', cleanupError.message)
+      // Non blocca l'operazione principale
+    }
+    
     const result = await getUserLoans(userId) // Il servizio ora restituisce { loans, summary }
 
     res.json({
@@ -398,8 +422,6 @@ export async function skipLoanPaymentController(req, res, next) {
     const userId = req.user.id
     const loanId = req.params.id
     
-    console.log(`📝 DEBUG: Skip payment request - userId: ${userId}, loanId: ${loanId}`)
-    
     if (!loanId) {
       return res.status(400).json({
         success: false,
@@ -408,9 +430,7 @@ export async function skipLoanPaymentController(req, res, next) {
     }
 
     // 🔸 Salta il pagamento
-    console.log(`📝 DEBUG: Calling skipLoanPayment...`)
     const result = await skipLoanPayment(userId, loanId)
-    console.log(`📝 DEBUG: skipLoanPayment completed:`, result)
 
     // 🆕 NUOVO: Recupera la planned transaction aggiornata per confermare la sincronizzazione
     const { prisma } = await import('../lib/prisma.js')
@@ -468,8 +488,6 @@ export async function payNextLoanController(req, res, next) {
     const userId = req.user.id
     const loanId = req.params.id
     
-    console.log(`💰 DEBUG: Pay next payment request - userId: ${userId}, loanId: ${loanId}`)
-    
     if (!loanId) {
       return res.status(400).json({
         success: false,
@@ -478,9 +496,7 @@ export async function payNextLoanController(req, res, next) {
     }
 
     // 🔸 Paga la prossima rata automaticamente (senza dati aggiuntivi)
-    console.log(`💰 DEBUG: Calling payLoan with automatic data...`)
     const result = await payLoan(userId, loanId, {})
-    console.log(`💰 DEBUG: payLoan completed:`, result)
 
     // 🔸 Risposta con dettagli aggiornamento
     res.json({
@@ -513,6 +529,78 @@ export async function payNextLoanController(req, res, next) {
     }
 
     console.error('❌ Pay next loan payment error:', error)
+    next(error)
+  }
+}
+
+/**
+ * 🎯 POST /api/loans/:id/payoff
+ * Estingue completamente un prestito
+ */
+export async function payoffLoanController(req, res, next) {
+  try {
+    const userId = req.user.id
+    const loanId = req.params.id
+    
+    if (!loanId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Loan ID is required'
+      })
+    }
+
+    // 🔸 Validazione body
+    const validatedData = payoffLoanSchema.parse(req.body)
+
+    // 🔸 Estinzione prestito
+    const result = await payoffLoan(userId, loanId, validatedData)
+
+    // 🔸 Risposta con dettagli estinzione
+    const isTotal = result.summary.type === 'TOTAL'
+    res.json({
+      success: true,
+      message: `Loan ${isTotal ? 'paid off' : 'partially paid off'} successfully`,
+      data: {
+        loan: result.loan,
+        loanTransaction: result.loanTransaction,
+        payoffTransaction: result.payoffTransaction,
+        summary: {
+          type: result.summary.type,
+          finalBalance: result.summary.newBalance,
+          status: result.loan.status,
+          payoffAmount: result.summary.payoffAmount,
+          penaltyAmount: result.summary.penaltyAmount,
+          totalAmount: result.summary.totalAmount,
+          payoffDate: result.loanTransaction.paidDate,
+          remainingPayments: result.summary.remainingPayments
+        }
+      }
+    })
+
+  } catch (error) {
+    if (error.message.includes('not found')) {
+      return res.status(404).json({
+        success: false,
+        message: error.message
+      })
+    }
+
+    if (error.message === 'Loan is already paid off') {
+      return res.status(400).json({
+        success: false,
+        message: 'Loan is already paid off'
+      })
+    }
+
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: error.errors
+      })
+    }
+
+    console.error('❌ Payoff loan error:', error)
     next(error)
   }
 }

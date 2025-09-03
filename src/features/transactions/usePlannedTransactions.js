@@ -32,7 +32,8 @@ const normalizeMainKey = (main) => {
   return map[u] || u.toLowerCase()
 }
 
-export function usePlannedTransactions(token) {
+export function usePlannedTransactions(token, options = {}) {
+  const { refreshTransactions } = options
   // 🔸 State per transazioni pianificate
   const [plannedTransactions, setPlannedTransactions] = useState([])
   const [transactionGroups, setTransactionGroups] = useState([])
@@ -84,6 +85,62 @@ export function usePlannedTransactions(token) {
     load()
     return () => { active = false }
   }, [token, refreshTrigger])
+  
+  // 🔸 Materializzazione transazioni
+  const materializePlannedTx = async (plannedTxId) => {
+    try {
+      const newTransaction = await api.materializePlannedTransaction(token, plannedTxId)
+      
+      // Force full refresh to get updated data including nextDueDate changes
+      setRefreshTrigger(prev => prev + 1)
+      
+      return newTransaction
+    } catch (err) {
+      console.error('❌ Errore materialize planned tx:', err.message)
+      throw err
+    }
+  }
+
+  // 🔸 Auto-materializzazione per transazioni AUTOMATIC scadute
+  useEffect(() => {
+    if (!token || dueTransactions.length === 0) return
+    
+    const autoMaterializeTransactions = async () => {
+      // Filtra transazioni che devono essere auto-materializzate
+      const autoTransactions = dueTransactions.filter(tx => 
+        tx.confirmationMode === 'AUTOMATIC' && 
+        tx.isActive && 
+        tx.nextDueDate && 
+        new Date(tx.nextDueDate) <= new Date()
+      )
+      
+      if (autoTransactions.length === 0) return
+      
+      console.log(`🤖 Auto-materializzazione di ${autoTransactions.length} transazioni automatiche scadute`)
+      
+      // Materializza ogni transazione automatica
+      for (const tx of autoTransactions) {
+        try {
+          console.log(`🤖 Auto-materializzazione transazione: ${tx.title}`)
+          await materializePlannedTx(tx.id)
+        } catch (error) {
+          console.error(`❌ Errore auto-materializzazione transazione ${tx.title}:`, error)
+          // Continua con le altre transazioni anche se una fallisce
+        }
+      }
+      
+      // ✨ REFRESH delle transazioni normali per mostrarle immediatamente nel tab
+      if (autoTransactions.length > 0 && refreshTransactions && typeof refreshTransactions === 'function') {
+        setTimeout(() => {
+          console.log('🔄 Auto-refresh transazioni dopo auto-materializzazione')
+          refreshTransactions()
+        }, 500) // Piccolo delay per permettere al backend di completare il sync
+      }
+    }
+    
+    // Esegui l'auto-materializzazione
+    autoMaterializeTransactions()
+  }, [dueTransactions, token])
 
   // 🔸 Gestione modal planned transactions
   const openAddPlannedTx = () => { setEditingPlannedTx(null); setPlannedTxModalOpen(true) }
@@ -151,13 +208,11 @@ export function usePlannedTransactions(token) {
             targetMonth: null
           }
           await applyTransactionToBudget(savedTransaction, budgetOptions, subcats, batchUpsertBudgets)
-          console.log('Transazione applicata automaticamente al budgeting')
           
           // 🔸 Refresh dello stato budgeting se fornita la callback
           if (refreshBudgets && typeof refreshBudgets === 'function') {
             try {
               await refreshBudgets()
-              console.log('Dati budgeting aggiornati dopo applicazione automatica')
             } catch (refreshError) {
               console.error('Errore nel refresh budgeting:', refreshError)
             }
@@ -188,7 +243,6 @@ export function usePlannedTransactions(token) {
           targetMonth: null
         }
         await removeTransactionFromBudgeting(transactionToDelete, options, subcats, batchUpsertBudgets)
-        console.log('Transazione rimossa dal budgeting prima dell\'eliminazione')
         
         // Refresh budgeting data
         if (refreshBudgets && typeof refreshBudgets === 'function') {
@@ -247,30 +301,6 @@ export function usePlannedTransactions(token) {
   }
 
   // Removed reorderGroups and movePlannedTx functions - no longer needed without drag-and-drop
-
-  // 🔸 Materializzazione transazioni
-  const materializePlannedTx = async (plannedTxId) => {
-    try {
-      console.log('🎯 DEBUG: Starting materialize for transaction:', plannedTxId)
-      
-      const newTransaction = await api.materializePlannedTransaction(token, plannedTxId)
-      
-      console.log('✅ DEBUG: Materialize response:', newTransaction)
-      
-      // Force full refresh to get updated data including nextDueDate changes
-      console.log('🔄 DEBUG: Forcing complete refresh after materialize...')
-      setRefreshTrigger(prev => {
-        const newVal = prev + 1
-        console.log('🔄 DEBUG: Refresh trigger incremented from', prev, 'to', newVal)
-        return newVal
-      })
-      
-      return newTransaction
-    } catch (err) {
-      console.error('❌ Errore materialize planned tx:', err.message)
-      throw err
-    }
-  }
 
   // 🔸 Refresh funzioni
   const refresh = () => {

@@ -3,8 +3,19 @@ import React, { useState } from 'react';
 import { Button } from '../../ui';
 import { Pencil, Trash2, FileText, X } from 'lucide-react';
 import { MAIN_CATS } from '../../../lib/constants.js';
-import { nice } from '../../../lib/utils.js';
 import SvgIcon from '../../icons/components/SvgIcon.jsx';
+import { parseLocalDate, formatDateForDisplay } from '../../../lib/dateUtils.js';
+import { nice } from '../../../lib/utils.js';
+
+/* Converte stringa in Title Case */
+function toTitleCase(str) {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
 
 /* Da HEX a rgba con alpha */
 function hexToRgba(hex, a = 1) {
@@ -23,8 +34,10 @@ const MAIN_COLOR = MAIN_CATS.reduce((acc, m) => {
 }, {});
 
 /* Stile del badge Tipo (usa i colori reali della main) */
-function typeBadgeStyle(mainKey) {
-  const base = MAIN_COLOR[mainKey] || '#94a3b8';
+function typeBadgeStyle(mainKey, customMainCats = []) {
+  // Prima cerca nelle custom categories, poi fallback alle core
+  const customCat = customMainCats.find(c => c.key === mainKey);
+  const base = customCat?.color || MAIN_COLOR[mainKey] || '#94a3b8';
   return {
     backgroundColor: hexToRgba(base, 0.18),
     color: base,
@@ -39,9 +52,12 @@ const NEG_TEXT_LIGHT = '#c62828';
 const POS_TEXT_LIGHT = '#2e7d32';
 
 /* Importo formattato con simbolo € e segno in base alla main */
-function formatAmountEUR(row) {
+function formatAmountEUR(row, customMainCats = []) {
   const base = Number(row.amount) || 0;
-  const isNegative = row.main === 'expense' || row.main === 'debt';
+  
+  // Solo 'income' è positivo, tutto il resto è negativo
+  const isNegative = row.main !== 'income';
+  
   const abs = Math.abs(base);
   const num = nice(abs); // es. 1.234,56
   const sign = isNegative ? '-' : '+';
@@ -87,9 +103,14 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
 
   const openNote = (t) => {
     setNoteText(t.note || '');
+    // Usa customMainCats anche per la modale delle note
+    const customCat = state?.customMainCats?.find(c => c.key === t.main);
+    const fallbackCat = MAIN_CATS.find(m => m.key === t.main);
+    const categoryName = customCat?.name || fallbackCat?.name || t.main;
+    
     setNoteMeta({
-      date: new Date(t.date).toLocaleDateString('it-IT'),
-      main: MAIN_CATS.find(m => m.key === t.main)?.name || t.main,
+      date: formatDateForDisplay(parseLocalDate(t.date), 'it-IT'),
+      main: toTitleCase(categoryName),
       sub: getSubcategoryInfo(t, state).name,
     });
     setNoteOpen(true);
@@ -112,11 +133,16 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
 
         <tbody>
           {rows.map((t) => {
-            const mc = MAIN_CATS.find(m => m.key === t.main);
+            // Usa customMainCats per trovare la categoria (include sia core che custom)
+            const customCat = state?.customMainCats?.find(c => c.key === t.main);
+            const fallbackCat = MAIN_CATS.find(m => m.key === t.main);
+            const mc = customCat || fallbackCat;
+            
             const { name: subName, iconKey } = getSubcategoryInfo(t, state);
-            const badge = typeBadgeStyle(t.main);
+            const badge = typeBadgeStyle(t.main, state?.customMainCats);
 
-            const isNeg = t.main === 'expense' || t.main === 'debt';
+            // Solo 'income' è positivo, tutto il resto è negativo (incluse le custom)
+            const isNeg = t.main !== 'income';
             const amtClasses = [
               'px-2', 'py-0.5', 'rounded', 'inline-block', 'text-right', 'min-w-[110px]',
               isNeg
@@ -131,22 +157,22 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
                 className="align-top border-t border-[#e6e6e6] dark:border-slate-700/40 odd:bg-[#f8f9fa] dark:odd:bg-slate-800/40"
               >
                 <td className="p-2 whitespace-nowrap">
-                  {new Date(t.date).toLocaleDateString('it-IT')}
+                  {formatDateForDisplay(parseLocalDate(t.date), 'it-IT')}
                 </td>
 
                 <td className="p-2 whitespace-nowrap">
                   <span className="inline-flex items-center" style={badge}>
-                    {mc?.name}
+                    {toTitleCase(mc?.name)}
                   </span>
                 </td>
 
                 <td className="p-2 whitespace-nowrap">
                   <div className="flex items-center gap-2">
                     {iconKey ? (
-                      <span style={{ color: MAIN_COLOR[t.main] }}>
+                      <span style={{ color: mc?.color }}>
                         <SvgIcon
                           name={iconKey}
-                          color={MAIN_CATS.find(m => m.key === t.main)?.color}
+                          color={mc?.color}
                           size={18}
                         />
                       </span>

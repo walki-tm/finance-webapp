@@ -24,7 +24,7 @@
  */
 
 // 🔸 Import core React
-import React, { useMemo } from 'react'
+import React, { useMemo, useCallback } from 'react'
 
 // 🔸 Import providers e context
 import { ToastProvider } from './features/toast'
@@ -44,6 +44,7 @@ import useCategories from './features/categories/useCategories.js'
 import useTransactions from './features/transactions/useTransactions.js'
 import useTheme from './features/app/useTheme.js'
 import useTabState from './features/app/useTabState.js'
+import { useBalance } from './features/app/useBalance.js'
 
 // 🔸 Import icone
 import { Layers3, LogOut, SunMedium, Moon, User, Plus } from 'lucide-react'
@@ -54,8 +55,9 @@ import { Layers3, LogOut, SunMedium, Moon, User, Plus } from 'lucide-react'
  * Contenuto principale dell'app che usa il BudgetContext
  */
 function AppContent() {
-  // 🔸 Hook per autenticazione
+  // 🔸 Hook per autenticazione e saldo
   const { user, logout, token } = useAuth()
+  const { balance, isLoading: balanceLoading } = useBalance(token)
 
   // 🔸 Hook per UI e navigazione
   const { theme, toggleTheme } = useTheme()
@@ -86,10 +88,33 @@ function AppContent() {
     openAddTx,
     openEditTx,
     closeTxModal,
-    delTx,
-    saveTx,
+    delTx: originalDelTx,
+    saveTx: originalSaveTx,
     refreshTransactions,
   } = useTransactions(token)
+  
+  // 🔸 Wrapper functions che includono refresh per sincronizzazione
+  const delTx = useCallback(async (id) => {
+    console.log('🗑️ Deleting transaction:', id);
+    await originalDelTx(id);
+    // Force refresh dopo delete
+    setTimeout(() => {
+      refreshTransactions();
+      // Notifica componenti locali del cambiamento
+      window.dispatchEvent(new CustomEvent('transactionRefresh'));
+    }, 100);
+  }, [originalDelTx, refreshTransactions]);
+  
+  const saveTx = useCallback(async (payload) => {
+    console.log('💾 Saving transaction:', payload);
+    await originalSaveTx(payload);
+    // Force refresh dopo save
+    setTimeout(() => {
+      refreshTransactions();
+      // Notifica componenti locali del cambiamento
+      window.dispatchEvent(new CustomEvent('transactionRefresh'));
+    }, 100);
+  }, [originalSaveTx, refreshTransactions]);
 
 
   // 🔸 State consolidato per performance (memoized)
@@ -112,6 +137,8 @@ function AppContent() {
     },
     transactions: {
       state,
+      token,
+      updateTx: saveTx, // Passa la funzione per aggiornare transazioni
       delTx,
       openTxEditor: openEditTx,
       refreshTransactions, // Aggiunta la funzione di refresh
@@ -137,7 +164,7 @@ function AppContent() {
       // LoansPage gestisce il suo stato internamente via useLoans hook
       // Potenzialmente aggiungere props comuni qui se necessario
     },
-  }), [state, year, dashDetail, delTx, openEditTx, refreshTransactions, addSubcat, updateSubcat, removeSubcat, updateMainCat, addMainCat, removeMainCat, upsertBudget, batchUpsertBudgets, isManagedAutomatically])
+  }), [state, year, dashDetail, token, saveTx, delTx, openEditTx, refreshTransactions, addSubcat, updateSubcat, removeSubcat, updateMainCat, addMainCat, removeMainCat, upsertBudget, batchUpsertBudgets, isManagedAutomatically])
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
@@ -154,6 +181,23 @@ function AppContent() {
             <Badge variant="secondary" className="ml-2">Anno: {year}</Badge>
           </div>
           <div className="flex items-center gap-2">
+            {/* Saldo sempre visibile in topbar */}
+            {user && (
+              <div className="px-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Saldo attuale</div>
+                <div className={`text-sm font-semibold ${
+                  Number(balance) < 0 
+                    ? 'text-rose-600 dark:text-rose-400' 
+                    : 'text-emerald-600 dark:text-emerald-400'
+                }`}>
+                  {balanceLoading ? 'Caricamento...' : (
+                    balance !== null ? (Number(balance)).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })
+                    : 'Non disponibile'
+                  )}
+                </div>
+              </div>
+            )}
+            
             <Switch checked={theme === 'dark'} onCheckedChange={toggleTheme} />
             {theme === 'dark' ? <Moon className="h-4 w-4" /> : <SunMedium className="h-4 w-4" />}
             {user && (
@@ -171,26 +215,20 @@ function AppContent() {
         ) : (
           <>
             {/* Tabs */}
-            <div className="flex items-center justify-between flex-wrap gap-2 bg-slate-200/60 dark:bg-slate-800/60 p-1 rounded-2xl">
-              <div className="flex flex-wrap gap-2">
-                {tabs.map(({ key, label }) => (
-                  <button
-                    key={key}
-                    onClick={() => setActiveTab(key)}
-                    className={
-                      'px-3 py-2 rounded-xl text-sm transition ' +
-                      (activeTab === key
-                        ? 'bg-white dark:bg-slate-900 shadow border border-slate-200/40'
-                        : 'hover:bg-white/40 dark:hover:bg-slate-900/40')
-                    }>
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              <button onClick={openAddTx} className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm bg-gradient-to-tr from-sky-600 to-indigo-600 text-white hover:opacity-90">
-                <Plus className="h-4 w-4" /> Nuova Transazione
-              </button>
+            <div className="flex flex-wrap gap-2 bg-slate-200/60 dark:bg-slate-800/60 p-1 rounded-2xl">
+              {tabs.map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key)}
+                  className={
+                    'px-3 py-2 rounded-xl text-sm transition ' +
+                    (activeTab === key
+                      ? 'bg-white dark:bg-slate-900 shadow border border-slate-200/40'
+                      : 'hover:bg-white/40 dark:hover:bg-slate-900/40')
+                  }>
+                  {label}
+                </button>
+              ))}
             </div>
 
             <div className="mt-4">

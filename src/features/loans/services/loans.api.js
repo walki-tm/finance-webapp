@@ -147,6 +147,16 @@ export const loansApi = {
   payNextLoan: (token, loanId) =>
     request(`/api/loans/${loanId}/pay-next`, "POST", token),
 
+  /**
+   * 🎯 Estingue completamente un prestito
+   * @param {string} token - JWT token
+   * @param {string} loanId - ID del prestito
+   * @param {Object} payoffData - Dati estinzione
+   * @returns {Promise<Object>} Risultato con loan, payoffTransaction e summary
+   */
+  payoffLoan: (token, loanId, payoffData = {}) =>
+    request(`/api/loans/${loanId}/payoff`, "POST", token, payoffData),
+
   // =============================================================================
   // 🎯 SIMULATION OPERATIONS
   // =============================================================================
@@ -295,6 +305,7 @@ export const extendApiWithLoans = (api) => {
     recordLoanPayment: loansApi.recordLoanPayment,
     skipLoanPayment: loansApi.skipLoanPayment,
     payNextLoan: loansApi.payNextLoan,
+    payoffLoan: loansApi.payoffLoan,
     simulateLoanPayoff: loansApi.simulateLoanPayoff,
   }
 }

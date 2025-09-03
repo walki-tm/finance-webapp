@@ -153,6 +153,15 @@ export default function PlannedTransactionModal({
 
   const handleSave = () => {
     if (!isValid) return
+    
+    // 🔸 DEBUG: Log della data prima del salvataggio
+    console.log('🐛 DEBUG PlannedTransactionModal - handleSave:')
+    console.log('- formData.startDate (string):', formData.startDate)
+    console.log('- Date object from string:', new Date(formData.startDate))
+    console.log('- Date ISO string:', new Date(formData.startDate).toISOString())
+    console.log('- Today date for comparison:', new Date().toLocaleDateString('it-IT'))
+    console.log('- Input startDate vs today:', formData.startDate, 'vs', new Date().toISOString().slice(0, 10))
+    
     onSave(formData)
   }
   

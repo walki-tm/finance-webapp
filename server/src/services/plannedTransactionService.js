@@ -17,6 +17,7 @@
  */
 
 import { prisma } from '../lib/prisma.js'
+import { invalidateBalanceCache } from './balanceService.js'
 
 function httpError(status, message) {
   const err = new Error(message)
@@ -29,22 +30,93 @@ function calculateNextDueDate(startDate, frequency, currentDate = new Date()) {
   const start = new Date(startDate)
   const now = new Date(currentDate)
   
+  // 🔸 DEBUG per troubleshooting
+  console.log('📅 calculateNextDueDate DEBUG:')
+  console.log('  - startDate:', start.toISOString())
+  console.log('  - currentDate:', now.toISOString())
+  console.log('  - frequency:', frequency)
+  
   if (frequency === 'ONE_TIME') {
+    console.log('  - ONE_TIME: returning startDate as-is')
     return start
   }
   
   let nextDue = new Date(start)
   
+  // 🔸 Per date odierne o passate, la prima scadenza è la data di inizio stessa
+  // Solo se è nel futuro, saltiamo alla prossima occorrenza
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startOfStartDate = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+  
+  console.log('  - startOfToday:', startOfToday.toISOString())
+  console.log('  - startOfStartDate:', startOfStartDate.toISOString())
+  console.log('  - startOfStartDate <= startOfToday:', startOfStartDate <= startOfToday)
+  
+  if (startOfStartDate <= startOfToday) {
+    // La data di inizio è oggi o nel passato, quindi questa è la prima scadenza
+    console.log('  - Start date is today or in past, using as first due date')
+    return nextDue
+  }
+  
+  // Data nel futuro: calcola normalmente
   if (frequency === 'MONTHLY') {
     // Trova il prossimo mese con lo stesso giorno
     while (nextDue <= now) {
       nextDue.setMonth(nextDue.getMonth() + 1)
     }
+    console.log('  - MONTHLY future date, calculated nextDue:', nextDue.toISOString())
   } else if (frequency === 'YEARLY') {
     // Trova il prossimo anno con la stessa data
     while (nextDue <= now) {
       nextDue.setFullYear(nextDue.getFullYear() + 1)
     }
+    console.log('  - YEARLY future date, calculated nextDue:', nextDue.toISOString())
+  }
+  
+  return nextDue
+}
+
+// 🔸 Utility SPECIFICA per calcolo prossima occorrenza dopo materializzazione
+function calculateNextOccurrenceAfterMaterialization(startDate, frequency, lastDueDate) {
+  console.log('🔄 calculateNextOccurrenceAfterMaterialization DEBUG:')
+  console.log('  - startDate:', startDate)
+  console.log('  - frequency:', frequency)
+  console.log('  - lastDueDate:', lastDueDate)
+  
+  if (frequency === 'ONE_TIME') {
+    console.log('  - ONE_TIME: should not be called for one-time transactions')
+    return null
+  }
+  
+  const lastDue = new Date(lastDueDate)
+  let nextDue = new Date(lastDue)
+  
+  if (frequency === 'MONTHLY') {
+    // Gestisci correttamente i mesi con numero diverso di giorni
+    const originalDay = lastDue.getDate()
+    const currentMonth = lastDue.getMonth()
+    const currentYear = lastDue.getFullYear()
+    
+    console.log('  - Original day of month:', originalDay)
+    console.log('  - Current month:', currentMonth)
+    
+    // Vai al primo giorno del mese successivo
+    nextDue.setMonth(currentMonth + 1, 1)
+    
+    // Trova l'ultimo giorno del mese successivo
+    const lastDayOfNextMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate()
+    console.log('  - Last day of next month:', lastDayOfNextMonth)
+    
+    // Imposta il giorno: usa il giorno originale o l'ultimo giorno del mese se quello originale non esiste
+    const targetDay = Math.min(originalDay, lastDayOfNextMonth)
+    nextDue.setDate(targetDay)
+    
+    console.log('  - MONTHLY: Original day', originalDay, '-> Target day', targetDay, 'Result:', nextDue.toISOString())
+    
+  } else if (frequency === 'YEARLY') {
+    // Aggiungi un anno alla data di ultima scadenza
+    nextDue.setFullYear(nextDue.getFullYear() + 1)
+    console.log('  - YEARLY: Added 1 year to lastDueDate, result:', nextDue.toISOString())
   }
   
   return nextDue
@@ -65,7 +137,20 @@ function calculateNextOccurrences(startDate, frequency, count = 5, fromDate = ne
     occurrences.push(new Date(current))
     
     if (frequency === 'MONTHLY') {
-      current.setMonth(current.getMonth() + 1)
+      // Usa la stessa logica corretta per gestire i mesi con diverso numero di giorni
+      const originalDay = current.getDate()
+      const currentMonth = current.getMonth()
+      
+      // Vai al primo giorno del mese successivo
+      current.setMonth(currentMonth + 1, 1)
+      
+      // Trova l'ultimo giorno del mese successivo
+      const lastDayOfNextMonth = new Date(current.getFullYear(), current.getMonth() + 1, 0).getDate()
+      
+      // Imposta il giorno: usa il giorno originale o l'ultimo giorno del mese se quello originale non esiste
+      const targetDay = Math.min(originalDay, lastDayOfNextMonth)
+      current.setDate(targetDay)
+      
     } else if (frequency === 'YEARLY') {
       current.setFullYear(current.getFullYear() + 1)
     }
@@ -117,10 +202,20 @@ export async function listPlannedTransactions(userId, { groupId } = {}) {
  */
 export async function createPlannedTransaction(userId, data) {
   const { title, main, subId, subName, amount, note, payee, frequency, startDate, confirmationMode, groupId, appliedToBudget, loanId } = data
+  
+  // 🔸 DEBUG: Log nel service
+  console.log('🐛 DEBUG plannedTransactionService - createPlannedTransaction:')
+  console.log('- data.startDate (from controller):', startDate)
+  console.log('- startDate instanceof Date:', startDate instanceof Date)
+  console.log('- startDate.getTimezoneOffset():', startDate instanceof Date ? startDate.getTimezoneOffset() : 'N/A')
+  console.log('- loanId:', loanId)
+  
   const finalSubId = await resolveSubId(userId, subId, subName)
   
   // Calcola nextDueDate basandosi su frequency e startDate
+  console.log('- Before calculateNextDueDate:', startDate)
   const nextDueDate = calculateNextDueDate(startDate, frequency)
+  console.log('- After calculateNextDueDate:', nextDueDate)
   
   // Verifica che il gruppo appartenga all'utente se specificato
   if (groupId) {
@@ -134,28 +229,73 @@ export async function createPlannedTransaction(userId, data) {
     if (!loanExists) throw httpError(400, 'Invalid loanId')
   }
   
-  return prisma.plannedTransaction.create({
-    data: {
-      userId,
-      title: title || null,  // ✅ Aggiungi title mancante
-      main,
-      subId: finalSubId,
-      amount,
-      note: note || null,
-      payee: payee || null,
-      frequency,
-      startDate: new Date(startDate),
-      confirmationMode,
-      groupId: groupId || null,
-      appliedToBudget: appliedToBudget || false,
-      loanId: loanId || null, // ✅ Aggiungi loanId mancante
-      nextDueDate,
-    },
+  // 🔸 Le transazioni provenienti da loan devono essere sempre AUTOMATIC
+  let finalConfirmationMode = confirmationMode
+  if (loanId) {
+    console.log('- Forcing AUTOMATIC confirmation mode for loan transaction')
+    finalConfirmationMode = 'AUTOMATIC'
+  }
+  
+  const prismaData = {
+    userId,
+    title: title || null,  // ✅ Aggiungi title mancante
+    main,
+    subId: finalSubId,
+    amount,
+    note: note || null,
+    payee: payee || null,
+    frequency,
+    startDate: new Date(startDate),
+    confirmationMode: finalConfirmationMode,
+    groupId: groupId || null,
+    appliedToBudget: appliedToBudget || false,
+    loanId: loanId || null, // ✅ Aggiungi loanId mancante
+    nextDueDate,
+  }
+  
+  // 🔸 DEBUG: Log dei dati che vanno a Prisma
+  console.log('- Before Prisma create:')
+  console.log('  - prismaData.startDate:', prismaData.startDate)
+  console.log('  - prismaData.startDate.toISOString():', prismaData.startDate.toISOString())
+  
+  const result = await prisma.plannedTransaction.create({
+    data: prismaData,
     include: { 
       subcategory: true,
       group: true
     }
   })
+  
+  // 🔸 DEBUG: Log del risultato da Prisma
+  console.log('- After Prisma create:')
+  console.log('  - result.startDate:', result.startDate)
+  console.log('  - result.startDate.toISOString():', result.startDate?.toISOString())
+  
+  // 🔸 Se è una transazione con data odierna e AUTOMATIC, materializzala subito
+  if (finalConfirmationMode === 'AUTOMATIC') {
+    const today = new Date()
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const dueDateStart = new Date(result.nextDueDate.getFullYear(), result.nextDueDate.getMonth(), result.nextDueDate.getDate())
+    
+    console.log('- Checking if planned transaction should be materialized immediately:')
+    console.log('  - todayStart:', todayStart.toISOString())
+    console.log('  - dueDateStart:', dueDateStart.toISOString())
+    console.log('  - dueDateStart <= todayStart:', dueDateStart <= todayStart)
+    console.log('  - isLoanTransaction:', !!loanId)
+    
+    if (dueDateStart <= todayStart) {
+      console.log('- ⚙️ Auto-materializing planned transaction due today')
+      try {
+        const materialized = await materializePlannedTransaction(userId, result.id)
+        console.log('✅ Planned transaction auto-materialized:', materialized.id)
+      } catch (error) {
+        console.error('❌ Failed to auto-materialize planned transaction:', error.message)
+        // Non bloccare la creazione della transazione per questo errore
+      }
+    }
+  }
+  
+  return result
 }
 
 /**
@@ -449,7 +589,8 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
   
   // Se è una transazione collegata a un loan, registra il pagamento nel loan
   if (plannedTx.loanId) {
-    const { payLoan, syncLoanWithPaymentPlan } = await import('./loanService.js')
+    const { payLoan } = await import('./loanService.js')
+    const { syncLoanWithPaymentPlan } = await import('./loanBudgetingService.js')
     
     // Usa il nuovo servizio ottimizzato payLoan che gestisce automaticamente la prossima rata
     console.log('💰 DEBUG: Processing loan payment for planned transaction:', plannedTx.id, 'loan:', plannedTx.loanId)
@@ -488,10 +629,31 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
       const paymentNumber = updatedLoan?.paidPayments || 'N/A'
       
       // Crea la transazione reale con i dati del loan payment
+      // Usa la data odierna (inizio giornata) in UTC per evitare problemi di timezone
+      const today = new Date()
+      const transactionDate = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()))
+      console.log('📊 DEBUG: Creating transaction in register with date:', transactionDate, 'ISO:', transactionDate.toISOString())
+      console.log('📅 DEBUG: Today is:', today.toISOString(), 'but using date:', transactionDate.toISOString())
+      
+      // 💰 CORREZIONE: Assicurati che l'importo sia negativo per le spese
+      const finalAmount = plannedTx.main.toUpperCase() === 'EXPENSE' || plannedTx.main.toUpperCase() === 'DEBT' 
+        ? -Math.abs(plannedTx.amount) 
+        : plannedTx.amount
+      
+      console.log('🔧 DEBUG: Preparing transaction data:', {
+        userId,
+        date: transactionDate,
+        amount: finalAmount,
+        originalAmount: plannedTx.amount,
+        main: plannedTx.main,
+        subId: plannedTx.subId,
+        payee: plannedTx.payee
+      })
+      
       const transaction = await prisma.transaction.create({
         data: {
           userId,
-          date: loanPaymentResult.payment.paidDate || new Date(),
+          date: transactionDate,
           amount: plannedTx.amount, // Mantieni il segno negativo per le spese
           main: plannedTx.main,
           subId: plannedTx.subId,
@@ -500,6 +662,34 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
         },
         include: { subcategory: true }
       })
+      
+      // Invalida cache saldo dopo creazione transazione da loan
+      invalidateBalanceCache(userId)
+      
+      console.log('✅ Transaction created successfully in database:')
+      console.log('  - ID:', transaction.id)
+      console.log('  - Date:', transaction.date?.toISOString())
+      console.log('  - Amount:', transaction.amount)
+      console.log('  - Note:', transaction.note)
+      
+      // 🔍 Verifica immediata: rileggi la transazione dal database per assicurarci che sia stata salvata
+      try {
+        const verifyTransaction = await prisma.transaction.findUnique({
+          where: { id: transaction.id },
+          include: { subcategory: true }
+        })
+        
+        if (verifyTransaction) {
+          console.log('✅ VERIFICATION: Transaction successfully found in database:')
+          console.log('  - Verified ID:', verifyTransaction.id)
+          console.log('  - Verified Date:', verifyTransaction.date?.toISOString())
+          console.log('  - Verified Amount:', verifyTransaction.amount)
+        } else {
+          console.error('❌ VERIFICATION FAILED: Transaction not found in database after creation!')
+        }
+      } catch (verifyError) {
+        console.error('❌ VERIFICATION ERROR:', verifyError.message)
+      }
       
       console.log('✅ Loan payment recorded and transaction created')
       
@@ -536,10 +726,15 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
   }
   
   // Comportamento normale per transazioni non-loan
+  // Usa la data odierna (inizio giornata) in UTC per evitare problemi di timezone
+  const today = new Date()
+  const transactionDate = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()))
+  console.log('📊 DEBUG: Creating non-loan transaction with date:', transactionDate, 'ISO:', transactionDate.toISOString())
+  
   const transaction = await prisma.transaction.create({
     data: {
       userId,
-      date: plannedTx.nextDueDate,
+      date: transactionDate,
       amount: plannedTx.amount,
       main: plannedTx.main,
       subId: plannedTx.subId,
@@ -549,9 +744,17 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
     include: { subcategory: true }
   })
   
+  // Invalida cache saldo dopo creazione transazione pianificata
+  invalidateBalanceCache(userId)
+  
   // Aggiorna nextDueDate della transazione pianificata se ricorrente
   if (plannedTx.frequency !== 'ONE_TIME') {
-    const newNextDueDate = calculateNextDueDate(plannedTx.startDate, plannedTx.frequency, plannedTx.nextDueDate)
+    // Usa la funzione specifica per calcolare la prossima occorrenza dopo materializzazione
+    const newNextDueDate = calculateNextOccurrenceAfterMaterialization(
+      plannedTx.startDate,
+      plannedTx.frequency,
+      plannedTx.nextDueDate
+    )
     
     await prisma.plannedTransaction.update({
       where: { id: plannedTxId },
@@ -577,7 +780,8 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
  */
 export async function getPlannedTransactionsDue(userId, daysAhead = 7) {
   const now = new Date()
-  const futureDate = new Date(now)
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()) // 00:00:00 di oggi
+  const futureDate = new Date(todayStart)
   futureDate.setDate(futureDate.getDate() + daysAhead)
   
   return prisma.plannedTransaction.findMany({
@@ -585,7 +789,8 @@ export async function getPlannedTransactionsDue(userId, daysAhead = 7) {
       userId,
       isActive: true,
       nextDueDate: {
-        lte: futureDate
+        gte: todayStart, // 🔄 FIXED: Include solo da oggi in poi
+        lte: futureDate  // Fino a daysAhead giorni nel futuro
       }
     },
     orderBy: { nextDueDate: 'asc' },

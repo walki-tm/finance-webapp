@@ -3,6 +3,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent } from '../../ui';
 import { MAIN_CATS, months } from '../../../lib/constants.js';
 import { nice } from '../../../lib/utils.js';
+import { formatDateForAPI, parseLocalDate, getMonthBounds, getYearBounds } from '../../../lib/dateUtils.js';
 import SvgIcon from '../../icons/components/SvgIcon.jsx';
 import BudgetTable from '../components/BudgetTable.jsx';
 import { buildCtxFromState, selectBudgetRows } from '../lib';
@@ -29,7 +30,7 @@ function hexToRgba(hex, a = 1) {
 const isDark = () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
 function monthKey(date) {
-  const d = new Date(date);
+  const d = parseLocalDate(date);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 

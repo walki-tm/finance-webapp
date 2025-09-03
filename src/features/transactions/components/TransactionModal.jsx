@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, AlertCircle, StickyNote, ChevronDown, TrendingUp, ShoppingCart, CreditCard, PiggyBank } from 'lucide-react';
 import { MAIN_CATS } from '../../../lib/constants.js';
 import SvgIcon from '../../icons/components/SvgIcon.jsx';
+import { formatDateForAPI, getTodayDate } from '../../../lib/dateUtils.js';
 
 /* ===== utils ===== */
 function hexToRgba(hex, a = 1) {
@@ -209,7 +210,7 @@ export default function TransactionModal({
   // stato form
   const [main, setMain] = useState(initial?.main || 'expense');
   const [sub, setSub] = useState(initial?.sub || '');
-  const [date, setDate] = useState(initial?.date || new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(initial?.date ? formatDateForAPI(new Date(initial.date)) : formatDateForAPI(getTodayDate()));
   const [amount, setAmount] = useState(initial?.amount != null ? Math.abs(Number(initial.amount)) : '');
   const [note, setNote] = useState(initial?.note || '');
   const [showNote, setShowNote] = useState(Boolean(initial?.note));

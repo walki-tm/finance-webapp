@@ -120,6 +120,12 @@ export default function LoansDashboard({
     openModal('deleteLoan', loan)
   }
 
+  const handlePayoffLoan = (loan) => {
+    console.log('🔥 [LoansDashboard] handlePayoffLoan called for:', loan.name)
+    console.log('🔥 [LoansDashboard] openModal function:', typeof openModal)
+    openModal('payoffLoan', loan)
+  }
+
   const handleCreateLoan = () => {
     openModal('createLoan')
   }
@@ -372,6 +378,7 @@ export default function LoansDashboard({
                 onSimulatePayoff={handleSimulatePayoff}
                 onEdit={handleEditLoan}
                 onDelete={handleDeleteLoan}
+                onPayoff={handlePayoffLoan}
               />
             ))}
           </div>

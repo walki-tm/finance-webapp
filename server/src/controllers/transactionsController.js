@@ -5,6 +5,7 @@ import {
   updateTransaction as updateTransactionService,
   deleteTransaction as deleteTransactionService,
 } from '../services/transactionService.js'
+import { invalidateBalanceCache } from '../services/balanceService.js'
 
 const txSchema = z.object({
   date: z.coerce.date(),
@@ -28,7 +29,15 @@ const txPatchSchema = z.object({
 
 export async function listTransactions(req, res, next) {
   try {
+    // 🔍 DEBUG: Log ogni chiamata API
+    console.log('🚀 API Call: GET /api/transactions')
+    console.log('  - User ID:', req.user.id)
+    console.log('  - Query params:', req.query)
+    console.log('  - URL completa:', req.url)
+    
     const data = await listTransactionsService(req.user.id, req.query)
+    
+    console.log('  - Risultato: trovate', data.length, 'transazioni')
     res.json(data)
   } catch (e) { next(e) }
 }
@@ -38,6 +47,7 @@ export async function createTransaction(req, res, next) {
   if (!parsed.success) return res.status(400).json({ error: 'Invalid body' })
   try {
     const created = await createTransactionService(req.user.id, parsed.data)
+    invalidateBalanceCache(req.user.id) // Invalida cache saldo
     res.status(201).json(created)
   } catch (e) { next(e) }
 }
@@ -47,6 +57,7 @@ export async function updateTransaction(req, res, next) {
   if (!parsed.success) return res.status(400).json({ error: 'Invalid body' })
   try {
     const updated = await updateTransactionService(req.user.id, req.params.id, parsed.data)
+    invalidateBalanceCache(req.user.id) // Invalida cache saldo
     res.json(updated)
   } catch (e) { next(e) }
 }
@@ -54,6 +65,7 @@ export async function updateTransaction(req, res, next) {
 export async function deleteTransaction(req, res, next) {
   try {
     await deleteTransactionService(req.user.id, req.params.id)
+    invalidateBalanceCache(req.user.id) // Invalida cache saldo
     res.status(204).end()
   } catch (e) { next(e) }
 }

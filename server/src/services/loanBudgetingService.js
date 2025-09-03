@@ -128,11 +128,17 @@ export async function createLoanPaymentPlan(userId, loan) {
       payee: loan.lenderName,
       frequency,
       startDate: nextPaymentDate, // Usa la data calcolata dinamicamente
-      confirmationMode: 'MANUAL', // L'utente deve confermare i pagamenti
+      confirmationMode: 'AUTOMATIC', // ✅ AUTOMATICO per prestiti - verranno auto-materializzate se in scadenza
       groupId: null, // Potremmo creare un gruppo "Prestiti" in futuro
       appliedToBudget: false, // L'utente può scegliere se applicare al budgeting
       loanId: loan.id // Collegamento diretto al prestito
     }
+    
+    console.log('🏦 DEBUG: Creating planned transaction for loan:', loan.id)
+    console.log('📅 Start date:', nextPaymentDate, 'ISO:', nextPaymentDate.toISOString())
+    console.log('💰 Monthly payment amount:', parseFloat(loan.monthlyPayment))
+    console.log('🔄 Frequency: MONTHLY')
+    console.log('⚡ Confirmation mode: AUTOMATIC')
 
     // Crea la planned transaction
     const plannedTransaction = await createPlannedTransaction(userId, plannedTransactionData)

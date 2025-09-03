@@ -76,7 +76,7 @@ export default function ActionsMenu({ onEdit, onRemove, onReset, customActions =
         document.removeEventListener("keydown", onKey);
       };
     }
-  }, [open, customActions, onEdit, onReset, onRemove]);
+  }, [open, customActions?.length]);
 
   const baseItem = "w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800";
   const item = baseItem + " text-slate-700 dark:text-slate-100";

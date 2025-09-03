@@ -96,7 +96,7 @@ export default function PlannedTransactionsTab({ state, onOpenAddPlannedTx, refr
     applyTransactionToBudget,
     applyGroupToBudgeting,
     toggleTransactionActive: toggleTransactionActiveBase,
-  } = usePlannedTransactions(token)
+  } = usePlannedTransactions(token, { refreshTransactions })
   
   // 🎉 Wrapper con toast per deletePlannedTx - CON REFRESH BUDGETING
   const deletePlannedTx = async (transactionId) => {
@@ -161,10 +161,10 @@ export default function PlannedTransactionsTab({ state, onOpenAddPlannedTx, refr
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     
     switch (dueStatus) {
-      case 'overdue': return diffDays < 0
-      case 'today': return diffDays === 0
-      case 'this_week': return diffDays > 0 && diffDays <= 7
-      case 'upcoming': return diffDays > 7
+      case 'overdue': return diffDays < 0  // Solo transazioni veramente scadute (ieri e prima)
+      case 'today': return diffDays === 0  // Solo transazioni di oggi
+      case 'this_week': return diffDays >= 0 && diffDays <= 7  // 🔄 FIXED: Include oggi (0) e prossimi 7 giorni
+      case 'upcoming': return diffDays > 7  // Future (oltre 7 giorni)
       default: return true
     }
   }
@@ -196,7 +196,11 @@ export default function PlannedTransactionsTab({ state, onOpenAddPlannedTx, refr
   const isExpired = (transaction) => {
     const now = new Date()
     const dueDate = new Date(transaction.nextDueDate)
-    return dueDate < now
+    const diffTime = dueDate - now
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    // 🔄 FIXED: Usa la stessa logica di applyDueStatusFilter - Solo transazioni veramente scadute (ieri e prima)
+    return diffDays < 0
   }
   
   // 🔸 Funzione per ordinare transazioni (prima OK, poi scadute)
@@ -267,8 +271,6 @@ const handleDirectBudgetApplication = async (transaction) => {
         description: `€${Math.abs(transaction.amount).toFixed(2)} mensile aggiunta ai budget ${currentYear}`
       }
     )
-    
-    console.log('Transazione mensile applicata direttamente al budgeting')
   } catch (error) {
     console.error('Errore nell\'applicazione diretta al budgeting:', error)
     
@@ -366,8 +368,6 @@ const handleBudgetApplication = async (options) => {
         { description: `€${Math.abs(transaction.amount).toFixed(2)} ${application}` }
       )
     }
-    
-    console.log('Applicazione al budget completata con successo')
   } catch (error) {
     console.error('Errore nell\'applicazione al budget:', error)
     alert('Errore nell\'applicazione al budget: ' + error.message)
@@ -622,29 +622,22 @@ const handleBudgetApplication = async (options) => {
                 onDeleteTransaction={deletePlannedTx}
                 onMaterialize={async (txId) => {
                   try {
-                    console.log('🎯 DEBUG: Starting materialize for transaction:', txId)
-                    
                     // Get transaction details to check if it's a loan payment
                     const transaction = plannedTransactions.find(tx => tx.id === txId)
                     
                     const result = await materializePlannedTx(txId)
                     
-                    console.log('✅ DEBUG: Materialize completed, result:', result)
-                    
                     // If this was a loan payment, refresh the loan data (payment already processed by materialize)
                     if (transaction?.loanId && result) {
-                      console.log('💰 DEBUG: Triggering loan data refresh for loan:', transaction.loanId)
                       await refreshLoanData(transaction.loanId)
                     }
                     
                     // Small delay to ensure backend sync operations complete
                     setTimeout(() => {
-                      console.log('🔄 DEBUG: Delayed refresh after materialize...')
                       refresh()
                       // ✨ REFRESH delle transazioni per mostrare la nuova transazione materializzata
                       if (refreshTransactions) {
                         refreshTransactions()
-                        console.log('🔄 DEBUG: Transactions refreshed after materialize')
                       }
                     }, 500) // Increased delay to allow backend sync
                     
@@ -668,8 +661,6 @@ const handleBudgetApplication = async (options) => {
                   try {
                     // Se il skip è già stato completato dal card, fai solo refresh
                     if (skipData?.skipCompleted && skipData?.refreshOnly) {
-                      console.log('🔄 DEBUG: Skip already completed by card, doing refresh only...')
-                      
                       // Solo refresh dei dati senza operazioni aggiuntive
                       refresh()
                       
@@ -680,14 +671,10 @@ const handleBudgetApplication = async (options) => {
                     }
                     
                     // Fallback: chiamata diretta API (non dovrebbe mai essere eseguita ora)
-                    console.log('🔄 DEBUG: Fallback - calling API directly...')
                     const result = await api.skipLoanPayment(token, transaction.loanId)
-                    
-                    console.log('🔄 DEBUG: Skip completed, forcing refresh trigger increment...')
                     
                     // 🆕 FORZA REFRESH COMPLETO: Incrementa il trigger per bypassare completamente la cache
                     refresh() // Questo chiama setRefreshTrigger(prev => prev + 1) internamente
-                    console.log('🔄 DEBUG: Refresh trigger incremented to bypass cache')
                     
                     toast.success(`⏭️ Rata saltata per ${transaction.title || 'transazione'}`, {
                       description: 'Il prossimo pagamento è stato spostato al mese successivo'
@@ -736,26 +723,19 @@ const handleBudgetApplication = async (options) => {
                 onDelete={() => deletePlannedTx(tx.id)}
                 onMaterialize={async () => {
                   try {
-                    console.log('🎯 DEBUG: Starting materialize for transaction:', tx.id)
-                    
                     const result = await materializePlannedTx(tx.id)
-                    
-                    console.log('✅ DEBUG: Materialize completed, result:', result)
                     
                     // If this was a loan payment, refresh the loan data (payment already processed by materialize)
                     if (tx.loanId && result) {
-                      console.log('💰 DEBUG: Triggering loan data refresh for loan:', tx.loanId)
                       await refreshLoanData(tx.loanId)
                     }
                     
                     // Small delay to ensure backend sync operations complete
                     setTimeout(() => {
-                      console.log('🔄 DEBUG: Delayed refresh after materialize...')
                       refresh()
                       // ✨ REFRESH delle transazioni per mostrare la nuova transazione materializzata
                       if (refreshTransactions) {
                         refreshTransactions()
-                        console.log('🔄 DEBUG: Transactions refreshed after materialize')
                       }
                     }, 500) // Increased delay to allow backend sync
                     
@@ -778,11 +758,8 @@ const handleBudgetApplication = async (options) => {
                   try {
                     // Se il skip è già stato completato dal card, fai solo refresh
                     if (skipData?.skipCompleted && skipData?.refreshOnly) {
-                      console.log('🔄 DEBUG: Skip already completed by card, doing refresh only...')
-                      
                       // Solo refresh dei dati senza operazioni aggiuntive
                       setTimeout(() => {
-                        console.log('🔄 DEBUG: Delayed refresh after skip payment...')
                         refresh()
                       }, 500) // Delay ridotto per refresh
                       
@@ -793,17 +770,12 @@ const handleBudgetApplication = async (options) => {
                     }
                     
                     // Fallback: chiamata diretta API (non dovrebbe mai essere eseguita ora)
-                    console.log('🔄 DEBUG: Fallback - calling API directly...')
                     const result = await api.skipLoanPayment(token, transaction.loanId)
-                    
-                    console.log('🔄 DEBUG: Skip completed, forcing refresh trigger increment...')
                     
                     // 🕰️ Aspetta un momento per permettere al database di aggiornarsi completamente
                     setTimeout(() => {
-                      console.log('🔄 DEBUG: Delayed refresh after skip payment...')
                       // 🆕 FORZA REFRESH COMPLETO: Incrementa il trigger per bypassare completamente la cache
                       refresh() // Questo chiama setRefreshTrigger(prev => prev + 1) internamente
-                      console.log('🔄 DEBUG: Refresh trigger incremented to bypass cache')
                     }, 1000) // Delay di 1 secondo per permettere al sync di completarsi
                     
                     toast.success(`⏭️ Rata saltata per ${transaction.title || 'transazione'}`, {
