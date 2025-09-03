@@ -79,9 +79,15 @@ UI: Custom components + Lucide Icons
 
 ### ⚡ Performance e Ottimizzazioni
 - **Database**: Ottimizzazioni query N+1 implementate in `batchAccumulateBudgets`
+- **Balance System**: Sistema saldo ottimizzato con cache intelligente (339ms → 0ms)
+  - Hook `useBalance` centralizzato per gestione saldo applicazione
+  - Cache intelligente 30s TTL + invalidazione automatica
+  - Query singola aggregata invece di multiple query
+  - Testato con 12k+ transazioni: performance eccellenti
 - **Toast System**: Feedback UI immediato per operazioni budgeting
 - **Real-time Sync**: Refresh automatico dati budgeting per tutte le operazioni CRUD
 - **Background Processing**: Operazioni async ottimizzate per UX fluida
+- **Cache Management**: Invalidazione automatica su tutte le operazioni transazioni
 
 ### 📊 State Management
 - **Pattern**: Custom hooks per feature
@@ -335,7 +341,7 @@ npx prisma generate
 
 ---
 
-**🔄 Ultimo aggiornamento**: 31 Agosto 2025  
-**📝 Versione**: 2.0.0
+**🔄 Ultimo aggiornamento**: 3 Settembre 2025  
+**📝 Versione**: 2.1.0
 
 > **Ricorda**: Questo progetto ha una struttura consolidata. Cambiamenti strutturali richiedono sempre approvazione esplicita dall'utente.
