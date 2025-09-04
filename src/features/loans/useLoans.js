@@ -20,6 +20,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { loansApi } from './services/loans.api.js'
+import { triggerBalanceRefresh } from '../app/useBalance.js'
 
 export function useLoans(token) {
   // =============================================================================
@@ -202,6 +203,11 @@ export function useLoans(token) {
       // Aggiorna lista prestiti
       await loadUserLoans()
       
+      // 🔄 Trigger refresh saldo se il prestito ha planned transactions attive
+      if (loanData.autoCreatePayments) {
+        triggerBalanceRefresh()
+      }
+      
       // Chiudi modal
       closeModal('createLoan')
       
@@ -305,6 +311,9 @@ export function useLoans(token) {
       // Aggiorna lista prestiti per i summary
       await loadUserLoans()
       
+      // 🔄 Trigger refresh saldo dopo registrazione pagamento
+      triggerBalanceRefresh()
+      
       closeModal('paymentRecord')
       
       return result
@@ -338,6 +347,9 @@ export function useLoans(token) {
       if (loanDetails && loanDetails.id === loanId) {
         await loadLoanDetails(loanId)
       }
+      
+      // 🔄 Trigger refresh saldo dopo pagamento automatico rata
+      triggerBalanceRefresh()
       
       return result
 
@@ -392,6 +404,9 @@ export function useLoans(token) {
       if (loanDetails && loanDetails.id === loanId) {
         await loadLoanDetails(loanId)
       }
+      
+      // 🔄 Trigger refresh saldo dopo estinzione prestito
+      triggerBalanceRefresh()
       
       // Chiudi modale payoff
       closeModal('payoffLoan')

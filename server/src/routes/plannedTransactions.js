@@ -27,6 +27,7 @@ import {
   movePlannedTransaction,
   materializePlannedTransaction,
   getPlannedTransactionsDue,
+  getUpcomingPlannedTransactions,
   getNextOccurrences,
   applyToBudgeting,
   removeFromBudgeting,
@@ -45,6 +46,7 @@ router.delete('/:id', deletePlannedTransaction)
 // 🔸 Routes per materializzazione
 router.post('/:id/materialize', materializePlannedTransaction)
 router.get('/due', getPlannedTransactionsDue)
+router.get('/upcoming', getUpcomingPlannedTransactions)
 
 // 🔸 Routes per spostamento tra gruppi
 router.patch('/:id/move', movePlannedTransaction)

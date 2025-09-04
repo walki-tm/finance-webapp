@@ -92,3 +92,33 @@ export async function deleteSubcategory(userId, id) {
     await tx.subcategory.delete({ where: { id } })
   })
 }
+
+/**
+ * 🎯 SERVICE: Aggiorna visibilità categoria per dashboard
+ */
+export async function updateCategoryVisibility(userId, main, visible) {
+  // Cerca tutte le categorie con lo stesso main per questo utente
+  const categories = await prisma.category.findMany({
+    where: { userId, main: main.toUpperCase() }
+  })
+  
+  if (categories.length === 0) {
+    throw httpError(404, `Categoria ${main} non trovata`)
+  }
+  
+  // Aggiorna tutte le categorie con lo stesso main
+  await prisma.category.updateMany({
+    where: { userId, main: main.toUpperCase() },
+    data: { visible }
+  })
+  
+  // Ritorna le categorie aggiornate
+  return prisma.category.findMany({
+    where: { userId, main: main.toUpperCase() },
+    include: {
+      subcats: {
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }]
+      }
+    }
+  })
+}

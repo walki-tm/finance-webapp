@@ -635,12 +635,12 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
       console.log('📊 DEBUG: Creating transaction in register with date:', transactionDate, 'ISO:', transactionDate.toISOString())
       console.log('📅 DEBUG: Today is:', today.toISOString(), 'but using date:', transactionDate.toISOString())
       
-      // 💰 CORREZIONE: Assicurati che l'importo sia negativo per le spese
-      const finalAmount = plannedTx.main.toUpperCase() === 'EXPENSE' || plannedTx.main.toUpperCase() === 'DEBT' 
-        ? -Math.abs(plannedTx.amount) 
-        : plannedTx.amount
+      // 💰 CORREZIONE: Solo INCOME ha importo positivo, tutte le altre categorie sono negative
+      const finalAmount = plannedTx.main.toUpperCase() === 'INCOME' 
+        ? Math.abs(plannedTx.amount) 
+        : -Math.abs(plannedTx.amount)
       
-      console.log('🔧 DEBUG: Preparing transaction data:', {
+      console.log('🔧 DEBUG: Preparing loan transaction data:', {
         userId,
         date: transactionDate,
         amount: finalAmount,
@@ -654,7 +654,7 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
         data: {
           userId,
           date: transactionDate,
-          amount: plannedTx.amount, // Mantieni il segno negativo per le spese
+          amount: finalAmount, // Usa l'importo corretto
           main: plannedTx.main,
           subId: plannedTx.subId,
           note: `Rata prestito #${paymentNumber} - ${plannedTx.title || 'Rata'} - Capitale: €${loanPaymentResult.payment.principalAmount?.toFixed(2) || '0.00'}, Interessi: €${loanPaymentResult.payment.interestAmount?.toFixed(2) || '0.00'}`,
@@ -731,11 +731,26 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
   const transactionDate = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()))
   console.log('📊 DEBUG: Creating non-loan transaction with date:', transactionDate, 'ISO:', transactionDate.toISOString())
   
+  // 💰 CORREZIONE: Solo INCOME ha importo positivo, tutte le altre categorie sono negative
+  const finalAmount = plannedTx.main.toUpperCase() === 'INCOME' 
+    ? Math.abs(plannedTx.amount) 
+    : -Math.abs(plannedTx.amount)
+  
+  console.log('🔧 DEBUG: Preparing non-loan transaction data:', {
+    userId,
+    date: transactionDate,
+    amount: finalAmount,
+    originalAmount: plannedTx.amount,
+    main: plannedTx.main,
+    subId: plannedTx.subId,
+    payee: plannedTx.payee
+  })
+  
   const transaction = await prisma.transaction.create({
     data: {
       userId,
       date: transactionDate,
-      amount: plannedTx.amount,
+      amount: finalAmount,
       main: plannedTx.main,
       subId: plannedTx.subId,
       note: plannedTx.note,

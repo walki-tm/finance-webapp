@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { api } from '../../lib/api.js';
 import { formatDateTimeForAPI, getTodayDate } from '../../lib/dateUtils.js';
+import { triggerBalanceRefresh } from '../app/useBalance.js';
 
 const normalizeMainKey = (main) => {
   const u = String(main || 'EXPENSE').toUpperCase();
@@ -23,16 +24,13 @@ export function useTransactions(token, filters = null) {
   // Funzione per caricare transazioni con filtri specifici
   const loadTransactions = useCallback(async (apiFilters) => {
     if (!token) { 
-      console.log('❌ No token, skipping load');
       setTransactions([]);
       return;
     }
     
     setLoading(true);
     try {
-      console.log('🔄 Loading transactions with filters:', apiFilters);
       const list = await api.listTransactions(token, apiFilters);
-      console.log('📦 Raw API response:', list);
       
       if (!Array.isArray(list)) {
         console.error('❌ API response is not an array:', list);
@@ -47,7 +45,6 @@ export function useTransactions(token, filters = null) {
             main: normalizeMainKey(t.main),
             sub: t.subcategory?.name || t.sub || '',
           };
-          if (index < 2) console.log(`🔧 Normalized transaction ${index}:`, result);
           return result;
         } catch (err) {
           console.error(`❌ Error normalizing transaction ${index}:`, t, err);
@@ -55,16 +52,13 @@ export function useTransactions(token, filters = null) {
         }
       });
       
-      console.log('🔧 About to setTransactions with:', normalized.length, 'transactions');
       setTransactions(normalized);
-      console.log('✅ setTransactions called successfully');
       
     } catch (err) {
       console.error('❌ Errore list tx:', err.message, err);
       setTransactions([]);
     } finally {
       setLoading(false);
-      console.log('🎁 Loading completed');
     }
   }, [token]);
 
@@ -82,22 +76,17 @@ export function useTransactions(token, filters = null) {
       limit: 200
     };
     
-    console.log('🎯 useTransactions: loading with filters:', filtersToUse);
-    
     // Carica direttamente senza usare loadTransactions nel dependency
     const doLoad = async () => {
       setLoading(true);
       try {
-        console.log('🔄 Loading transactions with filters:', filtersToUse);
         const list = await api.listTransactions(token, filtersToUse);
         const normalized = list.map(t => ({
           ...t,
           main: normalizeMainKey(t.main),
           sub: t.subcategory?.name || t.sub || '',
         }));
-        console.log('🔧 About to setTransactions with:', normalized.length, 'transactions', normalized.slice(0, 2));
         setTransactions(normalized);
-        console.log('✅ Loaded', normalized.length, 'transactions');
       } catch (err) {
         console.error('❌ Errore list tx:', err.message);
         setTransactions([]);
@@ -109,14 +98,6 @@ export function useTransactions(token, filters = null) {
     doLoad();
   }, [token, refreshTrigger, filtersString]);
 
-  // Debug: log dello stato attuale delle transazioni
-  console.log('📊 useTransactions hook state:', {
-    transactionsLength: transactions.length,
-    transactions: transactions.slice(0, 2),
-    loading,
-    filtersString
-  });
-
   const openAddTx = () => { setEditingTx(null); setTxModalOpen(true); };
   const openEditTx = (tx) => { setEditingTx(tx); setTxModalOpen(true); };
   const closeTxModal = () => { setTxModalOpen(false); setEditingTx(null); };
@@ -125,6 +106,10 @@ export function useTransactions(token, filters = null) {
     setTransactions(s => s.filter(t => t.id !== id));
     try {
       await api.deleteTransaction(token, id);
+      
+      // 🔄 Trigger refresh saldo dopo eliminazione transazione
+      triggerBalanceRefresh();
+      
     } catch (err) {
       console.error('Errore delete tx:', err.message);
     }
@@ -148,11 +133,18 @@ export function useTransactions(token, filters = null) {
         const normalizedMain = normalizeMainKey(updated.main);
         const normalized = { ...updated, main: normalizedMain, sub: payload.sub || updated.subcategory?.name || '' };
         setTransactions(s => s.map(t => (t.id === editingTx.id ? normalized : t)));
+        
+        // 🔄 Trigger refresh saldo dopo modifica transazione
+        triggerBalanceRefresh();
+        
       } else {
         const created = await api.addTransaction(token, body);
         const normalizedMain = normalizeMainKey(created.main);
         const normalized = { ...created, main: normalizedMain, sub: payload.sub || created.subcategory?.name || '' };
         setTransactions(s => [normalized, ...s]);
+        
+        // 🔄 Trigger refresh saldo dopo creazione transazione
+        triggerBalanceRefresh();
       }
     } catch (err) {
       console.error('Errore save tx:', err.message);

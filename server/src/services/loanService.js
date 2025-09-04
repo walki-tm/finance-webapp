@@ -412,7 +412,18 @@ async function payLoan(userId, loanId, paymentData = {}) {
         throw new Error('Loan is already paid off')
       }
 
-      // 2️⃣ Calcola breakdown pagamento
+      // 2️⃣ Trova il prossimo paymentNumber disponibile (strategia sicura)
+      const lastTransaction = await tx.loanTransaction.findFirst({
+        where: { loanId },
+        select: { paymentNumber: true },
+        orderBy: { paymentNumber: 'desc' }
+      })
+      
+      const nextPaymentNumber = (lastTransaction?.paymentNumber || 0) + 1
+      
+      console.log(`💰 PayLoan: Using safe paymentNumber=${nextPaymentNumber} (last was ${lastTransaction?.paymentNumber || 0})`)
+      
+      // 3️⃣ Calcola breakdown pagamento
       const monthlyRate = loan.interestRate / 12
       const payment = calculatePaymentBreakdown(
         parseFloat(loan.currentBalance),
@@ -420,10 +431,9 @@ async function payLoan(userId, loanId, paymentData = {}) {
         monthlyRate
       )
 
-      const nextPaymentNumber = loan.paidPayments + 1
       const paidAmount = paymentData.actualAmount || loan.monthlyPayment
       
-      // 3️⃣ Registra transazione
+      // 4️⃣ Registra transazione
       await tx.loanTransaction.create({
         data: {
           loanId,
@@ -439,7 +449,7 @@ async function payLoan(userId, loanId, paymentData = {}) {
         }
       })
 
-      // 4️⃣ Aggiorna prestito
+      // 5️⃣ Aggiorna prestito
       const currentNextPaymentDate = new Date(loan.nextPaymentDate)
       const newNextPaymentDate = payment.newBalance > 0.01 
         ? addMonths(loan.nextPaymentDate, 1)
@@ -463,7 +473,7 @@ async function payLoan(userId, loanId, paymentData = {}) {
         }
       })
 
-      // 5️⃣ Aggiorna anche la planned transaction collegata
+      // 6️⃣ Aggiorna anche la planned transaction collegata
       if (payment.newBalance > 0.01) {
         await tx.plannedTransaction.updateMany({
           where: { loanId, userId },
@@ -486,7 +496,7 @@ async function payLoan(userId, loanId, paymentData = {}) {
       return { loan: updatedLoan, payment }
     })
 
-    // 5️⃣ Sincronizza piano pagamenti
+    // 7️⃣ Sincronizza piano pagamenti
     try {
       await syncLoanWithPaymentPlan(userId, loanId)
       console.log('✅ Loan payment plan synced')

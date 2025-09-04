@@ -5,6 +5,28 @@ Tutte le modifiche importanti al progetto saranno documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/),
 e questo progetto segue il [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2025-09-03
+
+### 🐛 Fixed (Correzioni Critiche)
+- **Dashboard Loop Infiniti**: Risolti problemi di performance e stability
+  - `DashboardFilters.jsx`: Rimossa dipendenza `onFiltersChange` dal `useEffect` per evitare loop infiniti
+  - `Dashboard.jsx`: Memoizzati callback `handleFiltersChange` e `handleFilterMainChange` con `useCallback`
+  - `useFilteredDashboardData.js`: Destrutturate dipendenze primitive negli array di dipendenze per stabilità render
+- **Gestione Errori API**: Migliorata resilienza nell'hook `useUpcomingPlannedTransactions`
+  - Gestione graceful di errori JSON parsing e risposte HTTP non-JSON
+  - Prevenzione crash applicazione per endpoint non disponibili o errori di rete
+  - Logging migliorato per debugging senza spam in console
+
+### ⚡ Performance (Ottimizzazioni)
+- **Render Stabilization**: Eliminati re-render inutili causati da oggetti che cambiano referenza
+- **Memory Management**: Callback e filtri memoizzati correttamente per evitare memory leaks
+- **Console Cleanup**: Rimossi log di debug che causavano spam nelle DevTools
+
+### 🔧 Technical (Miglioramenti Tecnici)
+- **State Management**: Pattern migliorati per gestione state reattiva senza loop infiniti
+- **Error Boundaries**: Gestione errori più robusta per API calls e parsing dati
+- **Code Quality**: Commenti migliorati e documentazione dei fix applicati
+
 ## [2.1.0] - 2025-09-03
 
 ### 🚀 Added (Novità)

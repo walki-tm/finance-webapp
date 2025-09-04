@@ -237,6 +237,25 @@ export async function getPlannedTransactionsDue(req, res, next) {
 }
 
 /**
+ * 🎯 CONTROLLER: Ottieni prossime N transazioni pianificate per dashboard
+ */
+export async function getUpcomingPlannedTransactions(req, res, next) {
+  try {
+    const { limit = '5' } = req.query
+    const limitNum = Math.min(parseInt(limit, 10) || 5, 10) // Max 10 transazioni
+    
+    const upcoming = await getPlannedTransactionsDueService(req.user.id, 365) // Prossimi 365 giorni
+    
+    // Ordina per nextDueDate e prendi solo le prime N
+    const sortedUpcoming = upcoming
+      .sort((a, b) => new Date(a.nextDueDate) - new Date(b.nextDueDate))
+      .slice(0, limitNum)
+    
+    res.json(sortedUpcoming)
+  } catch (e) { next(e) }
+}
+
+/**
  * 🎯 CONTROLLER: Calcola prossime occorrenze per una transazione pianificata
  */
 export async function getNextOccurrences(req, res, next) {

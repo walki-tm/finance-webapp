@@ -22,6 +22,7 @@ model User {
   transactionGroups   TransactionGroup[]
   plannedTransactions PlannedTransaction[]
   loans               Loan[]
+  dashboardCategories DashboardCategoryVisibility[]
 }
 
 model Category {
@@ -260,4 +261,24 @@ model LoanTransaction {
   
   // 🔒 Constraint: ogni prestito ha transazioni con numeri progressivi unici
   @@unique([loanId, paymentNumber])
+}
+
+// =============================================================================
+// 📊 DASHBOARD VISIBILITY
+// =============================================================================
+
+// Visibilità categorie specifiche per dashboard utente (max 4 categorie)
+model DashboardCategoryVisibility {
+  id         String  @id @default(cuid())
+  userId     String
+  categoryKey String // main categoria (es: "INCOME", "EXPENSES", "SAVINGS")
+  visible    Boolean @default(true)
+  sortOrder  Int     @default(0) // ordinamento per visualizzazione dashboard
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  User User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryKey])
+  @@index([userId, visible, sortOrder])
 }

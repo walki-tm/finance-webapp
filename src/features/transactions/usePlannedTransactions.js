@@ -18,6 +18,7 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api.js'
+import { triggerBalanceRefresh } from '../app/useBalance.js'
 import { 
   applyMonthlyTransactionToBudget,
   applyYearlyTransactionToBudget,
@@ -94,6 +95,9 @@ export function usePlannedTransactions(token, options = {}) {
       // Force full refresh to get updated data including nextDueDate changes
       setRefreshTrigger(prev => prev + 1)
       
+      // 🔄 Trigger refresh saldo dopo materializzazione transazione
+      triggerBalanceRefresh()
+      
       return newTransaction
     } catch (err) {
       console.error('❌ Errore materialize planned tx:', err.message)
@@ -123,6 +127,10 @@ export function usePlannedTransactions(token, options = {}) {
         try {
           console.log(`🤖 Auto-materializzazione transazione: ${tx.title}`)
           await materializePlannedTx(tx.id)
+          
+          // 🔄 Trigger refresh saldo per ogni transazione auto-materializzata
+          // (Nota: materializePlannedTx già chiama triggerBalanceRefresh, ma è comunque safe)
+          
         } catch (error) {
           console.error(`❌ Errore auto-materializzazione transazione ${tx.title}:`, error)
           // Continua con le altre transazioni anche se una fallisce

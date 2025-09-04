@@ -18,10 +18,10 @@ import { formatDateForAPI, getTodayDate } from '../../../lib/dateUtils.js';
  * - Tabella: ordinata per data desc e filtrata per periodo + categoria.
  */
 
-export default function Transactions({ state, updateTx, delTx, openTxEditor, refreshTransactions, token }) {
-  console.log('🏪 Transactions props:', { updateTx, delTx, refreshTransactions });
+export default function Transactions({ state, updateTx, delTx, openTxEditor, refreshTransactions, token, initialTab = 'register' }) {
+  console.log('🏪 Transactions props:', { updateTx, delTx, refreshTransactions, initialTab });
   /* ===== Sub-tab state ===== */
-  const [activeTab, setActiveTab] = useState('register');
+  const [activeTab, setActiveTab] = useState(initialTab);
   /* ===== Filtro macro-categoria ===== */
   const [filterMain, setFilterMain] = useState('all');
 
@@ -140,6 +140,19 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
     window.addEventListener('transactionRefresh', handleGlobalRefresh);
     return () => window.removeEventListener('transactionRefresh', handleGlobalRefresh);
   }, [transactionState]);
+  
+  // Listener per navigazione al tab planned dalla dashboard
+  React.useEffect(() => {
+    const handleSetPlannedTab = (event) => {
+      console.log('📋 Planned tab navigation event received');
+      if (event.detail?.tab === 'planned') {
+        setActiveTab('planned');
+      }
+    };
+    
+    window.addEventListener('setPlannedTab', handleSetPlannedTab);
+    return () => window.removeEventListener('setPlannedTab', handleSetPlannedTab);
+  }, []);
   
   console.log('🏪 Transactions component: transactionState =', {
     transactions: transactionState.transactions,
