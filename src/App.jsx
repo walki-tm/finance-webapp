@@ -48,7 +48,6 @@ import { useBalance } from './features/app/useBalance.js'
 
 // 🔸 Import icone
 import { Layers3, LogOut, SunMedium, Moon, User, Plus, Settings } from 'lucide-react'
-import DashboardSettingsModal from './features/dashboard/components/DashboardSettingsModal.jsx'
 
 /**
  * 🎯 COMPONENTE: App Content (interno)
@@ -65,7 +64,6 @@ function AppContent() {
   const year = String(new Date().getFullYear())
   const { budgets, upsertBudget, batchUpsertBudgets, isManagedAutomatically } = useBudgetContext()
   const { activeTab, setActiveTab, menuOpen, setMenuOpen, dashDetail, setDashDetail } = useTabState()
-  const [showDashboardSettings, setShowDashboardSettings] = useState(false)
 
   // 🔸 Hook per gestione categorie
   const {
@@ -213,16 +211,6 @@ function AppContent() {
               </div>
             )}
             
-            {/* 🔸 Pulsante impostazioni Dashboard (solo se siamo nella dashboard) */}
-            {user && activeTab === 'dashboard' && (
-              <button
-                className="border rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 transition-colors"
-                onClick={() => setShowDashboardSettings(true)}
-              >
-                <Settings className="h-4 w-4" />
-                <span className="hidden md:inline">Impostazioni</span>
-              </button>
-            )}
             
             <Switch checked={theme === 'dark'} onCheckedChange={toggleTheme} />
             {theme === 'dark' ? <Moon className="h-4 w-4" /> : <SunMedium className="h-4 w-4" />}
@@ -298,16 +286,6 @@ function AppContent() {
         subcats={subcats}
         mains={mainsForModal}
         onSave={saveTx}
-      />
-      
-      {/* 🔸 Modal impostazioni Dashboard */}
-      <DashboardSettingsModal 
-        isOpen={showDashboardSettings}
-        onClose={() => setShowDashboardSettings(false)}
-        onSettingsUpdated={() => {
-          // Ricarica i dati dopo il salvataggio delle impostazioni
-          refreshTransactions()
-        }}
       />
     </div>
   );

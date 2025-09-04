@@ -19,10 +19,7 @@ import { months } from '../../../lib/constants.js'
 import { formatDateForAPI, getTodayDate } from '../../../lib/dateUtils.js'
 
 export default function DashboardFilters({ 
-  onFiltersChange,
-  filterMain = 'all',
-  onFilterMainChange,
-  mainCategories = []
+  onFiltersChange
 }) {
   /* ===== State periodo (stessa logica Transactions) ===== */
   const today = useMemo(() => getTodayDate(), [])  // ✅ Memoizzato per evitare ricreazione ad ogni render
@@ -288,16 +285,6 @@ export default function DashboardFilters({
         </button>
       </div>
 
-      {/* Filtro CATEGORIA MAIN */}
-      <NativeSelect
-        className="w-48"
-        value={filterMain}
-        onChange={onFilterMainChange}
-        options={[
-          { value: 'all', label: 'Tutte le categorie' }, 
-          ...mainCategories.map(m => ({ value: m.key, label: m.name }))
-        ]}
-      />
     </div>
   )
 }

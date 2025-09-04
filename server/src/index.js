@@ -11,7 +11,6 @@ import budgetRoutes from './routes/budgets.js'
 import loanRoutes from './routes/loanRoutes.js'
 import balanceRoutes from './routes/balance.js'
 import userSettingsRoutes from './routes/userSettings.js'
-import dashboardCategoriesRoutes from './routes/dashboardCategories.js'
 import { errorMiddleware } from './middleware/error.js'
 import './services/schedulerService.js' // Inizializza scheduler automatico
 
@@ -38,7 +37,6 @@ app.use('/api/budgets', budgetRoutes)
 app.use('/api/loans', loanRoutes)
 app.use('/api/balance', balanceRoutes)
 app.use('/api/user-settings', userSettingsRoutes)
-app.use('/api/dashboard-categories', dashboardCategoriesRoutes)
 
 app.use(errorMiddleware)
 

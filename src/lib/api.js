@@ -506,31 +506,4 @@ export const api = {
    */
   payNextLoan: (token, loanId) =>
     request(`/api/loans/${loanId}/pay-next`, "POST", token),
-
-  // ---- Dashboard Categories ----
-  /**
-   * Ottieni tutte le impostazioni di visibilità categorie dashboard.
-   * @param {string} token Token di accesso JWT.
-   * @returns {Promise<Array>} Lista delle impostazioni visibilità.
-   * @throws {Error} Se la richiesta fallisce.
-   */
-  getDashboardCategoriesVisibility: (token) =>
-    request("/api/dashboard-categories", "GET", token),
-  /**
-   * Ottieni solo le categorie visibili per dashboard.
-   * @param {string} token Token di accesso JWT.
-   * @returns {Promise<Array>} Lista categorie visibili ordinate per sortOrder.
-   * @throws {Error} Se la richiesta fallisce.
-   */
-  getVisibleDashboardCategories: (token) =>
-    request("/api/dashboard-categories/visible", "GET", token),
-  /**
-   * Aggiorna le impostazioni di visibilità categorie dashboard.
-   * @param {string} token Token di accesso JWT.
-   * @param {Array} categories Array di oggetti con categoryKey, visible, sortOrder.
-   * @returns {Promise<Array>} Impostazioni aggiornate.
-   * @throws {Error} Se la richiesta fallisce.
-   */
-  updateDashboardCategoriesVisibility: (token, categories) =>
-    request("/api/dashboard-categories", "PUT", token, { categories }),
 };
