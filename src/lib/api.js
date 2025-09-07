@@ -506,4 +506,89 @@ export const api = {
    */
   payNextLoan: (token, loanId) =>
     request(`/api/loans/${loanId}/pay-next`, "POST", token),
+
+  // ---- Savings Goals ----
+  /**
+   * Elenca tutti gli obiettivi di risparmio dell'utente.
+   * @param {string} token Token di accesso JWT.
+   * @returns {Promise<Array>} Lista di obiettivi di risparmio.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  listSavingsGoals: (token) =>
+    request("/api/savings-goals", "GET", token),
+  /**
+   * Ottiene dettagli di un obiettivo specifico.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} goalId ID dell'obiettivo.
+   * @returns {Promise<object>} Obiettivo con dettagli completi.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  getSavingsGoal: (token, goalId) =>
+    request(`/api/savings-goals/${goalId}`, "GET", token),
+  /**
+   * Crea un nuovo obiettivo di risparmio.
+   * @param {string} token Token di accesso JWT.
+   * @param {object} goalData Dati dell'obiettivo.
+   * @returns {Promise<object>} Obiettivo creato.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  createSavingsGoal: (token, goalData) =>
+    request("/api/savings-goals", "POST", token, goalData),
+  /**
+   * Aggiorna un obiettivo esistente.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} goalId ID dell'obiettivo.
+   * @param {object} updateData Dati da aggiornare.
+   * @returns {Promise<object>} Obiettivo aggiornato.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  updateSavingsGoal: (token, goalId, updateData) =>
+    request(`/api/savings-goals/${goalId}`, "PUT", token, updateData),
+  /**
+   * Elimina un obiettivo.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} goalId ID dell'obiettivo.
+   * @returns {Promise<null>} Nessun contenuto in caso di successo.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  deleteSavingsGoal: (token, goalId) =>
+    request(`/api/savings-goals/${goalId}`, "DELETE", token),
+  /**
+   * Aggiunge saldo a un obiettivo.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} goalId ID dell'obiettivo.
+   * @param {object} data Dati dell'operazione (amount, notes).
+   * @returns {Promise<object>} Risultato dell'operazione.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  addToSavingsGoal: (token, goalId, data) =>
+    request(`/api/savings-goals/${goalId}/add`, "POST", token, data),
+  /**
+   * Preleva saldo da un obiettivo.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} goalId ID dell'obiettivo.
+   * @param {object} data Dati dell'operazione (amount, notes).
+   * @returns {Promise<object>} Risultato dell'operazione.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  withdrawFromSavingsGoal: (token, goalId, data) =>
+    request(`/api/savings-goals/${goalId}/withdraw`, "POST", token, data),
+  /**
+   * Ottiene lo storico transazioni di un obiettivo.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} goalId ID dell'obiettivo.
+   * @returns {Promise<Array>} Lista transazioni dell'obiettivo.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  getSavingsGoalHistory: (token, goalId) =>
+    request(`/api/savings-goals/${goalId}/history`, "GET", token),
+  /**
+   * Ripete un obiettivo completato (riporta a 0 e riattiva).
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} goalId ID dell'obiettivo.
+   * @returns {Promise<object>} Risultato con obiettivo ripetuto e ammontare rimborsato.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  repeatCompletedGoal: (token, goalId) =>
+    request(`/api/savings-goals/${goalId}/repeat`, "POST", token),
 };

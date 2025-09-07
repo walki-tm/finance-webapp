@@ -91,7 +91,7 @@ export default function UpcomingPlannedTransactions({ token, onNavigateToPlanned
       if (diffDays === 1) return { key: 'tomorrow', label: '🌅 Domani', priority: 2 }
       if (diffDays <= 7) return { key: 'thisWeek', label: '📅 Questa settimana', priority: 3 }
       if (diffDays <= 30) return { key: 'thisMonth', label: '📆 Questo mese', priority: 4 }
-      return { key: 'later', label: '🕰️ Più tardi', priority: 5 }
+      return { key: 'later', label: '🕰️ Prossimamente', priority: 5 }
     }
     
     // Raggruppa le transazioni
@@ -181,7 +181,7 @@ export default function UpcomingPlannedTransactions({ token, onNavigateToPlanned
         <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <CalendarClock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-          <h3 className="font-semibold text-slate-900 dark:text-slate-100">Prossime Transazioni Pianificate</h3>
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100">Prossime Transazioni</h3>
         </div>
           {hasUpcomingTransactions && (
           <button

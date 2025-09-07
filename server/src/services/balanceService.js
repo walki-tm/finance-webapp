@@ -17,10 +17,11 @@ export async function getCurrentBalance(userId) {
   // Query per calcolare il saldo correttamente:
   // PROBLEMA: Nel DB ci sono segni misti - alcune transazioni corrette, altre no
   // SOLUZIONE: Recuperiamo tutte le transazioni e applichiamo la logica corretta
+  // NOTA: Rimuoviamo il filtro di data per evitare problemi di fuso orario
+  // Il filtro lte: now potrebbe escludere transazioni dello stesso giorno
   const allTransactions = await prisma.transaction.findMany({
     where: { 
-      userId, 
-      date: { lte: now }
+      userId
     },
     select: {
       amount: true,

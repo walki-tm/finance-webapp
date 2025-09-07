@@ -31,25 +31,14 @@ export default function useUpcomingPlannedTransactions(token, limit = 5) {
     setLoading(true)
     try {
       const url = `/api/planned-transactions/upcoming?limit=${limit}`
-      console.log('🔍 DEBUG: Fetching upcoming planned transactions from:', url)
       
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       
-      console.log('🔍 DEBUG: Response status:', response.status)
-      console.log('🔍 DEBUG: Response headers:', Object.fromEntries(response.headers.entries()))
-      
       if (!response.ok) {
-        console.error('❌ API Error:', response.status, response.statusText)
-        
-        // Log the response body for debugging
-        const responseText = await response.text()
-        console.error('❌ Response body:', responseText.substring(0, 500) + (responseText.length > 500 ? '...' : ''))
-        
         // Controlla se è un errore 404 (endpoint non trovato) o altro
         if (response.status === 404) {
-          console.warn('⚠️ Upcoming planned transactions endpoint not available')
           setUpcomingTransactions([])
           setError(null)
           return
@@ -59,29 +48,19 @@ export default function useUpcomingPlannedTransactions(token, limit = 5) {
       
       // Controlla se la risposta è JSON valido
       const contentType = response.headers.get('content-type')
-      console.log('🔍 DEBUG: Content-Type:', contentType)
       
       if (!contentType || !contentType.includes('application/json')) {
-        console.warn('⚠️ Unexpected response type from upcoming planned transactions:', contentType)
-        
-        // Log the actual response for debugging
-        const responseText = await response.text()
-        console.warn('⚠️ Response body (first 500 chars):', responseText.substring(0, 500))
-        
         setUpcomingTransactions([])
         setError(null)
         return
       }
       
       const data = await response.json()
-      console.log('✅ Successfully loaded upcoming transactions:', data)
       setUpcomingTransactions(Array.isArray(data) ? data : [])
       setError(null)
     } catch (err) {
-      console.error('❌ Error loading upcoming planned transactions:', err)
       // Per errori di parsing JSON, non mostrare errore ma logga per debug
       if (err.name === 'SyntaxError' && err.message.includes('JSON')) {
-        console.warn('⚠️ Invalid JSON response, hiding upcoming transactions section')
         setUpcomingTransactions([])
         setError(null) // Non mostrare errore all'utente
       } else {

@@ -19,7 +19,6 @@ import { formatDateForAPI, getTodayDate } from '../../../lib/dateUtils.js';
  */
 
 export default function Transactions({ state, updateTx, delTx, openTxEditor, refreshTransactions, token, initialTab = 'register' }) {
-  console.log('🏪 Transactions props:', { updateTx, delTx, refreshTransactions, initialTab });
   /* ===== Sub-tab state ===== */
   const [activeTab, setActiveTab] = useState(initialTab);
   /* ===== Filtro macro-categoria ===== */
@@ -31,7 +30,6 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
   const [mode, setMode] = useState('month');           // default: mese corrente
   const [pointer, setPointer] = useState(() => {
     const currentDate = getTodayDate();
-    console.log('🗺 [INIT] Initializing pointer with today:', currentDate);
     return currentDate;
   });  // puntatore temporale
   const [panelOpen, setPanelOpen] = useState(false);   // dropdown opzioni
@@ -110,7 +108,6 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
       };
     }
     
-    console.log('📅 Transactions.jsx: apiFilters calculated:', { mode, pointer, result });
     return result;
   }, [mode, pointer, fromDate, toDate, today]);
 
@@ -119,11 +116,9 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
   
   // Wrapper per operazioni che richiedono refresh
   const handleDelete = useCallback(async (id) => {
-    console.log('🗑️ Local delete wrapper:', id);
     await delTx(id); // Chiama la funzione globale
     // Refresh dei dati locali dopo l'operazione
     setTimeout(() => {
-      console.log('🔄 Refreshing local transactions after delete');
       transactionState.refreshTransactions();
     }, 200);
   }, [delTx, transactionState]);
@@ -131,7 +126,6 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
   // Listener per refresh globale (quando si aggiunge transazione dalla modale)
   React.useEffect(() => {
     const handleGlobalRefresh = () => {
-      console.log('🌍 Global refresh event received, refreshing local transactions');
       setTimeout(() => {
         transactionState.refreshTransactions();
       }, 100);
@@ -144,7 +138,6 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
   // Listener per navigazione al tab planned dalla dashboard
   React.useEffect(() => {
     const handleSetPlannedTab = (event) => {
-      console.log('📋 Planned tab navigation event received');
       if (event.detail?.tab === 'planned') {
         setActiveTab('planned');
       }
@@ -153,12 +146,6 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
     window.addEventListener('setPlannedTab', handleSetPlannedTab);
     return () => window.removeEventListener('setPlannedTab', handleSetPlannedTab);
   }, []);
-  
-  console.log('🏪 Transactions component: transactionState =', {
-    transactions: transactionState.transactions,
-    length: transactionState.transactions?.length,
-    loading: transactionState.loading
-  });
 
   /* ===== Helper per normalizzare le transazioni ===== */
   const normalizeMainKey = (main) => {
@@ -189,12 +176,6 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
       start = new Date(pointer.getFullYear(), pointer.getMonth(), 1);
       end   = new Date(pointer.getFullYear(), pointer.getMonth() + 1, 0, 23, 59, 59, 999);
       lbl   = `${months[pointer.getMonth()].toUpperCase()} ${pointer.getFullYear()}`;
-      
-      console.log('📅 [DEBUG] Month label calculation:');
-      console.log('  - pointer:', pointer);
-      console.log('  - pointer.getMonth():', pointer.getMonth());
-      console.log('  - months[pointer.getMonth()]:', months[pointer.getMonth()]);
-      console.log('  - final label:', lbl);
     }
 
     if (mode === 'year') {
@@ -246,22 +227,11 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
 
   /* ===== Filtraggio solo per categoria (il range è già gestito dall'API) ===== */
   const rows = useMemo(() => {
-    console.log('🔍 Transactions component: processing transactions', {
-      rawTransactions: transactionState.transactions,
-      length: transactionState.transactions?.length || 0,
-      filterMain
-    });
-    
     if (!transactionState.transactions) return [];
     
     const filtered = transactionState.transactions.filter((t) => {
       const mainOk = filterMain === 'all' ? true : t.main === filterMain;
       return mainOk;
-    });
-    
-    console.log('✅ Filtered transactions for display:', {
-      filteredCount: filtered.length,
-      firstFew: filtered.slice(0, 3)
     });
     
     // Le transazioni dall'API sono già ordinate per data desc

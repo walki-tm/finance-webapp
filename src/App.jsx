@@ -95,7 +95,6 @@ function AppContent() {
   
   // 🔸 Wrapper functions che includono refresh per sincronizzazione
   const delTx = useCallback(async (id) => {
-    console.log('🗑️ Deleting transaction:', id);
     await originalDelTx(id);
     // Force refresh dopo delete
     setTimeout(() => {
@@ -106,7 +105,6 @@ function AppContent() {
   }, [originalDelTx, refreshTransactions]);
   
   const saveTx = useCallback(async (payload) => {
-    console.log('💾 Saving transaction:', payload);
     await originalSaveTx(payload);
     // Force refresh dopo save
     setTimeout(() => {

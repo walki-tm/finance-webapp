@@ -131,8 +131,8 @@ export default function PlannedTransactionCard({
   }
 
   return (
-    <Card className={`group transition-all duration-200 rounded-xl ${dueDateColors.card} ${dueDateColors.cardShadow} overflow-hidden`}>
-      <CardContent className="p-4">
+    <div className={`group transition-all duration-200 rounded-xl ${dueDateColors.card} bg-white dark:bg-slate-800 bg-slate-50/80 dark:bg-blue-900/10 border-slate-200 dark:border-slate-700 ${dueDateColors.cardShadow} overflow-hidden hover:shadow-lg hover:shadow-slate-200/50 dark:hover:shadow-slate-800/50`}>
+      <div className="p-4">
         <div className="space-y-3">
           {/* Riga 1: Titolo + Stato (badge a destra) */}
           <div className="flex items-start justify-between">
@@ -329,7 +329,7 @@ export default function PlannedTransactionCard({
             </div>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

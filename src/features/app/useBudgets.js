@@ -112,22 +112,12 @@ export default function useBudgets(year, initial = {}) {
     const subcategoryKey = `${main.toLowerCase()}:${subName}`;
     const subcategoryId = subcatsMap[subcategoryKey];
     if (!subcategoryId) {
-      console.error('Subcategory not found:', subcategoryKey);
-      console.log('Available subcategory keys:', Object.keys(subcatsMap));
-      console.log('Request details:', { main, subName, monthIndex, period });
       return;
     }
     
     // Get the original database main key
     const mainKeyMapping = subcatsMap.__mainKeyMapping || {};
     const originalMainKey = mainKeyMapping[main] || main.toUpperCase();
-    
-    console.log('Upsert mapping:', { 
-      normalizedMain: main, 
-      originalMain: originalMainKey, 
-      subcategoryKey, 
-      subcategoryId 
-    });
     
     try {
       // Call API to upsert budget with original database main key
@@ -168,11 +158,6 @@ export default function useBudgets(year, initial = {}) {
       // Get the original database main key
       const originalMainKey = mainKeyMapping[main] || main.toUpperCase();
       
-      // Debug logging
-      if (!subcategoryId) {
-        console.warn(`Subcategory not found for: ${subcategoryKey}`);
-        console.log('Available subcategory keys:', Object.keys(subcatsMap));
-      }
       
       return {
         main: originalMainKey,
@@ -278,7 +263,6 @@ export default function useBudgets(year, initial = {}) {
       
       setBudgets(converted);
       setBudgetMeta(metadata);
-      console.log('Budgets refreshed successfully');
     } catch (err) {
       console.error('Error refreshing budgets:', err);
       setError(err);

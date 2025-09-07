@@ -9,6 +9,7 @@ import transactionRoutes from './routes/transactions.js'
 import plannedTransactionRoutes from './routes/plannedTransactions.js'
 import budgetRoutes from './routes/budgets.js'
 import loanRoutes from './routes/loanRoutes.js'
+import savingsGoalsRoutes from './routes/savingsGoals.js'
 import balanceRoutes from './routes/balance.js'
 import userSettingsRoutes from './routes/userSettings.js'
 import { errorMiddleware } from './middleware/error.js'
@@ -35,6 +36,7 @@ app.use('/api/transactions', transactionRoutes)
 app.use('/api/planned-transactions', plannedTransactionRoutes)
 app.use('/api/budgets', budgetRoutes)
 app.use('/api/loans', loanRoutes)
+app.use('/api/savings-goals', savingsGoalsRoutes)
 app.use('/api/balance', balanceRoutes)
 app.use('/api/user-settings', userSettingsRoutes)
 

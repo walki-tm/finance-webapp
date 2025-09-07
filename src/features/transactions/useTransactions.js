@@ -108,7 +108,7 @@ export function useTransactions(token, filters = null) {
       await api.deleteTransaction(token, id);
       
       // 🔄 Trigger refresh saldo dopo eliminazione transazione
-      triggerBalanceRefresh();
+      setTimeout(() => triggerBalanceRefresh(), 100);
       
     } catch (err) {
       console.error('Errore delete tx:', err.message);
@@ -135,7 +135,7 @@ export function useTransactions(token, filters = null) {
         setTransactions(s => s.map(t => (t.id === editingTx.id ? normalized : t)));
         
         // 🔄 Trigger refresh saldo dopo modifica transazione
-        triggerBalanceRefresh();
+        setTimeout(() => triggerBalanceRefresh(), 100);
         
       } else {
         const created = await api.addTransaction(token, body);
@@ -144,7 +144,7 @@ export function useTransactions(token, filters = null) {
         setTransactions(s => [normalized, ...s]);
         
         // 🔄 Trigger refresh saldo dopo creazione transazione
-        triggerBalanceRefresh();
+        setTimeout(() => triggerBalanceRefresh(), 100);
       }
     } catch (err) {
       console.error('Errore save tx:', err.message);

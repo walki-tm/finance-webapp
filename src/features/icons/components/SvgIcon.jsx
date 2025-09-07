@@ -41,22 +41,17 @@ export default function SvgIcon({ name, color = "#0b1220", size = 22, className 
 
     // Try each path until we find the icon
     const tryLoadIcon = async () => {
-      console.log(`[SvgIcon] Loading icon: ${name}, paths:`, possiblePaths);
       for (const url of possiblePaths) {
         try {
-          console.log(`[SvgIcon] Trying: ${url}`);
           const res = await fetch(url);
-          console.log(`[SvgIcon] Response for ${url}:`, res.status, res.ok);
           if (res.ok) {
             const text = await res.text();
-            console.log(`[SvgIcon] Success! Content length:`, text.length);
             return text;
           }
         } catch (error) {
-          console.log(`[SvgIcon] Error ${url}:`, error);
+          // Continue to next path
         }
       }
-      console.error(`[SvgIcon] Icon ${name} not found in any directory`);
       throw new Error(`Icon ${name} not found in any directory`);
     };
 

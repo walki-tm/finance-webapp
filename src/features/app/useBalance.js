@@ -32,10 +32,7 @@ export function useBalance(token) {
       const res = await api.getBalance(token)
       setBalance(res?.balance ?? 0)
       
-      console.log('💰 Balance refreshed:', res?.balance)
-      
     } catch (err) {
-      console.error('❌ Error loading balance:', err)
       setError(err.message)
     } finally {
       if (showLoading) setIsLoading(false)
@@ -64,7 +61,6 @@ export function useBalance(token) {
   // 🔸 Effect per ascolto eventi refresh automatici
   useEffect(() => {
     const handleBalanceRefresh = () => {
-      console.log('🔄 Balance refresh event received')
       loadBalance(false) // Refresh senza loading spinner
     }
     

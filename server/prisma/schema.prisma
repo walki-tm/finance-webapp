@@ -22,6 +22,8 @@ model User {
   transactionGroups   TransactionGroup[]
   plannedTransactions PlannedTransaction[]
   loans               Loan[]
+  savingsGoals        SavingsGoal[]
+  goalTransactions    GoalTransaction[]
 }
 
 model Category {
@@ -58,6 +60,7 @@ model Subcategory {
   budgets             Budget[]
   plannedTransactions PlannedTransaction[]
   loans               Loan[]
+  savingsGoals        SavingsGoal[]
 
   @@unique([userId, categoryId, name])
   @@index([userId, categoryId, sortOrder])
@@ -260,4 +263,74 @@ model LoanTransaction {
   
   // 🔒 Constraint: ogni prestito ha transazioni con numeri progressivi unici
   @@unique([loanId, paymentNumber])
+}
+
+// =============================================================================
+// 🎯 SISTEMA OBIETTIVI DI RISPARMIO
+// =============================================================================
+
+// 🎯 Obiettivi di risparmio con gestione completa
+model SavingsGoal {
+  id            String   @id @default(cuid())
+  userId        String
+  
+  // 📝 Informazioni principali
+  title         String   // nome dell'obiettivo (es: "Vacanza a Tokyo")
+  targetAmount  Decimal  @db.Decimal(20, 2) // importo obiettivo (es: 1800.00)
+  currentAmount Decimal  @db.Decimal(20, 2) @default(0) // importo attualmente risparmiato
+  targetDate    DateTime? // scadenza obiettivo opzionale (es: 04/09/2026 o null per "Accumulo Soldi")
+  
+  // 🏷️ Categorizzazione (obbligatoria)
+  categoryMain  String   @db.VarChar(32) // categoria principale (es: "SAVINGS")
+  subcategoryId String   // sottocategoria specifica (obbligatoria)
+  
+  // 📝 Informazioni aggiuntive
+  notes         String?  // note opzionali
+  iconKey       String?  // icona personalizzata
+  
+  // ⚙️ Stato e configurazione
+  status        String   @default("ACTIVE") // ACTIVE, COMPLETED, EXPIRED, PAUSED
+  
+  // 🕒 Audit
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 🔗 Relazioni
+  User           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subcategory    Subcategory      @relation(fields: [subcategoryId], references: [id], onDelete: Restrict)
+  goalTransactions GoalTransaction[] // storico operazioni sull'obiettivo
+
+  // 📈 Indici per performance
+  @@index([userId, status])
+  @@index([userId, targetDate])
+  @@index([subcategoryId])
+}
+
+// 💰 Transazioni specifiche per obiettivi di risparmio
+model GoalTransaction {
+  id            String   @id @default(cuid())
+  userId        String
+  goalId        String
+  
+  // 💰 Dettagli operazione
+  amount        Decimal  @db.Decimal(20, 2) // importo dell'operazione
+  type          String   // ADD (aggiungi saldo) o WITHDRAW (preleva)
+  
+  // 🔗 Collegamento transazione principale
+  transactionId String?  // ID della transazione principale creata nel sistema
+  
+  // 📝 Informazioni aggiuntive
+  notes         String?  // note dell'operazione
+  
+  // 🕒 Audit
+  createdAt     DateTime @default(now())
+
+  // 🔗 Relazioni
+  User         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goal         SavingsGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  // 📈 Indici per performance
+  @@index([userId, goalId])
+  @@index([goalId, createdAt])
+  @@index([transactionId])
 }

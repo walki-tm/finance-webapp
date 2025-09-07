@@ -469,7 +469,7 @@ const handleBudgetApplication = async (options) => {
         {/* Pillola Totale Pianificate */}
         <div 
           onClick={() => setFilters(prev => ({ ...prev, isActive: prev.isActive === true ? null : true }))}
-          className="group flex items-center gap-3 p-4 rounded-xl bg-blue-50/80 dark:bg-blue-900/20 border border-blue-200/50 dark:border-blue-700/50 hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:border-blue-300 dark:hover:border-blue-600 transition-all cursor-pointer hover:shadow-lg"
+          className="group flex items-center gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-slate-200/50 dark:hover:shadow-slate-800/50 bg-white dark:bg-slate-800 bg-blue-50/80 dark:bg-blue-900/10 cursor-pointer"
         >
           <div className="p-2 rounded-lg bg-blue-500 group-hover:bg-blue-600 transition-colors shadow-sm">
             <Calendar className="h-5 w-5 text-white" />
@@ -492,10 +492,10 @@ const handleBudgetApplication = async (options) => {
         {/* Pillola In Scadenza */}
         <div 
           onClick={() => setFilters(prev => ({ ...prev, dueStatus: prev.dueStatus === 'this_week' ? null : 'this_week' }))}
-          className={`group flex items-center gap-3 p-4 rounded-xl transition-all cursor-pointer hover:shadow-lg ${
+          className={`group flex items-center gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-slate-200/50 dark:hover:shadow-slate-800/50 bg-white dark:bg-slate-800 cursor-pointer ${
             dueTransactions.length > 0 
-              ? 'bg-orange-50/80 dark:bg-orange-900/20 border border-orange-200/50 dark:border-orange-700/50 hover:bg-orange-100 dark:hover:bg-orange-900/30 hover:border-orange-300 dark:hover:border-orange-600'
-              : 'bg-slate-50/80 dark:bg-slate-800/20 border border-slate-200/50 dark:border-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-800/30'
+              ? 'bg-orange-50/80 dark:bg-orange-900/10'
+              : 'bg-slate-50/80 dark:bg-slate-900/10'
           }`}
         >
           <div className={`relative p-2 rounded-lg shadow-sm transition-colors ${
@@ -538,7 +538,7 @@ const handleBudgetApplication = async (options) => {
         {/* Pillola Importo Mensile */}
         <div 
           onClick={() => setFilters(prev => ({ ...prev, frequency: prev.frequency === 'MONTHLY' ? null : 'MONTHLY' }))}
-          className="group flex items-center gap-3 p-4 rounded-xl bg-emerald-50/80 dark:bg-emerald-900/20 border border-emerald-200/50 dark:border-emerald-700/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-600 transition-all cursor-pointer hover:shadow-lg"
+          className="group flex items-center gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-slate-200/50 dark:hover:shadow-slate-800/50 bg-white dark:bg-slate-800 bg-emerald-50/80 dark:bg-emerald-900/10 cursor-pointer"
         >
           <div className="p-2 rounded-lg bg-emerald-500 group-hover:bg-emerald-600 transition-colors shadow-sm">
             <Euro className="h-5 w-5 text-white" />
