@@ -123,7 +123,8 @@ function AppContent() {
     subcats,
     budgets,
     transactions,
-  }), [theme, customMainCats, mainEnabled, subcats, budgets, transactions])
+    mains: mainsForModal, // Categorie per modal (include core + custom)
+  }), [theme, customMainCats, mainEnabled, subcats, budgets, transactions, mainsForModal])
 
   // 🔸 Funzione per navigare alle transazioni pianificate
   const navigateToPlanned = useCallback(() => {

@@ -9,7 +9,8 @@
 Finance WebApp/
 ├── 🌐 Frontend (React + Vite)
 ├── 🔧 Backend (Node.js + Express)
-└── 🗄️ Database (PostgreSQL + Prisma)
+├── 🗄️ Database (PostgreSQL + Prisma)
+└── 💾 Backup System (PowerShell Scripts)
 ```
 
 ---
@@ -411,6 +412,37 @@ User Action → Handler → State Update → Component Re-render
   - `POST /api/categories` - Crea categoria
   - `PUT /api/categories/:id` - Aggiorna categoria
   - `DELETE /api/categories/:id` - Elimina categoria
+
+---
+
+## 💾 BACKUP SYSTEM
+
+### Struttura Sistema Backup
+**Directory**: `backup/`
+
+| File | Tipo | Scopo |
+|------|------|-------|
+| `backup_facile.bat` | BAT | Esecuzione backup con doppio click |
+| `ripristina_facile.bat` | BAT | Ripristino backup con doppio click |
+| `finance_db_backup_simple.ps1` | PowerShell | Script backup principale |
+| `ripristina_backup_simple.ps1` | PowerShell | Script ripristino interattivo |
+| `README_BACKUP.txt` | TXT | Documentazione sistema backup |
+| `backup_log.txt` | LOG | Log operazioni backup |
+| `finance_webapp_backup_*.dump` | DUMP | File backup database |
+
+### Funzionalità Sistema
+- **Backup Automatizzato**: Script PowerShell con rilevamento PostgreSQL
+- **Rotazione File**: Mantiene automaticamente ultimi 5 backup
+- **Ripristino Sicuro**: Conferma obbligatoria e recreazione database
+- **Logging Completo**: Tracciamento di tutte le operazioni
+- **UI Semplificata**: File BAT per uso con doppio click
+
+### Configurazione Database
+- **Host**: localhost:5432
+- **Database**: finance_webapp
+- **User**: postgres
+- **Formato**: PostgreSQL Custom (.dump)
+- **Compressione**: Abilitata (-Fc)
 
 ---
 

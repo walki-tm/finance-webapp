@@ -52,6 +52,8 @@ export default function GoalCard({
 }) {
   // 🔸 State per menu contestuale
   const [showMenu, setShowMenu] = React.useState(false)
+  const [menuPosition, setMenuPosition] = React.useState({ top: 0, left: 0 })
+  const menuButtonRef = React.useRef(null)
   // 🔸 Calcoli derivati
   const progressPercentage = useMemo(() => {
     return Math.min(Math.max((goal.progressPercentage || 0), 0), 100)
@@ -243,246 +245,267 @@ export default function GoalCard({
     })
   }
 
+  // 🔸 Handler per aprire menu con calcolo posizione
+  const handleMenuToggle = () => {
+    if (!showMenu && menuButtonRef.current) {
+      const rect = menuButtonRef.current.getBoundingClientRect()
+      setMenuPosition({
+        top: rect.bottom + 4,
+        left: rect.right - 160 // 160px = larghezza menu (40 * 4)
+      })
+    }
+    setShowMenu(!showMenu)
+  }
+
   return (
-    <div className={`${cardTheme.bgClass}`}>
-      <div className="p-6">
-      {/* Header con titolo e status */}
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">
-            {goal.title}
-          </h3>
-          <div className="flex items-center mt-1 text-sm text-slate-500 dark:text-slate-400">
-            {goal.subcategory?.iconKey && (
-              <img 
-                src={`/icons/subcategories/${goal.subcategory.iconKey}.svg`}
-                alt=""
-                className="h-4 w-4 mr-2"
-                style={{ filter: 'brightness(0) saturate(100%) invert(64%) sepia(6%) saturate(1658%) hue-rotate(181deg) brightness(89%) contrast(88%)' }}
-              />
-            )}
-            <span>{goal.subcategory?.name}</span>
+    <>
+      <div className={`${cardTheme.bgClass} relative`}>
+        <div className="p-6">
+        {/* Header con titolo e status */}
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">
+              {goal.title}
+            </h3>
+            <div className="flex items-center mt-1 text-sm text-slate-500 dark:text-slate-400">
+              {goal.subcategory?.iconKey && (
+                <img 
+                  src={`/icons/subcategories/${goal.subcategory.iconKey}.svg`}
+                  alt=""
+                  className="h-4 w-4 mr-2"
+                  style={{ filter: 'brightness(0) saturate(100%) invert(64%) sepia(6%) saturate(1658%) hue-rotate(181deg) brightness(89%) contrast(88%)' }}
+                />
+              )}
+              <span>{goal.subcategory?.name}</span>
+            </div>
           </div>
-        </div>
-        {renderStatusBadge()}
-      </div>
-
-      {/* Progress section */}
-      <div className="flex items-center justify-between mb-6">
-        {/* Progress circle */}
-        <div className="flex-shrink-0">
-          {renderCircularProgress()}
+          {renderStatusBadge()}
         </div>
 
-        {/* Importi e info */}
-        <div className="flex-1 ml-4 space-y-2">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-slate-600 dark:text-slate-400">Risparmiato:</span>
-            <span className="font-semibold text-slate-900 dark:text-slate-100">
-              {formatCurrency(goal.currentAmount)}
-            </span>
+        {/* Progress section */}
+        <div className="flex items-center justify-between mb-6">
+          {/* Progress circle */}
+          <div className="flex-shrink-0">
+            {renderCircularProgress()}
           </div>
-          
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-slate-600 dark:text-slate-400">Obiettivo:</span>
-            <span className="font-semibold text-slate-900 dark:text-slate-100">
-              {formatCurrency(goal.targetAmount)}
-            </span>
-          </div>
-          
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-slate-600 dark:text-slate-400">Rimangono:</span>
-            <span className="font-medium text-slate-700 dark:text-slate-300">
-              {formatCurrency(parseFloat(goal.targetAmount) - parseFloat(goal.currentAmount || 0))}
-            </span>
-          </div>
-        </div>
-      </div>
 
-      {/* Timeline info con progress bar temporale */}
-      {goal.targetDate ? (
-        <div className="mb-4 p-3 bg-white/60 dark:bg-slate-700/30 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center space-x-2">
-              <Calendar className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-              <span className="text-sm text-slate-600 dark:text-slate-300">
-                Scadenza: {formatDate(goal.targetDate)}
+          {/* Importi e info */}
+          <div className="flex-1 ml-4 space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-slate-600 dark:text-slate-400">Risparmiato:</span>
+              <span className="font-semibold text-slate-900 dark:text-slate-100">
+                {formatCurrency(goal.currentAmount)}
               </span>
             </div>
             
-            {!isCompleted && !isOverdue && daysRemaining !== null && (
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                {daysRemaining} giorni
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-slate-600 dark:text-slate-400">Obiettivo:</span>
+              <span className="font-semibold text-slate-900 dark:text-slate-100">
+                {formatCurrency(goal.targetAmount)}
               </span>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-slate-600 dark:text-slate-400">Rimangono:</span>
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                {formatCurrency(parseFloat(goal.targetAmount) - parseFloat(goal.currentAmount || 0))}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Timeline info con progress bar temporale */}
+        {goal.targetDate ? (
+          <div className="mb-4 p-3 bg-white/60 dark:bg-slate-700/30 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2">
+                <Calendar className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                <span className="text-sm text-slate-600 dark:text-slate-300">
+                  Scadenza: {formatDate(goal.targetDate)}
+                </span>
+              </div>
+              
+              {!isCompleted && !isOverdue && daysRemaining !== null && (
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  {daysRemaining} giorni
+                </span>
+              )}
+            </div>
+            
+            {/* Mini progress bar temporale */}
+            {!isCompleted && !isOverdue && timeProgress !== null && (
+              <div className="mt-2">
+                <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                  <span>Tempo trascorso</span>
+                  <span>{Math.round(timeProgress)}%</span>
+                </div>
+                <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-1.5">
+                  <div 
+                    className="bg-slate-400 dark:bg-slate-300 h-1.5 rounded-full transition-all duration-500"
+                    style={{ width: `${timeProgress}%` }}
+                  />
+                </div>
+              </div>
             )}
           </div>
-          
-          {/* Mini progress bar temporale */}
-          {!isCompleted && !isOverdue && timeProgress !== null && (
-            <div className="mt-2">
-              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
-                <span>Tempo trascorso</span>
-                <span>{Math.round(timeProgress)}%</span>
-              </div>
-              <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-1.5">
-                <div 
-                  className="bg-slate-400 dark:bg-slate-300 h-1.5 rounded-full transition-all duration-500"
-                  style={{ width: `${timeProgress}%` }}
-                />
-              </div>
+        ) : (
+          <div className="mb-4 p-3 bg-white/60 dark:bg-slate-700/30 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <Target className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+              <span className="text-sm text-slate-600 dark:text-slate-300 font-medium">
+                💰 Accumulo Soldi - Nessuna scadenza
+              </span>
             </div>
-          )}
-        </div>
-      ) : (
-        <div className="mb-4 p-3 bg-white/60 dark:bg-slate-700/30 rounded-lg">
-          <div className="flex items-center space-x-2">
-            <Target className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-            <span className="text-sm text-slate-600 dark:text-slate-300 font-medium">
-              💰 Accumulo Soldi - Nessuna scadenza
-            </span>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Monthly target suggestion come pill colorata */}
-      {!isCompleted && !isOverdue && goal.monthlyTarget && (
-        <div className="mb-4 flex items-center justify-center">
-          <div className={`inline-flex items-center space-x-2 px-4 py-2 rounded-full ${cardTheme.badgeColor} border ${cardTheme.bgClass.includes('emerald') ? 'border-emerald-200 dark:border-emerald-700' : 
-            cardTheme.bgClass.includes('green') ? 'border-green-200 dark:border-green-700' :
-            cardTheme.bgClass.includes('blue') ? 'border-blue-200 dark:border-blue-700' :
-            'border-sky-200 dark:border-sky-700'}`}>
-            <TrendingUp className={`h-4 w-4 ${cardTheme.iconColor}`} />
-            <span className={`text-sm font-medium ${cardTheme.textColor}`}>
-              💰 {formatCurrency(goal.monthlyTarget)} / mese
-            </span>
+        {/* Monthly target suggestion come pill colorata */}
+        {!isCompleted && !isOverdue && goal.monthlyTarget && (
+          <div className="mb-4 flex items-center justify-center">
+            <div className={`inline-flex items-center space-x-2 px-4 py-2 rounded-full ${cardTheme.badgeColor} border ${cardTheme.bgClass.includes('emerald') ? 'border-emerald-200 dark:border-emerald-700' : 
+              cardTheme.bgClass.includes('green') ? 'border-green-200 dark:border-green-700' :
+              cardTheme.bgClass.includes('blue') ? 'border-blue-200 dark:border-blue-700' :
+              'border-sky-200 dark:border-sky-700'}`}>
+              <TrendingUp className={`h-4 w-4 ${cardTheme.iconColor}`} />
+              <span className={`text-sm font-medium ${cardTheme.textColor}`}>
+                💰 {formatCurrency(goal.monthlyTarget)} / mese
+              </span>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Notes */}
-      {goal.notes && (
-        <div className="mb-4">
-          <p className="text-sm text-slate-600 dark:text-slate-400 italic">
-            "{goal.notes}"
-          </p>
-        </div>
-      )}
+        {/* Notes */}
+        {goal.notes && (
+          <div className="mb-4">
+            <p className="text-sm text-slate-600 dark:text-slate-400 italic">
+              "{goal.notes}"
+            </p>
+          </div>
+        )}
 
-      {/* Action buttons migliorati */}
-      <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
-        {/* Azioni principali a sinistra */}
-        <div className="flex items-center gap-2">
-          {/* Quick actions per obiettivi attivi */}
-          {goal.status === 'ACTIVE' && (
-            <>
-              <Button
-                size="sm"
-                onClick={() => onAddBalance(goal)}
-                className="inline-flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 shadow-sm"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Aggiungi</span>
-              </Button>
+        {/* Action buttons migliorati */}
+        <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
+          {/* Azioni principali a sinistra */}
+          <div className="flex items-center gap-2">
+            {/* Quick actions per obiettivi attivi */}
+            {goal.status === 'ACTIVE' && (
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => onAddBalance(goal)}
+                  className="inline-flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 shadow-sm"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Aggiungi</span>
+                </Button>
 
-              {parseFloat(goal.currentAmount || 0) > 0 && (
+                {parseFloat(goal.currentAmount || 0) > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onWithdraw(goal)}
+                    className="inline-flex items-center space-x-2 px-3 py-2"
+                  >
+                    <Minus className="h-4 w-4" />
+                    <span>Preleva</span>
+                  </Button>
+                )}
+              </>
+            )}
+            
+            {/* Quick actions per obiettivi completati - stessa modalità */}
+            {goal.status === 'COMPLETED' && parseFloat(goal.currentAmount || 0) > 0 && (
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => onAddBalance(goal)}
+                  className="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 shadow-sm"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Aggiungi</span>
+                </Button>
+                
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => onWithdraw(goal)}
-                  className="inline-flex items-center space-x-2 px-3 py-2"
+                  className="inline-flex items-center space-x-2 px-3 py-2 border-emerald-200 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"
                 >
                   <Minus className="h-4 w-4" />
                   <span>Preleva</span>
                 </Button>
-              )}
-            </>
-          )}
-          
-          {/* Quick actions per obiettivi completati - stessa modalità */}
-          {goal.status === 'COMPLETED' && parseFloat(goal.currentAmount || 0) > 0 && (
-            <>
-              <Button
-                size="sm"
-                onClick={() => onAddBalance(goal)}
-                className="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 shadow-sm"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Aggiungi</span>
-              </Button>
-              
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onWithdraw(goal)}
-                className="inline-flex items-center space-x-2 px-3 py-2 border-emerald-200 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"
-              >
-                <Minus className="h-4 w-4" />
-                <span>Preleva</span>
-              </Button>
-            </>
-          )}
+              </>
+            )}
 
-          {/* Storico sempre visibile */}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onShowHistory(goal)}
-            className="inline-flex items-center space-x-2 px-3 py-2"
-          >
-            <History className="h-4 w-4" />
-            <span>Storico</span>
-          </Button>
+            {/* Storico sempre visibile */}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onShowHistory(goal)}
+              className="inline-flex items-center space-x-2 px-3 py-2"
+            >
+              <History className="h-4 w-4" />
+              <span>Storico</span>
+            </Button>
+          </div>
+
+          {/* Menu contestuale a destra */}
+          <div className="relative">
+            <Button
+              ref={menuButtonRef}
+              size="sm"
+              variant="ghost"
+              onClick={handleMenuToggle}
+              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+            >
+              <MoreVertical className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+            </Button>
+          </div>
         </div>
-
-        {/* Menu contestuale a destra */}
-        <div className="relative">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setShowMenu(!showMenu)}
-            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
-          >
-            <MoreVertical className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-          </Button>
-
-          {/* Dropdown menu */}
-          {showMenu && (
-            <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 z-10">
-              <div className="py-1">
-                <button
-                  onClick={() => {
-                    onEdit(goal)
-                    setShowMenu(false)
-                  }}
-                  className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center space-x-2"
-                >
-                  <Edit3 className="h-4 w-4" />
-                  <span>Modifica</span>
-                </button>
-                <button
-                  onClick={() => {
-                    onDelete(goal.id)
-                    setShowMenu(false)
-                  }}
-                  className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center space-x-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span>Elimina</span>
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
       {/* Overlay per chiudere il menu */}
       {showMenu && (
         <div 
-          className="fixed inset-0 z-5"
+          className="fixed inset-0 z-40"
           onClick={() => setShowMenu(false)}
         />
       )}
-      </div>
-    </div>
+
+      {/* Dropdown menu - Posizionato fixed fuori dalla card */}
+      {showMenu && (
+        <div 
+          className="fixed w-40 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50"
+          style={{
+            top: `${menuPosition.top}px`,
+            left: `${menuPosition.left}px`
+          }}
+        >
+          <div className="py-1">
+            <button
+              onClick={() => {
+                onEdit(goal)
+                setShowMenu(false)
+              }}
+              className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center space-x-2"
+            >
+              <Edit3 className="h-4 w-4" />
+              <span>Modifica</span>
+            </button>
+            <button
+              onClick={() => {
+                onDelete(goal.id)
+                setShowMenu(false)
+              }}
+              className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center space-x-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Elimina</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   )
 }

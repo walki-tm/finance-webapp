@@ -16,6 +16,7 @@ import { useMemo } from 'react'
 import { useTransactions } from '../transactions/useTransactions.js'
 import { useBalance } from '../app/useBalance.js'
 import useBudgets from '../app/useBudgets.js'
+import { useCategories } from '../categories/useCategories.js'
 import { MAIN_CATS } from '../../lib/constants.js'
 import { parseLocalDate } from '../../lib/dateUtils.js'
 import { months } from '../../lib/constants.js'
@@ -34,20 +35,23 @@ export function useFilteredDashboardData(token, filters) {
   // 🔸 Hook per budgets (per calcoli progresso ring charts)
   const currentYear = new Date().getFullYear().toString()
   const { budgets, loading: budgetsLoading } = useBudgets(currentYear)
+  
+  // 🔸 Hook per categorie (per colori e nomi corretti)
+  const { mainsForModal: allMainCategories } = useCategories(token)
 
   // 🔸 Calcoli aggregati per le statistiche principali
   const aggregatedData = useMemo(() => {
     if (!transactions?.length) {
       return {
-        sums: { income: 0, expense: 0, debt: 0, saving: 0 },
+        sums: {},
         categorySums: {},
         monthlyData: [],
         totalTransactions: 0
       }
     }
 
-    // Somme per categoria main
-    const sums = { income: 0, expense: 0, debt: 0, saving: 0 }
+    // Somme per categoria main - DINAMICHE (include tutte le categorie)
+    const sums = {}
     const categorySums = {}
     
     // Filtra per categoria main se specificata
@@ -63,10 +67,9 @@ export function useFilteredDashboardData(token, filters) {
       // Per income, mantieni il segno originale
       const displayAmount = mainKey === 'income' ? amount : Math.abs(amount)
       
-      // Somma per categoria main
-      if (sums.hasOwnProperty(mainKey)) {
-        sums[mainKey] += displayAmount
-      }
+      // Somma per categoria main - DINAMICA per tutte le categorie
+      if (!sums[mainKey]) sums[mainKey] = 0
+      sums[mainKey] += displayAmount
       
       // Somma per sottocategoria
       const subKey = `${mainKey}:${t.sub || 'altro'}`
@@ -123,7 +126,7 @@ export function useFilteredDashboardData(token, filters) {
 
   // 🔸 Calcolo budgets totali per categoria BASATO sul periodo filtrato
   const budgetTotals = useMemo(() => {
-    const totals = { income: 0, expense: 0, debt: 0, saving: 0 }
+    const totals = {}
     const yearBudgets = budgets?.[currentYear] || {}
     
     if (filters?.mode === 'month') {
@@ -131,7 +134,8 @@ export function useFilteredDashboardData(token, filters) {
       const monthIndex = filters.pointer?.getMonth() || 0
       for (const key in yearBudgets) {
         const [mainKey, , keyMonth] = key.split(':')
-        if (totals.hasOwnProperty(mainKey) && parseInt(keyMonth) === monthIndex) {
+        if (parseInt(keyMonth) === monthIndex) {
+          if (!totals[mainKey]) totals[mainKey] = 0
           totals[mainKey] += yearBudgets[key] || 0
         }
       }
@@ -139,9 +143,8 @@ export function useFilteredDashboardData(token, filters) {
       // ANNO: somma tutti i mesi
       for (const key in yearBudgets) {
         const [mainKey] = key.split(':')
-        if (totals.hasOwnProperty(mainKey)) {
-          totals[mainKey] += yearBudgets[key] || 0
-        }
+        if (!totals[mainKey]) totals[mainKey] = 0
+        totals[mainKey] += yearBudgets[key] || 0
       }
     } else if (filters?.mode === 'day') {
       // GIORNO: proporzione del budget del mese (1/30 circa)
@@ -149,7 +152,8 @@ export function useFilteredDashboardData(token, filters) {
       const daysInMonth = new Date(filters.pointer?.getFullYear() || new Date().getFullYear(), monthIndex + 1, 0).getDate()
       for (const key in yearBudgets) {
         const [mainKey, , keyMonth] = key.split(':')
-        if (totals.hasOwnProperty(mainKey) && parseInt(keyMonth) === monthIndex) {
+        if (parseInt(keyMonth) === monthIndex) {
+          if (!totals[mainKey]) totals[mainKey] = 0
           totals[mainKey] += (yearBudgets[key] || 0) / daysInMonth
         }
       }
@@ -159,7 +163,8 @@ export function useFilteredDashboardData(token, filters) {
       const weeksInMonth = 4.33 // Media settimane per mese
       for (const key in yearBudgets) {
         const [mainKey, , keyMonth] = key.split(':')
-        if (totals.hasOwnProperty(mainKey) && parseInt(keyMonth) === monthIndex) {
+        if (parseInt(keyMonth) === monthIndex) {
+          if (!totals[mainKey]) totals[mainKey] = 0
           totals[mainKey] += (yearBudgets[key] || 0) / weeksInMonth
         }
       }
@@ -181,7 +186,8 @@ export function useFilteredDashboardData(token, filters) {
           
           for (const key in yearBudgets) {
             const [mainKey, , keyMonth] = key.split(':')
-            if (totals.hasOwnProperty(mainKey) && parseInt(keyMonth) === m) {
+            if (parseInt(keyMonth) === m) {
+              if (!totals[mainKey]) totals[mainKey] = 0
               totals[mainKey] += (yearBudgets[key] || 0) * monthFactor
             }
           }
@@ -190,18 +196,16 @@ export function useFilteredDashboardData(token, filters) {
         // Multi-anno: per semplicità, calcola solo l'anno corrente
         for (const key in yearBudgets) {
           const [mainKey] = key.split(':')
-          if (totals.hasOwnProperty(mainKey)) {
-            totals[mainKey] += yearBudgets[key] || 0
-          }
+          if (!totals[mainKey]) totals[mainKey] = 0
+          totals[mainKey] += yearBudgets[key] || 0
         }
       }
     } else {
       // DEFAULT: somma tutti i mesi (comportamento anno)
       for (const key in yearBudgets) {
         const [mainKey] = key.split(':')
-        if (totals.hasOwnProperty(mainKey)) {
-          totals[mainKey] += yearBudgets[key] || 0
-        }
+        if (!totals[mainKey]) totals[mainKey] = 0
+        totals[mainKey] += yearBudgets[key] || 0
       }
     }
     
@@ -216,16 +220,48 @@ export function useFilteredDashboardData(token, filters) {
     filters?.rangeEnd?.getTime()
   ])
 
-  // 🔸 Dati per i donut charts delle categorie main
+  // 🔸 Dati per i donut charts delle categorie main - DINAMICI
   const categoryChartData = useMemo(() => {
-    return MAIN_CATS.map(mainCat => ({
-      key: mainCat.key,
-      name: mainCat.name,
-      color: mainCat.color,
-      value: aggregatedData.sums[mainCat.key] || 0,
-      budget: budgetTotals[mainCat.key] || 0
-    }))
-  }, [aggregatedData.sums, budgetTotals])
+    // Trova tutte le categorie uniche da transazioni e budget
+    const allCategories = new Set()
+    
+    // Aggiungi le categorie core prima (per mantenere l'ordine)
+    MAIN_CATS.forEach(cat => allCategories.add(cat.key))
+    
+    // Aggiungi categorie dalle transazioni
+    Object.keys(aggregatedData.sums || {}).forEach(key => allCategories.add(key))
+    
+    // Aggiungi categorie dai budget
+    Object.keys(budgetTotals || {}).forEach(key => allCategories.add(key))
+    
+    // Crea l'array dei dati categorici
+    return Array.from(allCategories).map(catKey => {
+      // Trova la categoria core se esiste
+      const coreCategory = MAIN_CATS.find(cat => cat.key === catKey)
+      
+      if (coreCategory) {
+        // Categoria core: usa i dati definiti
+        return {
+          key: coreCategory.key,
+          name: coreCategory.name,
+          color: coreCategory.color,
+          value: aggregatedData.sums[coreCategory.key] || 0,
+          budget: budgetTotals[coreCategory.key] || 0
+        }
+      } else {
+        // Categoria custom: trova dati dall'API delle categorie
+        const customCategory = allMainCategories?.find(cat => cat.key === catKey)
+        
+        return {
+          key: catKey,
+          name: customCategory?.name || catKey.toUpperCase(), // Nome dall'API o fallback
+          color: customCategory?.color || '#5B86E5', // Colore dall'API o fallback
+          value: aggregatedData.sums[catKey] || 0,
+          budget: budgetTotals[catKey] || 0
+        }
+      }
+    })
+  }, [aggregatedData.sums, budgetTotals, allMainCategories])
 
   // 🔸 Transazioni recenti (prime 10 per la sezione Recent)
   const recentTransactions = useMemo(() => {

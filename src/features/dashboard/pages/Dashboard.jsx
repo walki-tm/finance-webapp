@@ -47,8 +47,6 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
   // 🔸 State per tooltip personalizzato
   const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, data: null })
   
-  // 🔸 State per tab "Altre Categorie" espandibile
-  const [showOtherCategories, setShowOtherCategories] = useState(false)
   
   // 🔸 Hook per categorie disponibili 
   const { mainsForModal: allMainCategories } = useCategories(token)
@@ -177,44 +175,7 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
     })
   }, [categoryChartData, plannedTransactions, filters])
   
-  // 🔸 Filtra le categorie custom visibili (escluse quelle core)
-  const customVisibleCategories = useMemo(() => {
-    if (!allMainCategories?.length) return []
-    
-    // Categorie core da escludere
-    const coreKeys = new Set(['income', 'expense', 'debt', 'saving'])
-    
-    // Filtra solo le categorie custom con enabled = true (che corrisponde a visible = true nel DB)
-    return allMainCategories.filter(cat => {
-      return !coreKeys.has(cat.key) && cat.enabled === true
-    })
-  }, [allMainCategories])
   
-  // 🔸 Crea i dati per le categorie custom usando la stessa logica delle core
-  const customCategoryData = useMemo(() => {
-    if (!customVisibleCategories.length) return []
-    
-    return customVisibleCategories.map(customCat => {
-      // Cerca i dati da projectedData se esistono
-      const existingData = projectedData.find(d => d.key === customCat.key)
-      
-      if (existingData) {
-        // Se la categoria ha già dati, usa quelli
-        return existingData
-      } else {
-        // Se non ha dati, crea un oggetto vuoto con la struttura corretta
-        return {
-          key: customCat.key,
-          name: customCat.name,
-          color: customCat.color || '#5B86E5',
-          value: 0,
-          budget: 0,
-          projectedValue: 0,
-          totalWithProjections: 0
-        }
-      }
-    })
-  }, [customVisibleCategories, projectedData])
   
   // 🔸 Dati per i grafici (basati su dati filtrati + proiezioni)
   const donutData = projectedData
@@ -565,7 +526,7 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
         })}
       </div>
 
-      {/* 🔸 DetailPanel per categorie core (sopra le custom) */}
+      {/* 🔸 DetailPanel per categorie core */}
       {detailMain && ['income', 'expense', 'debt', 'saving'].includes(detailMain) && (
         <DetailPanel
           mainKey={detailMain}
@@ -580,292 +541,21 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
         />
       )}
 
-      {/* 🔸 Sezione Altre Categorie (espandibile) */}
-      {customVisibleCategories.length > 0 && (
-        <Card className="select-none">
-          <CardContent className="py-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <h3 className="font-medium text-slate-800 dark:text-slate-200">Altre Categorie</h3>
-                <Badge variant="outline" className="text-xs">
-                  {customVisibleCategories.length}
-                </Badge>
-              </div>
-              <button
-                onClick={() => setShowOtherCategories(prev => !prev)}
-                className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                <svg 
-                  className={`w-5 h-5 transition-transform duration-200 ${showOtherCategories ? 'rotate-180' : ''}`}
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </div>
-            
-            {/* Container espandibile */}
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
-              showOtherCategories ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
-            }`}>
-              {showOtherCategories && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
-                  {customCategoryData.map(d => {
-                    const projectedAmount = Math.abs(d.projectedValue || 0)
-                    const currentAmount = Math.abs(d.value)
-                    const totalProjected = currentAmount + projectedAmount
-                    
-                    const progressValue = d.budget > 0 ? (totalProjected / d.budget) * 100 : 0
-                    const hasData = d.value !== 0 || d.budget > 0 || projectedAmount > 0
-                    const isOverBudget = d.budget > 0 && totalProjected > d.budget
-                    const hasProjections = projectedAmount > 0
-                    const opacity = hasData ? 1 : 0.5 // Sbiadito se non ci sono dati
-                    
-                    return (
-                      <div key={d.key} className="relative group select-none">
-                        <button onClick={() => onSelectMain?.(d.key)} className="text-left w-full select-none">
-                          <Card style={{ 
-                            borderColor: isOverBudget ? '#fca5a5' : alpha(d.color, .35), 
-                            borderWidth: isOverBudget ? '2px' : '1px',
-                            opacity,
-                            transition: 'all 0.2s ease',
-                            userSelect: 'none',
-                            WebkitUserSelect: 'none',
-                            MozUserSelect: 'none',
-                            msUserSelect: 'none',
-                            WebkitTouchCallout: 'none'
-                          }} className="group-hover:shadow-lg group-hover:-translate-y-1">
-                            <CardContent>
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="font-medium flex items-center gap-2">
-                                  <span className="inline-block w-2.5 h-2.5 rounded-full transition-all duration-200 group-hover:w-3 group-hover:h-3" style={{ background: d.color }} />
-                                  {d.name}
-                                  {isOverBudget && (
-                                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-100 text-red-500 rounded-full">
-                                      Over!
-                                    </span>
-                                  )}
-                                </div>
-                                <div className={`text-xs transition-all duration-200 group-hover:font-semibold ${isOverBudget ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
-                                  {Math.abs(d.value || 0) === 0 ? '-' : nice(d.value)}
-                                  {d.budget > 0 && (
-                                    <span>
-                                      <span className="mx-1">/</span>
-                                      <span>{nice(d.budget)}</span>
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            
-                              <div className="h-32 relative">
-                                <ResponsiveContainer>
-                                  <PieChart>
-                                    <defs>
-                                      <linearGradient id={`g-custom-${d.key}`} x1="0" y1="0" x2="1" y2="1">
-                                        <stop offset="0%" stopColor={alpha(d.color, hasData ? .6 : .2)} />
-                                        <stop offset="100%" stopColor={alpha(d.color, hasData ? 1 : .3)} />
-                                      </linearGradient>
-                                    </defs>
-                                    <Pie
-                                      isAnimationActive={false}
-                                      data={(() => {
-                                        // 🔸 Caso speciale: Account nuovo senza dati né budget
-                                        if (currentAmount === 0 && d.budget === 0 && projectedAmount === 0) {
-                                          return [
-                                            { name: 'vuoto', value: 100, category: d.name, type: 'empty' }
-                                          ]
-                                        }
-                                        
-                                        if (hasProjections) {
-                                          // Con proiezioni: ordine SPESO > PROIEZIONI > RIMANENTE/ECCESSO
-                                          if (isOverBudget) {
-                                            return [
-                                              { name: 'utilizzato', value: currentAmount, category: d.name, type: 'used' },
-                                              { name: 'proiezioni', value: projectedAmount, category: d.name, type: 'projected' },
-                                              { name: 'eccesso', value: totalProjected - d.budget, category: d.name, type: 'excess' }
-                                            ]
-                                          } else {
-                                            return [
-                                              { name: 'utilizzato', value: currentAmount, category: d.name, type: 'used' },
-                                              { name: 'proiezioni', value: projectedAmount, category: d.name, type: 'projected' },
-                                              { name: 'rimanente', value: Math.max(d.budget - totalProjected, 0), category: d.name, type: 'remaining' }
-                                            ]
-                                          }
-                                        } else {
-                                          // Senza proiezioni: logica originale
-                                          if (isOverBudget) {
-                                            return [
-                                              { name: 'utilizzato', value: currentAmount, category: d.name, type: 'used' },
-                                              { name: 'eccesso', value: currentAmount - d.budget, category: d.name, type: 'excess' }
-                                            ]
-                                          } else {
-                                            return [
-                                              { name: 'utilizzato', value: currentAmount, category: d.name, type: 'used' },
-                                              { name: 'rimanente', value: Math.max((d.budget || 0) - currentAmount, 0), category: d.name, type: 'remaining' }
-                                            ]
-                                          }
-                                        }
-                                      })()}
-                                      dataKey="value"
-                                      innerRadius={42}
-                                      outerRadius={58}
-                                      paddingAngle={currentAmount === 0 && d.budget === 0 ? 0 : 1.5}
-                                    >
-                                      {/* 🔸 Colori dinamici per le celle del grafico */}
-                                      {(() => {
-                                        // Caso speciale: account vuoto
-                                        if (currentAmount === 0 && d.budget === 0 && projectedAmount === 0) {
-                                          return <Cell fill={alpha(d.color, .1)} />
-                                        }
-                                        
-                                        // Caso normale: celle multiple
-                                        const cells = []
-                                        cells.push(<Cell key="used" fill={isOverBudget ? `url(#g-custom-${d.key})` : `url(#g-custom-${d.key})`} />)
-                                        
-                                        if (hasProjections) {
-                                          cells.push(<Cell key="projected" fill={alpha(d.color, .4)} />)
-                                        }
-                                        
-                                        cells.push(<Cell key="remaining" fill={isOverBudget ? '#fca5a5' : alpha(d.color, hasData ? .15 : .08)} />)
-                                        
-                                        return cells
-                                      })()
-                                      }
-                                    </Pie>
-                                    <Tooltip 
-                                      position={{ x: 0, y: 0 }}
-                                      content={({ active, payload, coordinate }) => {
-                                        if (active && payload && payload.length > 0 && coordinate) {
-                                          const segment = payload[0].payload
-                                          const segmentValue = payload[0].value
-                                          
-                                          // Calcola la posizione relativa del tooltip rispetto al centro del grafico
-                                          const centerX = 70
-                                          const centerY = 70
-                                          const mouseX = coordinate.x
-                                          const mouseY = coordinate.y
-                                          
-                                          // Calcola l'angolo per determinare la posizione esterna ottimale
-                                          const angle = Math.atan2(mouseY - centerY, mouseX - centerX)
-                                          const distance = 100
-                                          
-                                          // Calcola posizione esterna basata sull'angolo
-                                          let externalX = centerX + Math.cos(angle) * distance
-                                          let externalY = centerY + Math.sin(angle) * distance
-                                          
-                                          // Aggiungi offset per evitare sovrapposizioni
-                                          const tooltipWidth = 120
-                                          const tooltipHeight = 50
-                                          
-                                          // Aggiusta posizione se troppo vicina ai bordi
-                                          if (externalX < tooltipWidth / 2) externalX = tooltipWidth / 2 + 10
-                                          if (externalX > 140 - tooltipWidth / 2) externalX = 140 - tooltipWidth / 2 - 10
-                                          if (externalY < tooltipHeight / 2) externalY = tooltipHeight / 2 + 10
-                                          if (externalY > 140 - tooltipHeight / 2) externalY = 140 - tooltipHeight / 2 - 10
-                                          
-                                          return (
-                                            <div 
-                                              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg p-2 text-xs pointer-events-none z-50"
-                                              style={{
-                                                position: 'absolute',
-                                                left: `${externalX - tooltipWidth / 2}px`,
-                                                top: `${externalY - tooltipHeight / 2}px`,
-                                                width: `${tooltipWidth}px`,
-                                                minHeight: `${tooltipHeight}px`,
-                                                transform: 'translate(0, 0)'
-                                              }}
-                                            >
-                                              <div className="flex items-center gap-2 mb-1">
-                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: payload[0].fill || d.color }} />
-                                                <span className="font-medium">
-                                                  {segment.type === 'used' && 'Speso'}
-                                                  {segment.type === 'projected' && 'Proiezioni'}
-                                                  {segment.type === 'excess' && 'Eccesso'}
-                                                  {segment.type === 'remaining' && 'Rimanente'}
-                                                  {segment.type === 'empty' && 'Nessun dato'}
-                                                </span>
-                                              </div>
-                                              <div className="font-bold text-center" style={{ color: segment.type === 'excess' ? '#ef4444' : d.color }}>
-                                                {segment.type === 'excess' ? '+' : ''}{nice(segmentValue)}
-                                              </div>
-                                            </div>
-                                          )
-                                        }
-                                        return null
-                                      }}
-                                    />
-                                  </PieChart>
-                                </ResponsiveContainer>
-                                
-                                {/* 🔸 Percentuale al centro del ring - dinamica con hover */}
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                  <div className="text-center transition-all duration-200 group-hover:scale-110">
-                                    <div className="text-xl font-bold transition-all duration-200 group-hover:text-2xl" style={{ 
-                                      color: isOverBudget ? '#ef4444' : d.color 
-                                    }}>
-                                      {(() => {
-                                        // 🔸 Caso speciale: Account nuovo senza dati né budget
-                                        if (currentAmount === 0 && d.budget === 0 && projectedAmount === 0) {
-                                          return '0€'
-                                        }
-                                        
-                                        if (d.budget <= 0) {
-                                          // Caso: Nessun budget impostato ma ci sono dati
-                                          if (currentAmount === 0 && projectedAmount === 0) {
-                                            return '0€'
-                                          }
-                                          return 'N/A'
-                                        }
-                                        
-                                        // Caso: Budget presente
-                                        if (progressValue > 100) {
-                                          // Over budget: mostra "100%+" per percentuali elevate
-                                          if (progressValue > 500) {
-                                            const overAmount = (totalProjected - d.budget).toFixed(0)
-                                            return `+${overAmount}€`
-                                          } else {
-                                            return '100%+'
-                                          }
-                                        }
-                                        
-                                        return `${progressValue.toFixed(0)}%`
-                                      })()
-                                    }
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* 🔸 DetailPanel per categorie custom (dentro la card "Altre Categorie") */}
-            {detailMain && !['income', 'expense', 'debt', 'saving'].includes(detailMain) && (
-              <div className="mt-6">
-                <DetailPanel
-                  mainKey={detailMain}
-                  filteredData={{
-                    transactions: transactions || [] // Usa TUTTE le transazioni del periodo filtrato
-                  }}
-                  subcats={state?.subcats || {}}
-                  budgets={budgets}
-                  filters={filters}
-                  color={allMainCategories?.find(cat => cat.key === detailMain)?.color || '#94a3b8'}
-                  addTx={addTx}
-                />
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* 🔸 DetailPanel per categorie custom */}
+      {detailMain && !['income', 'expense', 'debt', 'saving'].includes(detailMain) && (
+        <DetailPanel
+          mainKey={detailMain}
+          filteredData={{
+            transactions: transactions || [] // Usa TUTTE le transazioni del periodo filtrato
+          }}
+          subcats={state?.subcats || {}}
+          budgets={budgets}
+          filters={filters}
+          color={allMainCategories?.find(cat => cat.key === detailMain)?.color || '#94a3b8'}
+          addTx={addTx}
+        />
       )}
+
 
       {/* 🔸 Grafico trend mensile */}
       <Card className="select-none">

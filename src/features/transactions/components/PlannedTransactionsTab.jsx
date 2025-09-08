@@ -151,6 +151,37 @@ export default function PlannedTransactionsTab({ state, onOpenAddPlannedTx, refr
     }
   }
 
+  // 📁 Funzione per cambiare il gruppo di una transazione
+  const handleChangeGroup = async (transaction, newGroupId) => {
+    try {
+      // Trova il nuovo gruppo per il messaggio di toast
+      const newGroup = newGroupId ? transactionGroups.find(g => g.id === newGroupId) : null
+      const oldGroup = transaction.groupId ? transactionGroups.find(g => g.id === transaction.groupId) : null
+      
+      // Aggiorna la transazione tramite l'API
+      await api.updatePlannedTransaction(token, transaction.id, {
+        ...transaction,
+        groupId: newGroupId
+      })
+      
+      // Refresh dei dati
+      refresh()
+      
+      // 🎉 TOAST DI SUCCESSO
+      const groupText = newGroup ? `spostata in "${newGroup.name}"` : 'rimossa da tutti i gruppi'
+      toast.success(
+        `📁 ${transaction.title || 'Transazione'} ${groupText}`,
+        { 
+          description: oldGroup ? `Prima era in: "${oldGroup.name}"` : 'Prima non apparteneva a nessun gruppo'
+        }
+      )
+    } catch (error) {
+      console.error('Errore nel cambio gruppo:', error)
+      toast.error('Errore nel cambiare il gruppo della transazione')
+      throw error
+    }
+  }
+
   // 🔸 Filter logic
   const applyDueStatusFilter = (transaction, dueStatus) => {
     if (!dueStatus) return true
@@ -684,8 +715,10 @@ const handleBudgetApplication = async (options) => {
                     toast.error('Errore nel saltare la rata: ' + (error.message || 'Riprova.'))
                   }
                 }}
+                onChangeGroup={handleChangeGroup}
                 subcats={state.subcats}
                 mains={state.mains}
+                groups={transactionGroups}
               />
             ))}
           </div>
@@ -786,8 +819,10 @@ const handleBudgetApplication = async (options) => {
                     toast.error('Errore nel saltare la rata: ' + (error.message || 'Riprova.'))
                   }
                 }}
+                onChangeGroup={handleChangeGroup}
                 subcats={state.subcats}
                 mains={state.mains}
+                groups={transactionGroups}
               />
             ))}
           </div>

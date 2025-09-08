@@ -36,8 +36,10 @@ export default function PlannedTransactionCard({
   onApplyToBudgeting,
   onToggleActive,
   onSkipLoanPayment,
+  onChangeGroup,
   subcats = {},
-  mains = []
+  mains = [],
+  groups = []
 }) {
   const { token } = useAuth()
   const [showOccurrences, setShowOccurrences] = useState(false)
@@ -128,6 +130,49 @@ export default function PlannedTransactionCard({
       console.error('❌ Errore nel saltare la rata:', error)
       alert('Errore nel saltare la rata: ' + (error.message || 'Riprova.'))
     }
+  }
+
+  // 🔸 Helper function per cambiare gruppo
+  const handleChangeGroup = () => {
+    if (!onChangeGroup || groups.length === 0) return
+    
+    // Crea la lista delle opzioni: "Nessun gruppo" + tutti i gruppi
+    const options = [
+      { value: null, label: '🔄 Nessun gruppo' },
+      ...groups.map(group => ({
+        value: group.id,
+        label: `📁 ${group.name}`
+      }))
+    ]
+    
+    // Trova il gruppo attuale
+    const currentGroup = transaction.groupId ? 
+      groups.find(g => g.id === transaction.groupId) : null
+    
+    // Crea il messaggio con il gruppo attuale
+    const currentGroupText = currentGroup ? 
+      `Attualmente in: "${currentGroup.name}"` : 
+      'Attualmente: Nessun gruppo'
+    
+    // Mostra un semplice prompt con le opzioni
+    const groupNames = options.map((opt, idx) => `${idx + 1}. ${opt.label}`).join('\n')
+    const choice = prompt(
+      `Cambia gruppo per "${transaction.title || 'Transazione'}"\n\n${currentGroupText}\n\nScegli il nuovo gruppo:\n${groupNames}\n\nInserisci il numero (1-${options.length}):`
+    )
+    
+    if (choice === null) return // Annullato
+    
+    const choiceNum = parseInt(choice, 10)
+    if (choiceNum < 1 || choiceNum > options.length) {
+      alert('Scelta non valida!')
+      return
+    }
+    
+    const selectedOption = options[choiceNum - 1]
+    const newGroupId = selectedOption.value
+    
+    // Chiama la callback
+    onChangeGroup(transaction, newGroupId)
   }
 
   return (
@@ -240,7 +285,13 @@ export default function PlannedTransactionCard({
                     onClick: () => onMaterialize(),
                     variant: 'default'
                   }] : []),
-                  // 3. Disattiva (per transazioni mensili non-prestiti)
+                  // 3. Cambia gruppo (per transazioni non-prestiti)
+                  ...(!transaction.loanId && groups.length > 0 ? [{
+                    label: '📁 Cambia Gruppo',
+                    onClick: handleChangeGroup,
+                    variant: 'default'
+                  }] : []),
+                  // 4. Disattiva (per transazioni mensili non-prestiti)
                   ...(transaction.frequency === 'MONTHLY' && !transaction.loanId ? [{
                     label: transaction.isActive ? '🚫 Disattiva' : '▶️ Attiva',
                     onClick: () => onToggleActive && onToggleActive(transaction, !transaction.isActive),
@@ -252,13 +303,13 @@ export default function PlannedTransactionCard({
                     onClick: handleSkipLoanPayment,
                     variant: 'warning'
                   }] : []),
-                  // 4. Modifica (per transazioni non-prestiti) - PENULTIMO
+                  // 5. Modifica (per transazioni non-prestiti) - PENULTIMO
                   ...(!transaction.loanId ? [{
                     label: '✏️ Modifica',
                     onClick: () => onEdit(),
                     variant: 'default'
                   }] : []),
-                  // 5. Rimuovi (per transazioni non-prestiti) - ULTIMO
+                  // 6. Rimuovi (per transazioni non-prestiti) - ULTIMO
                   ...(!transaction.loanId ? [{
                     label: '🗑️ Rimuovi',
                     onClick: () => onDelete(transaction.id),

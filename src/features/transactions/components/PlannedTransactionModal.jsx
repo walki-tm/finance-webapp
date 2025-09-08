@@ -49,10 +49,26 @@ export default function PlannedTransactionModal({
     return subcats[formData.main] || []
   }, [formData.main, subcats])
   
-  // 🔸 Trova main category per colori e icone
+  // 🔸 Trova main category per colori e icone (include categorie custom)
   const selectedMainCat = useMemo(() => {
-    return MAIN_CATS.find(cat => cat.key === formData.main)
-  }, [formData.main])
+    // Prima cerca nelle categorie core
+    const coreCategory = MAIN_CATS.find(cat => cat.key === formData.main)
+    if (coreCategory) return coreCategory
+    
+    // Se non trovata nelle core, cerca nelle categorie custom
+    const customCategory = mains.find(cat => cat.key === formData.main)
+    if (customCategory) {
+      // Adatta la struttura delle categorie custom a quella delle core
+      return {
+        key: customCategory.key,
+        name: customCategory.name,
+        color: customCategory.color,
+        icon: () => null // Le categorie custom non hanno icone Lucide predefinite
+      }
+    }
+    
+    return null
+  }, [formData.main, mains])
   
   // 🔸 Validazione form
   const isValid = useMemo(() => {
@@ -182,7 +198,14 @@ export default function PlannedTransactionModal({
             <div className="flex items-center gap-3">
               {selectedMainCat && (
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${selectedMainCat.color}20` }}>
-                  <selectedMainCat.icon className="w-4 h-4" style={{ color: selectedMainCat.color }} />
+                  {selectedMainCat.icon ? (
+                    <selectedMainCat.icon className="w-4 h-4" style={{ color: selectedMainCat.color }} />
+                  ) : (
+                    <div 
+                      className="w-4 h-4 rounded-full" 
+                      style={{ backgroundColor: selectedMainCat.color }}
+                    />
+                  )}
                 </div>
               )}
               <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -250,9 +273,23 @@ export default function PlannedTransactionModal({
                     onChange={(e) => setFormData(prev => ({ ...prev, main: e.target.value }))}
                     className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   >
+                    {/* Categorie core (escluso income) */}
                     {MAIN_CATS.filter(cat => cat.key !== 'income').map(cat => (
                       <option key={cat.key} value={cat.key}>{cat.name}</option>
                     ))}
+                    
+                    {/* Categorie custom (se disponibili) */}
+                    {mains && mains.length > 0 && (
+                      <>
+                        <option disabled>──────────────</option>
+                        {mains
+                          .filter(cat => !['income', 'expense', 'debt', 'saving'].includes(cat.key) && cat.enabled)
+                          .map(cat => (
+                            <option key={cat.key} value={cat.key}>{cat.name}</option>
+                          ))
+                        }
+                      </>
+                    )}
                   </select>
                 </div>
                 
