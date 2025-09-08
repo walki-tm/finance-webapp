@@ -3,7 +3,7 @@ import { Card, CardContent, NativeSelect, Button } from '../../ui';
 import TransactionTable from '../components/TransactionTable.jsx';
 import PlannedTransactionsTab from '../components/PlannedTransactionsTab.jsx';
 import { MAIN_CATS, months } from '../../../lib/constants.js';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Search, Euro, X } from 'lucide-react';
 import { useTransactions } from '../useTransactions.js';
 import { api } from '../../../lib/api.js';
 import { formatDateForAPI, getTodayDate } from '../../../lib/dateUtils.js';
@@ -21,8 +21,11 @@ import { formatDateForAPI, getTodayDate } from '../../../lib/dateUtils.js';
 export default function Transactions({ state, updateTx, delTx, openTxEditor, refreshTransactions, token, initialTab = 'register' }) {
   /* ===== Sub-tab state ===== */
   const [activeTab, setActiveTab] = useState(initialTab);
-  /* ===== Filtro macro-categoria ===== */
+  /* ===== Filtri ===== */
   const [filterMain, setFilterMain] = useState('all');
+  const [searchText, setSearchText] = useState('');
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
 
   /* ===== Stato selettore periodo ===== */
   // mode: 'day' | 'week' | 'month' | 'year' | 'range'
@@ -225,18 +228,68 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
   // Disabilita freccia destra quando l'inizio del prossimo periodo è nel futuro
   const disableNext = mode !== 'range' && nextPeriodStart(pointer, mode) > endOfToday;
 
-  /* ===== Filtraggio solo per categoria (il range è già gestito dall'API) ===== */
+  /* ===== Helper per ottenere info sottocategoria ===== */
+  const getSubcategoryInfo = (t) => {
+    // Recupera il nome della sottocategoria dai vari campi possibili
+    const subName = t.sub || 
+                   t.subName || 
+                   t.subname || 
+                   t.subcategoryName || 
+                   t.subcategory?.name || 
+                   t.Subcategory?.name || 
+                   '';
+    return subName;
+  };
+
+  /* ===== Helper per ottenere nome categoria principale ===== */
+  const getMainCategoryName = (t) => {
+    // Cerca prima nelle categorie custom, poi in quelle standard
+    const customCat = state?.customMainCats?.find(c => c.key === t.main);
+    const fallbackCat = MAIN_CATS.find(m => m.key === t.main);
+    return customCat?.name || fallbackCat?.name || t.main || '';
+  };
+
+  /* ===== Filtraggio completo: categoria, ricerca testo e importi ===== */
   const rows = useMemo(() => {
     if (!transactionState.transactions) return [];
     
     const filtered = transactionState.transactions.filter((t) => {
+      // ✅ Filtro categoria principale
       const mainOk = filterMain === 'all' ? true : t.main === filterMain;
-      return mainOk;
+      if (!mainOk) return false;
+      
+      // ✅ Filtro ricerca testo (categoria main + sottocategoria + note)
+      if (searchText && searchText.trim()) {
+        const searchLower = searchText.toLowerCase().trim();
+        const mainName = getMainCategoryName(t).toLowerCase();
+        const subName = getSubcategoryInfo(t).toLowerCase();
+        const note = (t.note || '').toLowerCase();
+        
+        const textMatch = mainName.includes(searchLower) || 
+                         subName.includes(searchLower) || 
+                         note.includes(searchLower);
+        if (!textMatch) return false;
+      }
+      
+      // ✅ Filtro importi min/max
+      const amount = Math.abs(Number(t.amount) || 0);
+      
+      if (minAmount && minAmount.trim()) {
+        const min = Number(minAmount);
+        if (!isNaN(min) && amount < min) return false;
+      }
+      
+      if (maxAmount && maxAmount.trim()) {
+        const max = Number(maxAmount);
+        if (!isNaN(max) && amount > max) return false;
+      }
+      
+      return true;
     });
     
     // Le transazioni dall'API sono già ordinate per data desc
     return filtered;
-  }, [transactionState.transactions, filterMain]);
+  }, [transactionState.transactions, filterMain, searchText, minAmount, maxAmount, state?.customMainCats]);
 
   /* ===== UI ===== */
   return (
@@ -376,6 +429,96 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
               onChange={(v) => setFilterMain(v)}
               options={[{ value: 'all', label: 'Tutte le categorie' }, ...MAIN_CATS.map(m => ({ value: m.key, label: m.name }))]}
             />
+          </div>
+
+          {/* ===== SEZIONE FILTRI AGGIUNTIVI ===== */}
+          <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+            {/* Filtro ricerca testo */}
+            <div className="flex items-center gap-2 min-w-0 flex-1 max-w-xs">
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-slate-400" />
+                </div>
+                <input
+                  type="text"
+                  className="block w-full pl-10 pr-8 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                  placeholder="Cerca in categorie e note..."
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                />
+                {searchText && (
+                  <button
+                    onClick={() => setSearchText('')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Filtro importi */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
+                <Euro className="h-4 w-4" />
+                <span className="text-sm font-medium">Importi:</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  className="w-20 px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-transparent"
+                  placeholder="Min"
+                  min="0"
+                  step="0.01"
+                  value={minAmount}
+                  onChange={(e) => setMinAmount(e.target.value)}
+                />
+                <span className="text-slate-500">—</span>
+                <input
+                  type="number"
+                  className="w-20 px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-transparent"
+                  placeholder="Max"
+                  min="0"
+                  step="0.01"
+                  value={maxAmount}
+                  onChange={(e) => setMaxAmount(e.target.value)}
+                />
+                {(minAmount || maxAmount) && (
+                  <button
+                    onClick={() => {
+                      setMinAmount('');
+                      setMaxAmount('');
+                    }}
+                    className="ml-1 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    title="Pulisci filtro importi"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Badge risultati e reset globale */}
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-sm text-slate-500 dark:text-slate-400">
+                {rows.length} risultat{rows.length !== 1 ? 'i' : 'o'}
+              </span>
+              {(searchText || minAmount || maxAmount || filterMain !== 'all') && (
+                <button
+                  onClick={() => {
+                    setSearchText('');
+                    setMinAmount('');
+                    setMaxAmount('');
+                    setFilterMain('all');
+                  }}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                  title="Resetta tutti i filtri"
+                >
+                  <X className="h-3 w-3" />
+                  Reset filtri
+                </button>
+              )}
+            </div>
           </div>
 
               {/* Tabella transazioni */}
