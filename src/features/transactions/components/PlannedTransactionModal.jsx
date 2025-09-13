@@ -37,6 +37,8 @@ export default function PlannedTransactionModal({
     groupId: initial?.groupId || '',
     note: initial?.note || '',
     applyToBudget: initial?.appliedToBudget || false,
+    // 🔄 Nuovo campo per frequenza REPEAT
+    repeatCount: initial?.repeatCount || 2, // Default a 2 ripetizioni
   })
   
   const [showPreview, setShowPreview] = useState(false)
@@ -130,6 +132,7 @@ export default function PlannedTransactionModal({
         groupId: initial.groupId || '',
         note: initial.note || '',
         applyToBudget: initial.appliedToBudget || false,
+        repeatCount: initial.repeatCount || 2, // 🔄 Support per editing transazioni REPEAT
       })
     } else {
       // Reset per nuova transazione
@@ -145,6 +148,7 @@ export default function PlannedTransactionModal({
         groupId: '',
         note: '',
         applyToBudget: false,
+        repeatCount: 2, // 🔄 Default repeat count
       })
     }
   }, [initial, open]) // Aggiungi 'open' come dipendenza
@@ -339,11 +343,13 @@ export default function PlannedTransactionModal({
                     <option value="MONTHLY">Mensile</option>
                     <option value="YEARLY">Annuale</option>
                     <option value="ONE_TIME">Una volta</option>
+                    <option value="REPEAT">Ripetizione</option>
                   </select>
                   <p className="text-xs text-slate-500 mt-1">
                     {formData.frequency === 'MONTHLY' && 'Ripete ogni mese senza data di fine'}
                     {formData.frequency === 'YEARLY' && 'Ripete ogni anno senza data di fine'}
                     {formData.frequency === 'ONE_TIME' && 'Transazione singola, non ricorrente'}
+                    {formData.frequency === 'REPEAT' && 'Ripete mensilmente per un numero limitato di volte'}
                   </p>
                 </div>
                 
@@ -363,6 +369,26 @@ export default function PlannedTransactionModal({
                   </p>
                 </div>
               </div>
+              
+              {/* 🔸 Repeat Count - Solo per frequenza REPEAT */}
+              {formData.frequency === 'REPEAT' && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Numero di ripetizioni <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="2"
+                    max="24"
+                    value={formData.repeatCount}
+                    onChange={(e) => setFormData(prev => ({ ...prev, repeatCount: parseInt(e.target.value) || 2 }))}
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    La transazione si ripeterà per {formData.repeatCount} mesi consecutivi, poi si fermerà automaticamente
+                  </p>
+                </div>
+              )}
               
               {/* 🔸 Confirmation Mode */}
               <div>
@@ -438,6 +464,7 @@ export default function PlannedTransactionModal({
                       {formData.frequency === 'MONTHLY' && 'Applicherà €' + Math.abs(Number(formData.amount) || 0) + ' a tutti i mesi'}
                       {formData.frequency === 'YEARLY' && 'Applicherà €' + ((Math.abs(Number(formData.amount) || 0)) / 12).toFixed(2) + ' al mese (diviso su 12 mesi)'}
                       {formData.frequency === 'ONE_TIME' && 'Applicherà €' + Math.abs(Number(formData.amount) || 0) + ' al mese specifico'}
+                      {formData.frequency === 'REPEAT' && 'Applicherà €' + Math.abs(Number(formData.amount) || 0) + ' per ' + (formData.repeatCount || 2) + ' mesi consecutivi'}
                       {!formData.frequency && 'Seleziona una frequenza per vedere l\'anteprima'}
                     </p>
                   </div>

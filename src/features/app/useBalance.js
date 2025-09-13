@@ -72,7 +72,7 @@ export function useBalance(token) {
     }
   }, [loadBalance])
   
-  return { balance, isLoading, error }
+  return { balance, isLoading, error, refresh: loadBalance }
 }
 
 // Utility per triggerare refresh globale del saldo

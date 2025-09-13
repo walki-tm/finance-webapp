@@ -11,7 +11,7 @@ async function main() {
   const user = await prisma.user.upsert({
     where: { email },
     update: {},
-    create: { email, password },
+    create: { email, password, name: 'Demo User' },
   })
 
   // crea le 4 main più le sottocategorie come in DEFAULT_CATEGORIES (riuso la stessa lista se vuoi)

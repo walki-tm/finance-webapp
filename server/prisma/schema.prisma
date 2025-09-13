@@ -143,7 +143,7 @@ model PlannedTransaction {
   amount          Decimal  @db.Decimal(20, 2)
   note            String?
   payee           String?
-  frequency       String   // MONTHLY, YEARLY, ONE_TIME
+  frequency       String   // MONTHLY, YEARLY, ONE_TIME, REPEAT
   startDate       DateTime // data di inizio
   confirmationMode String   @default("MANUAL") // MANUAL, AUTOMATIC
   nextDueDate     DateTime // prossima data di scadenza
@@ -152,6 +152,11 @@ model PlannedTransaction {
   budgetApplicationMode String? // modalità usata per applicazione budgeting: 'divide' o 'specific'
   budgetTargetMonth Int? // mese target per modalità 'specific' (0-11)
   loanId          String?  // collegamento diretto al prestito, se questa planned transaction rappresenta le rate del prestito
+  
+  // 🔄 Campi per frequenza REPEAT (ripetizioni limitate)
+  repeatCount     Int?     // numero totale di ripetizioni pianificate (es: 2 per "2 mensilità")
+  remainingRepeats Int?    // ripetizioni rimanenti (decrementato ad ogni materializzazione)
+  
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
