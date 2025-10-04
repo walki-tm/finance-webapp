@@ -16,11 +16,14 @@ import { Card, CardContent, Button } from '../../ui';
 import { Plus, ArrowRight, Calendar, Euro, Edit2, Trash2 } from 'lucide-react';
 import { api } from '../../../lib/api.js';
 import { useAuth } from '../../../context/AuthContext.jsx';
+import TransferModal from './TransferModal.jsx';
 
 export default function TransfersTab() {
   const [transfers, setTransfers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [editingTransfer, setEditingTransfer] = useState(null);
   const { token } = useAuth();
 
   // Caricamento transfers
@@ -80,6 +83,29 @@ export default function TransfersTab() {
     }
   };
 
+  // Handler per apertura modal nuovo transfer
+  const handleNewTransfer = () => {
+    setEditingTransfer(null);
+    setShowModal(true);
+  };
+
+  // Handler per apertura modal modifica transfer
+  const handleEditTransfer = (transfer) => {
+    setEditingTransfer(transfer);
+    setShowModal(true);
+  };
+
+  // Handler per chiusura modal
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setEditingTransfer(null);
+  };
+
+  // Handler per salvataggio transfer (success callback)
+  const handleSaveTransfer = async () => {
+    await loadTransfers(); // Refresh lista
+  };
+
   // Rendering loading state
   if (isLoading) {
     return (
@@ -124,10 +150,7 @@ export default function TransfersTab() {
         </div>
         
         <Button
-          onClick={() => {
-            // TODO: Implementare modal per nuovo transfer
-            console.log('Open new transfer modal');
-          }}
+          onClick={handleNewTransfer}
           className="flex items-center gap-2 bg-gradient-to-tr from-emerald-600 to-teal-600"
         >
           <Plus className="h-4 w-4" />
@@ -151,7 +174,7 @@ export default function TransfersTab() {
                 Non hai ancora effettuato trasferimenti tra i tuoi conti.
               </p>
               <Button 
-                onClick={() => console.log('Open new transfer modal')}
+                onClick={handleNewTransfer}
                 className="bg-gradient-to-tr from-emerald-600 to-teal-600"
               >
                 Crea il primo trasferimento
@@ -244,7 +267,7 @@ export default function TransfersTab() {
                       <td className="py-4 px-4">
                         <div className="flex items-center justify-center gap-2">
                           <button
-                            onClick={() => console.log('Edit transfer:', transfer.id)}
+                            onClick={() => handleEditTransfer(transfer)}
                             className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                             title="Modifica trasferimento"
                           >
@@ -326,6 +349,14 @@ export default function TransfersTab() {
           </Card>
         </div>
       )}
+      
+      {/* Transfer Modal */}
+      <TransferModal
+        open={showModal}
+        onClose={handleCloseModal}
+        onSave={handleSaveTransfer}
+        initial={editingTransfer}
+      />
     </div>
   );
 }

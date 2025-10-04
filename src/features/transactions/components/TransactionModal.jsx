@@ -235,14 +235,8 @@ const TRANSACTION_TYPES = {
     icon: ArrowUpCircle,
     color: '#ef4444',
     description: 'Denaro che esce da un conto'
-  },
-  transfer: {
-    key: 'transfer',
-    name: 'Trasferimento',
-    icon: ArrowRightLeft,
-    color: '#8b5cf6',
-    description: 'Sposta denaro da un conto a un altro'
   }
+  // ✅ REMOVED: transfer type - now handled by separate TransferModal
 };
 
 /* ===== Account Layout Components ===== */
@@ -407,8 +401,8 @@ export default function TransactionModal({
   // Determina il tipo di transazione dall'initial se presente
   const getInitialTransactionType = () => {
     if (initial?.main === 'income') return 'income';
-    if (initial?.main) return 'expense';
-    return 'expense'; // default
+    // All other transaction types default to expense
+    return 'expense';
   };
 
   // stato form principale
@@ -428,9 +422,6 @@ export default function TransactionModal({
   // Filtro conti disponibili per tipo di transazione
   const availableAccounts = useMemo(() => {
     return accounts.filter(account => {
-      // Per trasferimenti, tutti i conti sono validi
-      if (transactionType === 'transfer') return true;
-      
       // Per entrate/uscite, escludi solo eventuali conti inattivi se presenti
       return account.isActive !== false;
     });
@@ -443,23 +434,16 @@ export default function TransactionModal({
 
   // Effetto per sincronizzare transactionType con main
   useEffect(() => {
-    if (transactionType === 'transfer') {
-      // Per i trasferimenti, non usiamo le categorie tradizionali
-      setMain('transfer');
-      setSub('');
-    } else {
-      // Per entrate/uscite, usa la categoria tradizionale
-      if (transactionType === 'income' && main !== 'income') {
-        setMain('income');
-      } else if (transactionType === 'expense' && main === 'income') {
-        setMain('expense');
-      }
+    // Per entrate/uscite, usa la categoria tradizionale
+    if (transactionType === 'income' && main !== 'income') {
+      setMain('income');
+    } else if (transactionType === 'expense' && main === 'income') {
+      setMain('expense');
     }
   }, [transactionType, main]);
 
   // lista sub per la main scelta
   const listForMain = useMemo(() => {
-    if (transactionType === 'transfer') return [];
     return subcats?.[main] || [];
   }, [subcats, main, transactionType]);
 
@@ -470,9 +454,6 @@ export default function TransactionModal({
 
   // colore main corrente (anche custom)
   const mainColor = useMemo(() => {
-    if (transactionType === 'transfer') {
-      return TRANSACTION_TYPES.transfer.color;
-    }
     const pool = (Array.isArray(mains) && mains.length > 0) ? mains : MAIN_CATS;
     return pool.find(m => m.key === main)?.color || '#94a3b8';
   }, [mains, main, transactionType]);
@@ -482,34 +463,21 @@ export default function TransactionModal({
     setError('');
     const a = Number(amount);
     
-    // Validazione per trasferimenti
-    if (transactionType === 'transfer') {
-      if (!accountId || !destinationAccountId || !date || isNaN(a) || a <= 0) {
-        setError('Per i trasferimenti: seleziona conti di origine e destinazione, data valida e importo > 0.');
-        return;
-      }
-      if (accountId === destinationAccountId) {
-        setError('Il conto di origine e destinazione devono essere diversi.');
-        return;
-      }
-    } else {
-      // Validazione per entrate/uscite
-      if (!sub || !accountId || !date || isNaN(a) || a <= 0) {
-        setError('Compila tutti i campi obbligatori e usa un importo > 0.');
-        return;
-      }
+    // Validazione per entrate/uscite (transfers now handled by separate modal)
+    if (!sub || !accountId || !date || isNaN(a) || a <= 0) {
+      setError('Compila tutti i campi obbligatori e usa un importo > 0.');
+      return;
     }
     
     // Prepara i dati per il salvataggio
     const transactionData = {
       transactionType,
       main,
-      sub: transactionType === 'transfer' ? 'Trasferimento' : sub,
+      sub,
       date,
       amount: Math.abs(a), // Always positive, sign handled by transactionType
       note: note.trim(),
-      accountId,
-      destinationAccountId: transactionType === 'transfer' ? destinationAccountId : null
+      accountId
     };
     
     onSave(transactionData);
@@ -544,7 +512,7 @@ export default function TransactionModal({
               <label className="block text-sm mb-2 font-semibold text-slate-700 dark:text-slate-200">
                 Tipo transazione
               </label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {Object.values(TRANSACTION_TYPES).map((type) => {
                   const IconComponent = type.icon;
                   const isSelected = transactionType === type.key;
@@ -576,27 +544,14 @@ export default function TransactionModal({
             </div>
 
             {/* SEZIONE CONTI */}
-            {transactionType === 'transfer' ? (
-              <TransferAccountsLayout
-                accountId={accountId}
-                setAccountId={setAccountId}
-                destinationAccountId={destinationAccountId}
-                setDestinationAccountId={setDestinationAccountId}
-                availableAccounts={availableAccounts}
-                destinationAccounts={destinationAccounts}
-                transactionType={transactionType}
-              />
-            ) : (
-              <SingleAccountLayout
-                accountId={accountId}
-                setAccountId={setAccountId}
-                availableAccounts={availableAccounts}
-                transactionType={transactionType}
-              />
-            )}
+            <SingleAccountLayout
+              accountId={accountId}
+              setAccountId={setAccountId}
+              availableAccounts={availableAccounts}
+              transactionType={transactionType}
+            />
 
-            {/* CATEGORIA E SOTTOCATEGORIA (solo per entrate/uscite) */}
-            {transactionType !== 'transfer' && (
+            {/* CATEGORIA E SOTTOCATEGORIA */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm mb-1 font-semibold text-slate-700 dark:text-slate-200">Categoria</label>
@@ -612,7 +567,6 @@ export default function TransactionModal({
                   />
                 </div>
               </div>
-            )}
 
             {/* DATA E IMPORTO */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -688,8 +642,7 @@ export default function TransactionModal({
               <button
                 type="submit"
                 disabled={
-                  !date || !amount || Number(amount) <= 0 || !accountId ||
-                  (transactionType === 'transfer' ? !destinationAccountId : !sub)
+                  !date || !amount || Number(amount) <= 0 || !accountId || !sub
                 }
                 className="px-3 py-2 rounded-xl text-sm bg-gradient-to-tr from-sky-600 to-indigo-600 text-white
                            hover:opacity-90 disabled:opacity-50"
