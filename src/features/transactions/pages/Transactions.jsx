@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { Card, CardContent, NativeSelect, Button } from '../../ui';
 import TransactionTable from '../components/TransactionTable.jsx';
 import PlannedTransactionsTab from '../components/PlannedTransactionsTab.jsx';
+import TransfersTab from '../components/TransfersTab.jsx';
 import { MAIN_CATS, months } from '../../../lib/constants.js';
 import { ChevronLeft, ChevronRight, Plus, Search, Euro, X } from 'lucide-react';
 import { useTransactions } from '../useTransactions.js';
@@ -315,6 +316,15 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
           >
             Planned
           </button>
+          <button
+            onClick={() => setActiveTab('transfer')}
+            className={`px-3 py-2 rounded-xl text-sm transition
+              ${activeTab === 'transfer'
+                ? 'bg-gradient-to-tr from-emerald-600 to-teal-600 text-white'
+                : 'border border-slate-300 dark:border-slate-700 hover:bg-white/60 dark:hover:bg-slate-900/60'}`}
+          >
+            Transfer
+          </button>
         </div>
         
         {/* CTA solo per Register */}
@@ -533,9 +543,11 @@ export default function Transactions({ state, updateTx, delTx, openTxEditor, ref
             </CardContent>
           </Card>
         </div>
-      ) : (
+      ) : activeTab === 'planned' ? (
         <PlannedTransactionsTab state={state} refreshTransactions={refreshTransactions} />
-      )}
+      ) : activeTab === 'transfer' ? (
+        <TransfersTab />
+      ) : null}
     </div>
   );
 }

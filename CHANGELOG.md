@@ -5,6 +5,140 @@ Tutte le modifiche importanti al progetto saranno documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/),
 e questo progetto segue il [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2025-10-04 - **STABILITY FIXES & ACCOUNTS SYSTEM** 🔧
+
+### 🚑 Critical Fixes (Correzioni Critiche)
+- **Planned Transactions Infinite Loop**: Risolto completamente il loop infinito che causava blocco dell'app
+  - Implementato pattern singleton per evitare chiamate API multiple simultanee
+  - Fix delle date `next_execution` che erano undefined causando errori nei calcoli
+  - Risolto bug "Planned transaction not found" nella materializzazione
+  - Aggiunta protezione anti-loop con limite di 10 render consecutivi
+- **useBalance Hook Critical Error**: Risolto errore `loadBalance is not defined` che causava pagina bianca
+  - Rimossa logica duplicata negli useEffect che causava confusione
+  - Definita correttamente funzione `loadBalance` con `useCallback`
+  - Semplificata architettura hook per maggiore manutenibilità
+
+### 🏦 Major Feature: Accounts Management System
+- **Sistema Conti Completo**: Implementazione sistema gestione multi-account
+  - Nuove tabelle database: `accounts`, `transfers` con relazioni complete
+  - Tipi conto: CURRENT, INVESTMENTS, SAVINGS, POCKET con icone automatiche
+  - Gestione completa CRUD conti con controller e servizi backend
+  - Componenti frontend: `AccountCard`, `AccountModal`, `AccountsPage`
+  - Integration completa con sistema transazioni esistente
+- **Trasferimenti tra Conti**: Sistema trasferimenti con tracking completo
+  - API per trasferimenti con validazione automatica conti
+  - Aggiornamento automatico saldi conti coinvolti
+  - Storico trasferimenti con note e categorizzazione
+
+### ⚡ Performance & Stability (Performance e Stabilità)
+- **Dashboard Calculations**: Ottimizzati calcoli Dashboard con protezioni avanzate
+  - Limitazioni iterazioni per prevenire loop infiniti nei calcoli proiezioni
+  - Gestione errori con fallback su date invalide
+  - Guard clauses per dati corrotti o incompleti
+- **Singleton Pattern Implementation**: Implementato pattern singleton per planned transactions
+  - Singola chiamata API condivisa per tutte le istanze del hook
+  - Gestione globale stato con subscriber pattern
+  - Eliminazione race conditions e sovrapposizioni chiamate API
+- **Memory Management**: Migliorata gestione memoria e cleanup
+  - Cleanup automatico event listeners e timeouts
+  - Prevenzione memory leaks in componenti con stati complessi
+
+### 🔄 Enhanced Planned Transactions
+- **Frequency Support Expansion**: Esteso supporto frequenze transazioni pianificate
+  - Aggiunte: WEEKLY, QUARTERLY, SEMIANNUAL oltre a MONTHLY, YEARLY
+  - Supporto completo REPEAT con contatore ripetizioni
+  - Calcoli corretti per tutte le frequenze supportate
+- **Date Normalization**: Sistema normalizzazione date automatica
+  - Fix globale per `next_execution` undefined che causava errori
+  - Calcoli data coerenti per tutte le frequenze
+  - Gestione corretta timezone e cambio mese
+- **Budget Integration**: Migliorata integrazione con sistema budgeting
+  - Gestione automatica applicazione/rimozione budget su attivazione/disattivazione
+  - Controllo conflitti per transazioni multiple su stessa categoria
+  - Modalità applicazione budget: divide, specific con target month
+
+### 🔧 Database & Schema
+- **Schema Extensions**: Estensioni schema database per accounts system
+  - Migration `add_accounts_and_transfers`: Tabelle accounts e transfers
+  - Migration `add_account_to_loans`: Collegamento prestiti a conti specifici
+  - Aggiornamento relazioni planned_transactions per supporto accountId
+- **Query Optimizations**: Ottimizzazioni query per performance
+  - Rimozione orderBy problematico su group.sortOrder che causava loop
+  - Indici ottimizzati per query accounts e transfers
+  - Batch operations per aggiornamenti saldi multipli
+
+### 🔍 Debug & Troubleshooting
+- **Comprehensive Debug Scripts**: Script completi per analisi e risoluzione problemi
+  - `diagnose_db.js`: Analisi completa database per problemi performance
+  - `fix_planned_transactions.js`: Fix automatico dati corrotti planned transactions
+  - `test_planned_transactions_api.js`: Test completo API planned transactions
+  - Suite completa script per debugging e maintenance
+- **Error Handling**: Gestione errori migliorata across tutta l'applicazione
+  - Logging dettagliato per debugging senza spam console
+  - Fallback graceful per API calls fallimentari
+  - User feedback migliorato per errori e operazioni async
+
+### 🎨 UI/UX Improvements
+- **Account Management UI**: Interface completa gestione conti
+  - Cards responsive con indicatori tipo conto e saldo
+  - Modali create/edit con validazione real-time
+  - Pagina dedicata accounts con statistiche e overview
+- **Error States**: Stati errore migliorati per planned transactions
+  - Messaggi errore descrittivi per problemi specifici
+  - Loading states durante operazioni async
+  - Recovery automatico da stati errore temporanei
+
+### 📚 Files Added (Nuovi File)
+#### Backend - Accounts System
+- `server/src/controllers/accountsController.js` - Controller REST API accounts
+- `server/src/services/accountService.js` - Business logic accounts
+- `server/src/services/accountBalanceService.js` - Gestione saldi accounts
+- `server/src/services/transferService.js` - Gestione trasferimenti
+- `server/src/routes/accounts.js` - Routes API accounts
+- `server/src/routes/transfers.js` - Routes API transfers
+
+#### Frontend - Accounts System  
+- `src/features/accounts/` - Feature completa accounts management
+  - `components/AccountCard.jsx` - Card singolo account
+  - `components/AccountModal.jsx` - Modal create/edit account
+  - `pages/AccountsPage.jsx` - Pagina principale accounts
+  - `services/accounts.api.js` - API client accounts
+  - `useAccounts.js` - Hook gestione stato accounts
+- `src/lib/accountIcons.js` - Sistema icone accounts
+
+#### Debug & Scripts
+- `server/diagnose_db.js` - Script diagnostica database
+- `server/fix_planned_transactions.js` - Fix automatico planned transactions
+- `server/test_planned_transactions_api.js` - Test suite API
+- `server/ultra_deep_diagnostics.js` - Diagnostica approfondita
+- `FREEZE_TROUBLESHOOTING.md` - Documentazione troubleshooting
+
+### 📝 Files Modified (File Modificati Principali)
+#### Core Application
+- `server/prisma/schema.prisma` - Schema esteso con accounts e transfers
+- `src/App.jsx` - Integrazione accounts system nella navigazione
+- `src/lib/api.js` - Client API esteso con endpoints accounts
+- `src/lib/constants.js` - Costanti per accounts management
+
+#### Planned Transactions Fixes
+- `src/features/transactions/usePlannedTransactions.js` - Singleton pattern implementation
+- `server/src/services/plannedTransactionService.js` - Query fixes e frequency support
+- `server/src/controllers/plannedTransactionsController.js` - Validation schema esteso
+
+#### Balance & Performance
+- `src/features/app/useBalance.js` - Fix critico loadBalance undefined
+- `src/features/dashboard/pages/Dashboard.jsx` - Ottimizzazioni calcoli
+- `server/src/services/transactionService.js` - Integration accounts system
+
+### 🏆 Impact (Impatto Utente)
+- **Stability**: App completamente stabile, risolti tutti i loop infiniti che causavano blocchi
+- **Multi-Account Support**: Gestione completa conti multipli per organizzazione finanziaria avanzata
+- **Performance**: Migliorata reattività app con singleton pattern e ottimizzazioni query
+- **User Experience**: Interface più robusta con gestione errori migliorata e feedback utente
+- **Data Integrity**: Sistemi di fix automatico e validazione per garantire coerenza dati
+
+Questa release segna una **svolta significativa nella stabilità** dell'applicazione, risolvendo i problemi critici che impedivano l'uso normale dell'app e aggiungendo il sistema accounts che era una delle funzionalità più richieste per la gestione finanziaria avanzata.
+
 ## [3.0.0] - 2025-09-07 - **FINANCE APP V1 RELEASE** 🎉
 
 ### 🚀 Added (Nuove Funzionalità Principali)

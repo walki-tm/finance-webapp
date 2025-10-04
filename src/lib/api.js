@@ -589,4 +589,106 @@ export const api = {
    */
   repeatCompletedGoal: (token, goalId) =>
     request(`/api/savings-goals/${goalId}/repeat`, "POST", token),
+
+  // ---- Accounts ----
+  /**
+   * Elenca tutti i conti dell'utente.
+   * @param {string} token Token di accesso JWT.
+   * @returns {Promise<Array>} Lista di conti.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  getAccounts: (token) =>
+    request("/api/accounts", "GET", token),
+  /**
+   * Ottiene dettagli di un conto specifico.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} accountId ID del conto.
+   * @returns {Promise<object>} Conto con dettagli completi.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  getAccount: (token, accountId) =>
+    request(`/api/accounts/${accountId}`, "GET", token),
+  /**
+   * Crea un nuovo conto.
+   * @param {string} token Token di accesso JWT.
+   * @param {object} accountData Dati del conto.
+   * @returns {Promise<object>} Conto creato.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  createAccount: (token, accountData) =>
+    request("/api/accounts", "POST", token, accountData),
+  /**
+   * Aggiorna un conto esistente.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} accountId ID del conto.
+   * @param {object} updateData Dati da aggiornare.
+   * @returns {Promise<object>} Conto aggiornato.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  updateAccount: (token, accountId, updateData) =>
+    request(`/api/accounts/${accountId}`, "PUT", token, updateData),
+  /**
+   * Elimina un conto.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} accountId ID del conto.
+   * @returns {Promise<null>} Nessun contenuto in caso di successo.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  deleteAccount: (token, accountId) =>
+    request(`/api/accounts/${accountId}`, "DELETE", token),
+  /**
+   * Ottiene statistiche aggregate dei conti.
+   * @param {string} token Token di accesso JWT.
+   * @returns {Promise<object>} Statistiche con saldi per tipo di conto.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  getAccountsStats: (token) =>
+    request("/api/accounts/stats", "GET", token),
+
+  // ---- Transfers ----
+  /**
+   * Elenca tutti i trasferimenti dell'utente.
+   * @param {string} token Token di accesso JWT.
+   * @returns {Promise<object>} { transfers: Array } Lista di trasferimenti.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  getTransfers: (token) =>
+    request("/api/transfers", "GET", token),
+  /**
+   * Ottiene dettagli di un trasferimento specifico.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} transferId ID del trasferimento.
+   * @returns {Promise<object>} Trasferimento con dettagli completi.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  getTransfer: (token, transferId) =>
+    request(`/api/transfers/${transferId}`, "GET", token),
+  /**
+   * Crea un nuovo trasferimento.
+   * @param {string} token Token di accesso JWT.
+   * @param {object} transferData Dati del trasferimento.
+   * @returns {Promise<object>} Trasferimento creato.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  createTransfer: (token, transferData) =>
+    request("/api/transfers", "POST", token, transferData),
+  /**
+   * Aggiorna un trasferimento esistente.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} transferId ID del trasferimento.
+   * @param {object} updateData Dati da aggiornare.
+   * @returns {Promise<object>} Trasferimento aggiornato.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  updateTransfer: (token, transferId, updateData) =>
+    request(`/api/transfers/${transferId}`, "PUT", token, updateData),
+  /**
+   * Elimina un trasferimento.
+   * @param {string} token Token di accesso JWT.
+   * @param {string|number} transferId ID del trasferimento.
+   * @returns {Promise<null>} Nessun contenuto in caso di successo.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  deleteTransfer: (token, transferId) =>
+    request(`/api/transfers/${transferId}`, "DELETE", token),
 };
