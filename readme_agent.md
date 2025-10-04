@@ -277,6 +277,30 @@ npm run db:reset
 npx prisma generate
 ```
 
+### 🚑 Script Diagnostici Avanzati (v3.1.0+)
+```bash
+# Diagnostica completa database e performance
+node server/diagnose_db.js
+
+# Fix automatico planned transactions corrotte
+node server/fix_planned_transactions.js
+
+# Test completo API planned transactions
+node server/test_planned_transactions_api.js
+
+# Diagnostica approfondita con analisi dettagliata
+node server/ultra_deep_diagnostics.js
+
+# Analisi dati utente specifici
+node server/analyze_user_specific_data.js
+```
+
+#### ⚠️ Problemi Specifici Risolti
+- **Planned Transactions Loop Infiniti**: Risolti con singleton pattern
+- **useBalance `loadBalance is not defined`**: Corretto in v3.1.0
+- **"Planned transaction not found" error**: Risolto passaggio parametri corretti
+- **Date `next_execution` undefined**: Fix automatico con script dedicated
+
 ---
 
 ## 📚 Risorse di Riferimento
@@ -328,8 +352,10 @@ npx prisma generate
 - ✅ CRUD transazioni
 - ✅ Dashboard overview
 - ✅ Sistema budgeting completo
-- ✅ Transazioni pianificate (Planned Transactions)
+- ✅ Transazioni pianificate (Planned Transactions) - **STABILIZZATO v3.1.0**
 - ✅ Sistema prestiti/mutui (Loans)
+- ✅ **Sistema Accounts Multi-Conto (NEW v3.1.0)**
+- ✅ **Trasferimenti tra Conti (NEW v3.1.0)**
 - 🔄 Report e analytics avanzati
 
 ### Principi Architetturali
@@ -341,7 +367,7 @@ npx prisma generate
 
 ---
 
-**🔄 Ultimo aggiornamento**: 3 Settembre 2025  
-**📝 Versione**: 2.1.0
+**🔄 Ultimo aggiornamento**: 4 Ottobre 2025  
+**📝 Versione**: 3.1.0
 
 > **Ricorda**: Questo progetto ha una struttura consolidata. Cambiamenti strutturali richiedono sempre approvazione esplicita dall'utente.
