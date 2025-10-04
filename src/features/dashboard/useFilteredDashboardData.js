@@ -276,6 +276,33 @@ export function useFilteredDashboardData(token, filters) {
     refreshBalance()
   }
 
+  // 🔸 Calcoli per mini box riepilogativa speciali
+  const miniBoxData = useMemo(() => {
+    if (!transactions?.length) {
+      return {
+        currentAccountIncome: 0,
+        totalExpenses: 0,
+        plannedExpensesForPeriod: 0
+      }
+    }
+
+    // 🔸 Entrate solo da conti CURRENT nel periodo filtrato
+    const currentAccountIncome = transactions
+      .filter(t => t.main === 'income' && t.account?.accountType === 'CURRENT')
+      .reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0)
+
+    // 🔸 Uscite totali del periodo (escluso INCOME)
+    const totalExpenses = transactions
+      .filter(t => t.main !== 'income')
+      .reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0)
+
+    return {
+      currentAccountIncome,
+      totalExpenses,
+      plannedExpensesForPeriod: 0 // Calcolato in Dashboard.jsx con planned transactions
+    }
+  }, [transactions])
+
   return {
     // Dati
     transactions,
@@ -283,6 +310,7 @@ export function useFilteredDashboardData(token, filters) {
     aggregatedData,
     categoryChartData,
     recentTransactions,
+    miniBoxData, // ✅ Nuovi dati per mini box
     
     // Stati
     loading: txLoading || balanceLoading || budgetsLoading,

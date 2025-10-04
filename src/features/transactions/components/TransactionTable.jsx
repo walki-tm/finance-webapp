@@ -6,6 +6,7 @@ import { MAIN_CATS } from '../../../lib/constants.js';
 import SvgIcon from '../../icons/components/SvgIcon.jsx';
 import { parseLocalDate, formatDateForDisplay } from '../../../lib/dateUtils.js';
 import { nice } from '../../../lib/utils.js';
+import { getAccountIcon } from '../../../lib/accountIcons.js';
 
 /* Converte stringa in Title Case */
 function toTitleCase(str) {
@@ -125,6 +126,7 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
             <th className="text-left p-2 whitespace-nowrap">Data</th>
             <th className="text-left p-2 whitespace-nowrap">Tipo</th>
             <th className="text-left p-2 whitespace-nowrap">Categoria</th>
+            <th className="text-left p-2 whitespace-nowrap">Conto</th>
             <th className="text-right p-2 whitespace-nowrap">Importo</th>
             <th className="text-left p-2 whitespace-nowrap">Note</th>
             <th className="p-2"></th>
@@ -183,6 +185,37 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
                   </div>
                 </td>
 
+                {/* Colonna Conto */}
+                <td className="p-2 whitespace-nowrap">
+                {t.account ? (
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const accountIconConfig = getAccountIcon(t.account.accountType || t.account.type);
+                      const AccountIconComponent = accountIconConfig.icon;
+                      return (
+                        <div 
+                          className="p-1.5 rounded-lg"
+                          style={{ 
+                            backgroundColor: `${t.account.colorHex || t.account.color}15`,
+                            border: `1px solid ${t.account.colorHex || t.account.color}30`
+                          }}
+                        >
+                          <AccountIconComponent 
+                            className="h-3.5 w-3.5" 
+                            style={{ color: t.account.colorHex || t.account.color }}
+                          />
+                        </div>
+                      );
+                    })()} 
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                      {t.account.name}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+                )}
+                </td>
+
                 <td className="p-2 text-right whitespace-nowrap">
                   <span className={amtClasses} style={amtStyle}>
                     {formatAmountEUR(t)}
@@ -238,7 +271,7 @@ export default function TransactionTable({ rows, state, onEdit, onDelete }) {
 
           {rows.length === 0 && (
             <tr>
-              <td className="p-4 text-center text-slate-500 dark:text-slate-400" colSpan={6}>
+              <td className="p-4 text-center text-slate-500 dark:text-slate-400" colSpan={7}>
                 Nessuna transazione
               </td>
             </tr>

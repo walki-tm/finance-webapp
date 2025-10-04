@@ -117,14 +117,47 @@ export function useTransactions(token, filters = null) {
 
   const saveTx = async (payload) => {
     const isEdit = Boolean(editingTx?.id);
+    
+    // Gestisci il nuovo formato con transactionType e accountId
+    let main, amount;
+    
+    if (payload.transactionType) {
+      // Nuovo formato dal TransactionModal aggiornato
+      switch (payload.transactionType) {
+        case 'income':
+          main = 'INCOME';
+          amount = Math.abs(Number(payload.amount || 0));
+          break;
+        case 'expense':
+          main = payload.main ? String(payload.main).toUpperCase() : 'EXPENSE';
+          amount = -Math.abs(Number(payload.amount || 0));
+          break;
+        case 'transfer':
+          // Per i trasferimenti, gestisci diversamente
+          main = 'TRANSFER';
+          amount = Math.abs(Number(payload.amount || 0));
+          break;
+        default:
+          main = String(payload.main || 'EXPENSE').toUpperCase();
+          amount = Number(payload.amount || 0);
+      }
+    } else {
+      // Formato vecchio per retrocompatibilità
+      main = String(payload.main || 'EXPENSE').toUpperCase();
+      amount = Number(payload.amount || 0);
+    }
+    
     const body = {
       date: payload.date || formatDateTimeForAPI(new Date()),
-      amount: Number(payload.amount || 0),
-      main: String(payload.main || 'EXPENSE').toUpperCase(),
+      amount,
+      main,
       note: payload.note || '',
       payee: payload.payee || '',
       subId: payload.subId || null,
       subName: payload.sub || null,
+      // Nuovi campi per supporto conti
+      accountId: payload.accountId || null,
+      destinationAccountId: payload.destinationAccountId || null,
     };
 
     try {

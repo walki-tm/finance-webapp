@@ -13,16 +13,20 @@ const txSchema = z.object({
   main: z.string().min(1).max(32).transform(s => s.toUpperCase()),
   subId: z.string().optional().nullable(),
   subName: z.string().optional().nullable(),
+  accountId: z.string().optional().nullable(),
+  destinationAccountId: z.string().optional().nullable(),
   note: z.string().optional().nullable(),
   payee: z.string().optional().nullable(),
 })
 
 const txPatchSchema = z.object({
-  date: z.string().optional(),
+  date: z.coerce.date().optional(),
   amount: z.number().optional(),
   main: z.string().min(1).max(32).transform(s => s.toUpperCase()).optional(),
   subId: z.string().nullable().optional(),
   subName: z.string().nullable().optional(),
+  accountId: z.string().nullable().optional(),
+  destinationAccountId: z.string().nullable().optional(),
   note: z.string().nullable().optional(),
   payee: z.string().nullable().optional(),
 })
@@ -53,13 +57,28 @@ export async function createTransaction(req, res, next) {
 }
 
 export async function updateTransaction(req, res, next) {
+  console.log('🔄 UPDATE TRANSACTION API CALL')
+  console.log('  - Transaction ID:', req.params.id)
+  console.log('  - User ID:', req.user.id)
+  console.log('  - Request Body:', JSON.stringify(req.body, null, 2))
+  
   const parsed = txPatchSchema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid body' })
+  if (!parsed.success) {
+    console.log('❌ Validation failed:', parsed.error.issues)
+    return res.status(400).json({ error: 'Invalid body', details: parsed.error.issues })
+  }
+  
+  console.log('✅ Validation successful:', JSON.stringify(parsed.data, null, 2))
+  
   try {
     const updated = await updateTransactionService(req.user.id, req.params.id, parsed.data)
+    console.log('✅ Transaction updated successfully')
     invalidateBalanceCache(req.user.id) // Invalida cache saldo
     res.json(updated)
-  } catch (e) { next(e) }
+  } catch (e) { 
+    console.log('❌ Error updating transaction:', e.message)
+    next(e) 
+  }
 }
 
 export async function deleteTransaction(req, res, next) {

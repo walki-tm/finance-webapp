@@ -252,10 +252,8 @@ export const api = {
    * @throws {Error} Se la richiesta fallisce.
    */
   listPlannedTransactions: (token, params = {}) => {
-    // Add cache buster timestamp to force fresh data
-    const cacheParams = { ...params, _t: Date.now() }
-    const query = new URLSearchParams(cacheParams).toString()
-    const path = query ? `/api/planned-transactions?${query}` : `/api/planned-transactions?_t=${Date.now()}`
+    const query = new URLSearchParams(params).toString()
+    const path = query ? `/api/planned-transactions?${query}` : '/api/planned-transactions'
     return request(path, "GET", token)
   },
   /**

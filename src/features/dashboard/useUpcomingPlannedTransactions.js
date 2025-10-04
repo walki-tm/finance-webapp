@@ -19,75 +19,78 @@
 import { useState, useEffect, useCallback } from 'react'
 
 export default function useUpcomingPlannedTransactions(token, limit = 5) {
+  console.log('🔄 useUpcomingPlannedTransactions: RE-ENABLED with fixed logic')
+  
   // 🔸 State per transazioni upcoming
   const [upcomingTransactions, setUpcomingTransactions] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-
-  // 🔸 Carica prossime transazioni pianificate
-  const loadUpcomingTransactions = useCallback(async () => {
+  
+  // 🔸 Carica all'avvio - FIXED INLINE LOGIC
+  useEffect(() => {
+    console.log('🔄 useUpcomingPlannedTransactions: Effect caricamento', { token: !!token, limit })
+    
     if (!token) return
     
+    let mounted = true
     setLoading(true)
-    try {
-      const url = `/api/planned-transactions/upcoming?limit=${limit}`
-      
-      const response = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      
-      if (!response.ok) {
-        // Controlla se è un errore 404 (endpoint non trovato) o altro
-        if (response.status === 404) {
-          setUpcomingTransactions([])
-          setError(null)
+    
+    const loadTransactions = async () => {
+      try {
+        const url = `/api/planned-transactions/upcoming?limit=${limit}`
+        
+        const response = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            if (mounted) {
+              setUpcomingTransactions([])
+              setError(null)
+            }
+            return
+          }
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+        
+        const contentType = response.headers.get('content-type')
+        
+        if (!contentType || !contentType.includes('application/json')) {
+          if (mounted) {
+            setUpcomingTransactions([])
+            setError(null)
+          }
           return
         }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        
+        const data = await response.json()
+        if (mounted) {
+          setUpcomingTransactions(Array.isArray(data) ? data : [])
+          setError(null)
+        }
+      } catch (err) {
+        if (mounted) {
+          if (err.name === 'SyntaxError' && err.message.includes('JSON')) {
+            setUpcomingTransactions([])
+            setError(null)
+          } else {
+            setError(err.message)
+            setUpcomingTransactions([])
+          }
+        }
+      } finally {
+        if (mounted) setLoading(false)
       }
-      
-      // Controlla se la risposta è JSON valido
-      const contentType = response.headers.get('content-type')
-      
-      if (!contentType || !contentType.includes('application/json')) {
-        setUpcomingTransactions([])
-        setError(null)
-        return
-      }
-      
-      const data = await response.json()
-      setUpcomingTransactions(Array.isArray(data) ? data : [])
-      setError(null)
-    } catch (err) {
-      // Per errori di parsing JSON, non mostrare errore ma logga per debug
-      if (err.name === 'SyntaxError' && err.message.includes('JSON')) {
-        setUpcomingTransactions([])
-        setError(null) // Non mostrare errore all'utente
-      } else {
-        setError(err.message)
-        setUpcomingTransactions([])
-      }
-    } finally {
-      setLoading(false)
     }
-  }, [token, limit])
-
-  // 🔸 Carica all'avvio
-  useEffect(() => {
-    loadUpcomingTransactions()
-  }, [loadUpcomingTransactions])
-
-  // 🔸 Auto refresh ogni 5 minuti
-  useEffect(() => {
-    if (!token) return
     
-    const interval = setInterval(() => {
-      loadUpcomingTransactions()
-    }, 5 * 60 * 1000) // 5 minuti
+    loadTransactions()
     
-    return () => clearInterval(interval)
-  }, [loadUpcomingTransactions, token])
-
+    return () => {
+      mounted = false
+    }
+  }, [token, limit]) // 🔧 FIX: Solo token e limit come dipendenze stabili
+  
   // 🔸 Formatta transazioni con informazioni aggiuntive
   const formattedUpcomingTransactions = upcomingTransactions.map(tx => {
     const nextDueDate = new Date(tx.nextDueDate)
@@ -116,12 +119,38 @@ export default function useUpcomingPlannedTransactions(token, limit = 5) {
       isFromLoan: !!tx.loanId
     }
   })
-
+  
+  // 🔸 Manual refresh function for external use
+  const refresh = async () => {
+    console.log('🔄 useUpcomingPlannedTransactions: Manual refresh triggered')
+    
+    if (!token) return
+    
+    setLoading(true)
+    try {
+      const url = `/api/planned-transactions/upcoming?limit=${limit}`
+      
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      
+      if (response.ok && response.headers.get('content-type')?.includes('application/json')) {
+        const data = await response.json()
+        setUpcomingTransactions(Array.isArray(data) ? data : [])
+        setError(null)
+      }
+    } catch (err) {
+      console.error('Error in manual refresh:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+  
   return {
     upcomingTransactions: formattedUpcomingTransactions,
     loading,
     error,
-    refresh: loadUpcomingTransactions,
+    refresh,
     hasUpcomingTransactions: upcomingTransactions.length > 0
   }
 }

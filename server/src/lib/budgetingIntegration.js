@@ -108,6 +108,132 @@ export function applyYearlyTransactionToBudget(transaction, year, subcats, mode 
 }
 
 /**
+ * Applica una transazione settimanale al budgeting
+ * @param {Object} transaction - Transazione pianificata
+ * @param {number} year - Anno di riferimento
+ * @param {Object} subcats - Mappa delle sottocategorie
+ * @returns {Array} Array di budget data per upsert
+ */
+export function applyWeeklyTransactionToBudget(transaction, year, subcats) {
+  const budgets = []
+  const amount = Math.abs(Number(transaction.amount) || 0)
+  // Calcola l'equivalente mensile: 52 settimane all'anno / 12 mesi = ~4.33 settimane al mese
+  const monthlyEquivalent = (amount * 52) / 12
+  
+  if (!transaction.subId && !transaction.subcategory?.name) {
+    throw new Error('Sottocategoria richiesta per applicare al budgeting')
+  }
+  
+  const subcategoryId = transaction.subId || transaction.subcategory?.id
+  const subcategoryName = transaction.subcategory?.name || findSubcategoryName(transaction.subId, subcats)
+  
+  if (!subcategoryId || !subcategoryName) {
+    throw new Error('Sottocategoria non trovata')
+  }
+  
+  // Per le transazioni settimanali, applichiamo l'equivalente mensile a tutti i 12 mesi dell'anno
+  for (let month = 1; month <= 12; month++) {
+    budgets.push({
+      main: transaction.main,
+      subcategoryId,
+      period: `${year}-${String(month).padStart(2, '0')}`,
+      amount: monthlyEquivalent,
+      style: 'FIXED',
+      managedAutomatically: true,
+      notes: `Auto-applicata da transazione pianificata settimanale: ${transaction.title || 'Senza titolo'}`
+    })
+  }
+  
+  return budgets
+}
+
+/**
+ * Applica una transazione trimestrale al budgeting
+ * @param {Object} transaction - Transazione pianificata
+ * @param {number} year - Anno di riferimento
+ * @param {Object} subcats - Mappa delle sottocategorie
+ * @returns {Array} Array di budget data per upsert
+ */
+export function applyQuarterlyTransactionToBudget(transaction, year, subcats) {
+  const budgets = []
+  const amount = Math.abs(Number(transaction.amount) || 0)
+  // Dividi l'importo trimestrale su 3 mesi
+  const monthlyAmount = amount / 3
+  
+  if (!transaction.subId && !transaction.subcategory?.name) {
+    throw new Error('Sottocategoria richiesta per applicare al budgeting')
+  }
+  
+  const subcategoryId = transaction.subId || transaction.subcategory?.id
+  const subcategoryName = transaction.subcategory?.name || findSubcategoryName(transaction.subId, subcats)
+  
+  if (!subcategoryId || !subcategoryName) {
+    throw new Error('Sottocategoria non trovata')
+  }
+  
+  // Per le transazioni trimestrali, applichiamo l'importo a tutti i trimestri dell'anno
+  for (let quarter = 0; quarter < 4; quarter++) {
+    const quarterStartMonth = quarter * 3 + 1
+    
+    // Applica ai 3 mesi del trimestre
+    for (let monthInQuarter = 0; monthInQuarter < 3; monthInQuarter++) {
+      const month = quarterStartMonth + monthInQuarter
+      budgets.push({
+        main: transaction.main,
+        subcategoryId,
+        period: `${year}-${String(month).padStart(2, '0')}`,
+        amount: monthlyAmount,
+        style: 'FIXED',
+        managedAutomatically: true,
+        notes: `Auto-applicata da transazione pianificata trimestrale: ${transaction.title || 'Senza titolo'}`
+      })
+    }
+  }
+  
+  return budgets
+}
+
+/**
+ * Applica una transazione semestrale al budgeting
+ * @param {Object} transaction - Transazione pianificata
+ * @param {number} year - Anno di riferimento
+ * @param {Object} subcats - Mappa delle sottocategorie
+ * @returns {Array} Array di budget data per upsert
+ */
+export function applySemiannualTransactionToBudget(transaction, year, subcats) {
+  const budgets = []
+  const amount = Math.abs(Number(transaction.amount) || 0)
+  // Dividi l'importo semestrale su 6 mesi
+  const monthlyAmount = amount / 6
+  
+  if (!transaction.subId && !transaction.subcategory?.name) {
+    throw new Error('Sottocategoria richiesta per applicare al budgeting')
+  }
+  
+  const subcategoryId = transaction.subId || transaction.subcategory?.id
+  const subcategoryName = transaction.subcategory?.name || findSubcategoryName(transaction.subId, subcats)
+  
+  if (!subcategoryId || !subcategoryName) {
+    throw new Error('Sottocategoria non trovata')
+  }
+  
+  // Per le transazioni semestrali, applichiamo l'importo diviso su tutti i mesi dell'anno
+  for (let month = 1; month <= 12; month++) {
+    budgets.push({
+      main: transaction.main,
+      subcategoryId,
+      period: `${year}-${String(month).padStart(2, '0')}`,
+      amount: monthlyAmount,
+      style: 'FIXED',
+      managedAutomatically: true,
+      notes: `Auto-applicata da transazione pianificata semestrale: ${transaction.title || 'Senza titolo'}`
+    })
+  }
+  
+  return budgets
+}
+
+/**
  * Applica una transazione una tantum al budgeting
  * @param {Object} transaction - Transazione pianificata
  * @param {number} year - Anno di riferimento
@@ -162,8 +288,14 @@ export function applyTransactionToBudget(transaction, options, subcats) {
   const { mode, targetMonth, year } = options
   
   switch (transaction.frequency) {
+    case 'WEEKLY':
+      return applyWeeklyTransactionToBudget(transaction, year, subcats)
     case 'MONTHLY':
       return applyMonthlyTransactionToBudget(transaction, year, subcats)
+    case 'QUARTERLY':
+      return applyQuarterlyTransactionToBudget(transaction, year, subcats)
+    case 'SEMIANNUAL':
+      return applySemiannualTransactionToBudget(transaction, year, subcats)
     case 'YEARLY':
       return applyYearlyTransactionToBudget(transaction, year, subcats, mode, targetMonth)
     case 'ONE_TIME':

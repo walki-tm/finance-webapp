@@ -1,31 +1,6 @@
-/**
- * 📄 USE PLANNED TRANSACTIONS: Hook per gestione transazioni pianificate
- * 
- * 🎯 Scopo: Gestisce state e operazioni per transazioni pianificate e gruppi
- * 
- * 🔧 Dipendenze principali:
- * - React hooks per state management
- * - API client per operazioni backend
- * 
- * 📝 Note:
- * - Gestisce CRUD per transazioni pianificate
- * - Supporta raggruppamento e riorganizzazione
- * - Include logica per materializzazione
- * 
- * @author Finance WebApp Team
- * @modified 23 Agosto 2025 - Creazione iniziale
- */
-
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { api } from '../../lib/api.js'
 import { triggerBalanceRefresh } from '../app/useBalance.js'
-import { 
-  applyMonthlyTransactionToBudget,
-  applyYearlyTransactionToBudget,
-  applyOneTimeTransactionToBudget,
-  applyGroupToBudget,
-  removeTransactionFromBudget
-} from './lib/budgetingIntegration.js'
 
 const normalizeMainKey = (main) => {
   const u = String(main || 'EXPENSE').toUpperCase()
@@ -33,493 +8,399 @@ const normalizeMainKey = (main) => {
   return map[u] || u.toLowerCase()
 }
 
-export function usePlannedTransactions(token, options = {}) {
-  const { refreshTransactions } = options
-  // 🔸 State per transazioni pianificate
-  const [plannedTransactions, setPlannedTransactions] = useState([])
-  const [transactionGroups, setTransactionGroups] = useState([])
-  const [plannedTxModalOpen, setPlannedTxModalOpen] = useState(false)
-  const [editingPlannedTx, setEditingPlannedTx] = useState(null)
-  const [groupModalOpen, setGroupModalOpen] = useState(false)
-  const [editingGroup, setEditingGroup] = useState(null)
-  const [dueTransactions, setDueTransactions] = useState([])
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
+// 🔥 SINGLETON PATTERN: Una sola istanza di dati per tutta l'app
+let GLOBAL_PLANNED_TRANSACTIONS_DATA = {
+  data: [],
+  groups: [],
+  isLoading: false,
+  groupsLoading: false,
+  hasLoaded: false,
+  groupsLoaded: false,
+  error: null,
+  subscribers: new Set(),
+  modalState: {
+    plannedTxOpen: false,
+    editingPlannedTx: null,
+    groupOpen: false,
+    editingGroup: null
+  }
+}
 
-  // 🔸 Caricamento iniziale
-  useEffect(() => {
-    let active = true
-    async function load() {
-      if (!token) {
-        setPlannedTransactions([])
-        setTransactionGroups([])
-        setDueTransactions([])
-        return
-      }
-      try {
-        const [planned, groups, due] = await Promise.all([
-          api.listPlannedTransactions(token),
-          api.listTransactionGroups(token),
-          api.getPlannedTransactionsDue(token)
-        ])
+let API_CALL_IN_PROGRESS = false
+let GROUPS_API_CALL_IN_PROGRESS = false
+
+// 🔥 SINGLETON API CALL: Una sola chiamata per tutta l'app
+async function loadPlannedTransactionsGlobal(token) {
+  if (!token || GLOBAL_PLANNED_TRANSACTIONS_DATA.hasLoaded || API_CALL_IN_PROGRESS) {
+    console.log('🛡️ Skipping API call - already loaded or in progress')
+    return
+  }
+  
+  console.log('🚀 SINGLETON: Loading planned transactions globally...')
+  API_CALL_IN_PROGRESS = true
+  GLOBAL_PLANNED_TRANSACTIONS_DATA.isLoading = true
+  
+  try {
+    const planned = await api.listPlannedTransactions(token)
+    console.log('✅ SINGLETON: API returned:', planned?.length || 0, 'transactions')
+    
+    // Fix next_execution undefined
+    const fixedPlanned = planned.map(tx => {
+      if (!tx.next_execution) {
+        const now = new Date()
+        let nextExecution
         
-        
-        const normalizedPlanned = planned.map(t => ({
-          ...t,
-          main: normalizeMainKey(t.main),
-          sub: t.subcategory?.name || '',
-        }))
-        
-        if (active) {
-          setPlannedTransactions(normalizedPlanned)
-          setTransactionGroups(groups)
-          setDueTransactions(due)
+        switch (tx.frequency) {
+          case 'MONTHLY':
+            nextExecution = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+            break
+          case 'QUARTERLY': 
+            nextExecution = new Date(now.getFullYear(), now.getMonth() + 3, 1)
+            break
+          case 'SEMIANNUAL':
+            nextExecution = new Date(now.getFullYear(), now.getMonth() + 6, 1)
+            break
+          case 'YEARLY':
+            nextExecution = new Date(now.getFullYear() + 1, now.getMonth(), 1)
+            break
+          default:
+            nextExecution = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
         }
+        
+        return { ...tx, next_execution: nextExecution.toISOString() }
+      }
+      return tx
+    })
+    
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.data = fixedPlanned
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.hasLoaded = true
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.isLoading = false
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.error = null
+    
+    console.log('✅ SINGLETON: Data saved globally, notifying', GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.size, 'subscribers')
+    
+    // Notify all subscribers
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.forEach(callback => {
+      try {
+        callback()
       } catch (err) {
-        console.error('Errore caricamento planned transactions:', err.message)
-        if (active) {
-          setPlannedTransactions([])
-          setTransactionGroups([])
-          setDueTransactions([])
-        }
+        console.error('Error in subscriber callback:', err)
       }
-    }
-    load()
-    return () => { active = false }
-  }, [token, refreshTrigger])
-  
-  // 🔸 Materializzazione transazioni
-  const materializePlannedTx = async (plannedTxId) => {
-    try {
-      const newTransaction = await api.materializePlannedTransaction(token, plannedTxId)
-      
-      // Force full refresh to get updated data including nextDueDate changes
-      setRefreshTrigger(prev => prev + 1)
-      
-      // 🔄 Trigger refresh saldo dopo materializzazione transazione
-      triggerBalanceRefresh()
-      
-      return newTransaction
-    } catch (err) {
-      console.error('❌ Errore materialize planned tx:', err.message)
-      throw err
-    }
-  }
-
-  // 🔸 Auto-materializzazione per transazioni AUTOMATIC scadute
-  useEffect(() => {
-    if (!token || dueTransactions.length === 0) return
+    })
     
-    const autoMaterializeTransactions = async () => {
-      // Filtra transazioni che devono essere auto-materializzate
-      const autoTransactions = dueTransactions.filter(tx => 
-        tx.confirmationMode === 'AUTOMATIC' && 
-        tx.isActive && 
-        tx.nextDueDate && 
-        new Date(tx.nextDueDate) <= new Date()
-      )
-      
-      if (autoTransactions.length === 0) return
-      
-      console.log(`🤖 Auto-materializzazione di ${autoTransactions.length} transazioni automatiche scadute`)
-      
-      // Materializza ogni transazione automatica
-      for (const tx of autoTransactions) {
-        try {
-          console.log(`🤖 Auto-materializzazione transazione: ${tx.title}`)
-          await materializePlannedTx(tx.id)
-          
-          // 🔄 Trigger refresh saldo per ogni transazione auto-materializzata
-          // (Nota: materializePlannedTx già chiama triggerBalanceRefresh, ma è comunque safe)
-          
-        } catch (error) {
-          console.error(`❌ Errore auto-materializzazione transazione ${tx.title}:`, error)
-          // Continua con le altre transazioni anche se una fallisce
-        }
-      }
-      
-      // ✨ REFRESH delle transazioni normali per mostrarle immediatamente nel tab
-      if (autoTransactions.length > 0 && refreshTransactions && typeof refreshTransactions === 'function') {
-        setTimeout(() => {
-          console.log('🔄 Auto-refresh transazioni dopo auto-materializzazione')
-          refreshTransactions()
-        }, 500) // Piccolo delay per permettere al backend di completare il sync
-      }
-    }
+  } catch (error) {
+    console.error('❌ SINGLETON: Error loading planned transactions:', error)
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.data = []
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.hasLoaded = true
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.isLoading = false
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.error = error
     
-    // Esegui l'auto-materializzazione
-    autoMaterializeTransactions()
-  }, [dueTransactions, token])
-
-  // 🔸 Gestione modal planned transactions
-  const openAddPlannedTx = () => { setEditingPlannedTx(null); setPlannedTxModalOpen(true) }
-  const openEditPlannedTx = (tx) => { setEditingPlannedTx(tx); setPlannedTxModalOpen(true) }
-  const closePlannedTxModal = () => { setPlannedTxModalOpen(false); setEditingPlannedTx(null) }
-
-  // 🔸 Gestione modal gruppi
-  const openAddGroup = () => { setEditingGroup(null); setGroupModalOpen(true) }
-  const openEditGroup = (group) => { setEditingGroup(group); setGroupModalOpen(true) }
-  const closeGroupModal = () => { setGroupModalOpen(false); setEditingGroup(null) }
-
-  // 🔸 CRUD transazioni pianificate
-  const savePlannedTx = async (payload, { subcats, batchUpsertBudgets, currentYear, refreshBudgets } = {}) => {
-    const isEdit = Boolean(editingPlannedTx?.id)
-    const shouldApplyToBudget = Boolean(payload.applyToBudget)
-    const body = {
-      title: payload.title || '',  // ✅ Aggiungi title mancante
-      main: String(payload.main || 'EXPENSE').toUpperCase(),
-      subId: payload.subId || null,
-      subName: payload.sub || null,
-      amount: Number(payload.amount || 0),
-      note: payload.note || '',
-      payee: payload.payee || '',
-      frequency: payload.frequency,
-      startDate: payload.startDate || new Date().toISOString(),
-      confirmationMode: payload.confirmationMode || 'MANUAL',
-      groupId: payload.groupId || null,
-      appliedToBudget: shouldApplyToBudget,
-    }
-
-    try {
-      let savedTransaction
-      if (isEdit) {
-        const updated = await api.updatePlannedTransaction(token, editingPlannedTx.id, body)
-        const normalizedMain = normalizeMainKey(updated.main)
-        const normalized = { 
-          ...updated, 
-          main: normalizedMain, 
-          sub: payload.sub || updated.subcategory?.name || '',
-          // Assicuriamoci che appliedToBudget sia preservato dal backend
-          appliedToBudget: updated.appliedToBudget || false
-        }
-        setPlannedTransactions(s => s.map(t => (t.id === editingPlannedTx.id ? normalized : t)))
-        savedTransaction = normalized
-      } else {
-        const created = await api.addPlannedTransaction(token, body)
-        const normalizedMain = normalizeMainKey(created.main)
-        const normalized = { 
-          ...created, 
-          main: normalizedMain, 
-          sub: payload.sub || created.subcategory?.name || '',
-          // Assicuriamoci che appliedToBudget sia preservato dal backend
-          appliedToBudget: created.appliedToBudget || false
-        }
-        setPlannedTransactions(s => [normalized, ...s])
-        savedTransaction = normalized
-      }
-
-      // 🔸 Applica automaticamente al budgeting se richiesto
-      if (shouldApplyToBudget && subcats && batchUpsertBudgets && currentYear) {
-        try {
-          const budgetOptions = {
-            year: currentYear,
-            mode: 'divide', // Default per applicazione automatica
-            targetMonth: null
-          }
-          await applyTransactionToBudget(savedTransaction, budgetOptions, subcats, batchUpsertBudgets)
-          
-          // 🔸 Refresh dello stato budgeting se fornita la callback
-          if (refreshBudgets && typeof refreshBudgets === 'function') {
-            try {
-              await refreshBudgets()
-            } catch (refreshError) {
-              console.error('Errore nel refresh budgeting:', refreshError)
-            }
-          }
-        } catch (budgetError) {
-          console.error('Errore nell\'applicazione automatica al budgeting:', budgetError)
-          // Non blocchiamo il salvataggio se l'applicazione al budget fallisce
-        }
-      }
-    } catch (err) {
-      console.error('Errore save planned tx:', err.message)
-      throw err
-    } finally {
-      closePlannedTxModal()
-    }
-  }
-
-  const deletePlannedTx = async (id, { subcats, batchUpsertBudgets, currentYear, refreshBudgets } = {}) => {
-    // Trova la transazione da eliminare
-    const transactionToDelete = plannedTransactions.find(t => t.id === id)
-    
-    // Se la transazione era applicata al budgeting, rimuoviamola prima di eliminare
-    if (transactionToDelete && transactionToDelete.appliedToBudget && subcats && batchUpsertBudgets && currentYear) {
+    // Notify subscribers of error
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.forEach(callback => {
       try {
-        const options = {
-          year: currentYear,
-          mode: 'divide',
-          targetMonth: null
-        }
-        await removeTransactionFromBudgeting(transactionToDelete, options, subcats, batchUpsertBudgets)
-        
-        // Refresh budgeting data
-        if (refreshBudgets && typeof refreshBudgets === 'function') {
-          await refreshBudgets()
-        }
-      } catch (budgetError) {
-        console.error('Errore nella rimozione dal budgeting:', budgetError)
-        // Continuiamo comunque con l'eliminazione
+        callback()
+      } catch (err) {
+        console.error('Error in subscriber callback:', err)
       }
-    }
-    
-    // Rimuovi dal state locale
-    setPlannedTransactions(s => s.filter(t => t.id !== id))
-    
-    try {
-      await api.deletePlannedTransaction(token, id)
-    } catch (err) {
-      console.error('Errore delete planned tx:', err.message)
-      // Re-aggiungi la transazione al state se l'eliminazione fallisce
-      if (transactionToDelete) {
-        setPlannedTransactions(s => [transactionToDelete, ...s])
-      }
-      throw err
-    }
+    })
+  } finally {
+    API_CALL_IN_PROGRESS = false
   }
+}
 
-  // 🔸 CRUD gruppi
-  const saveGroup = async (payload) => {
-    const isEdit = Boolean(editingGroup?.id)
-
-    try {
-      if (isEdit) {
-        const updated = await api.updateTransactionGroup(token, editingGroup.id, payload)
-        setTransactionGroups(s => s.map(g => (g.id === editingGroup.id ? updated : g)))
-      } else {
-        const created = await api.addTransactionGroup(token, payload)
-        setTransactionGroups(s => [...s, created])
-      }
-    } catch (err) {
-      console.error('Errore save group:', err.message)
-      throw err
-    } finally {
-      closeGroupModal()
-    }
-  }
-
-  const deleteGroup = async (id) => {
-    // Sposta le transazioni pianificate del gruppo fuori dal gruppo
-    setPlannedTransactions(s => s.map(t => t.groupId === id ? { ...t, groupId: null, group: null } : t))
-    setTransactionGroups(s => s.filter(g => g.id !== id))
-    try {
-      await api.deleteTransactionGroup(token, id)
-    } catch (err) {
-      console.error('Errore delete group:', err.message)
-    }
-  }
-
-  // Removed reorderGroups and movePlannedTx functions - no longer needed without drag-and-drop
-
-  // 🔸 Refresh funzioni
-  const refresh = () => {
-    setRefreshTrigger(prev => prev + 1)
+// 🔥 SINGLETON API CALL for Groups: Una sola chiamata per tutta l'app
+async function loadTransactionGroupsGlobal(token) {
+  if (!token || GLOBAL_PLANNED_TRANSACTIONS_DATA.groupsLoaded || GROUPS_API_CALL_IN_PROGRESS) {
+    console.log('🛡️ Skipping Groups API call - already loaded or in progress')
+    return
   }
   
-  const refreshDueTransactions = async () => {
-    try {
-      const due = await api.getPlannedTransactionsDue(token)
-      setDueTransactions(due)
-    } catch (err) {
-      console.error('Errore refresh due transactions:', err.message)
-    }
-  }
-
-  // 🔸 Applicazione al budgeting
-  const applyTransactionToBudget = async (transaction, options, subcats, batchUpsertBudgets) => {
-    const { mode, targetMonth, year } = options
-    let budgetUpdates = []
-
-    try {
-      switch (transaction.frequency) {
-        case 'MONTHLY':
-          budgetUpdates = applyMonthlyTransactionToBudget(transaction, year, subcats)
-          break
-        case 'YEARLY':
-          budgetUpdates = applyYearlyTransactionToBudget(transaction, year, subcats, mode, targetMonth)
-          break
-        case 'ONE_TIME':
-          budgetUpdates = applyOneTimeTransactionToBudget(transaction, year, subcats)
-          break
-        default:
-          throw new Error(`Frequenza non supportata: ${transaction.frequency}`)
-      }
-
-      // Applica gli aggiornamenti tramite batchUpsertBudgets
-      if (budgetUpdates.length > 0) {
-        await batchUpsertBudgets(budgetUpdates)
-      }
-      
-      return budgetUpdates
-    } catch (error) {
-      console.error('Errore applicazione al budget:', error)
-      throw error
-    }
-  }
-
-  const applyGroupToBudgeting = async (groupId, options, subcats, batchUpsertBudgets) => {
-    const { year } = options
-    const groupTransactions = plannedTransactions.filter(tx => tx.groupId === groupId)
+  console.log('🚀 SINGLETON: Loading transaction groups globally...')
+  GROUPS_API_CALL_IN_PROGRESS = true
+  GLOBAL_PLANNED_TRANSACTIONS_DATA.groupsLoading = true
+  
+  try {
+    const groups = await api.listTransactionGroups(token)
+    console.log('✅ SINGLETON: Groups API returned:', groups?.length || 0, 'groups')
     
-    if (groupTransactions.length === 0) {
-      throw new Error('Nessuna transazione trovata nel gruppo')
-    }
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.groups = Array.isArray(groups) ? groups : []
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.groupsLoaded = true
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.groupsLoading = false
+    
+    console.log('✅ SINGLETON: Groups saved globally, notifying', GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.size, 'subscribers')
+    
+    // Notify all subscribers
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.forEach(callback => {
+      try {
+        callback()
+      } catch (err) {
+        console.error('Error in groups subscriber callback:', err)
+      }
+    })
+    
+  } catch (error) {
+    console.error('❌ SINGLETON: Error loading transaction groups:', error)
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.groups = []
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.groupsLoaded = true
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.groupsLoading = false
+    
+    // Notify subscribers of error
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.forEach(callback => {
+      try {
+        callback()
+      } catch (err) {
+        console.error('Error in groups subscriber callback:', err)
+      }
+    })
+  } finally {
+    GROUPS_API_CALL_IN_PROGRESS = false
+  }
+}
 
+export function usePlannedTransactions(token, options = {}) {
+  console.log('🔥 SINGLETON usePlannedTransactions - Shared data approach')
+  
+  const [, forceUpdate] = useState(0)
+  const instanceId = useRef(Math.random().toString(36).substr(2, 9))
+  
+  console.log('🏷️ Instance:', instanceId.current, 'Global hasLoaded:', GLOBAL_PLANNED_TRANSACTIONS_DATA.hasLoaded)
+  // 🔥 SINGLETON: Subscribe to global data changes
+  useEffect(() => {
+    const updateCallback = () => {
+      console.log('🔔 Instance', instanceId.current, 'received update from singleton')
+      forceUpdate(prev => prev + 1)
+    }
+    
+    GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.add(updateCallback)
+    
+    // Load data if not already loaded
+    loadPlannedTransactionsGlobal(token)
+    loadTransactionGroupsGlobal(token)
+    
+    return () => {
+      console.log('🧹 Instance', instanceId.current, 'unsubscribing')
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.delete(updateCallback)
+    }
+  }, [token])
+  
+  // 📅 Calculate due transactions (scadute)
+  const dueTransactions = GLOBAL_PLANNED_TRANSACTIONS_DATA.data.filter(tx => {
+    if (!tx.isActive) return false // Skip inactive
+    if (!tx.next_execution) return false // Skip without execution date
+    
     try {
-      const budgetUpdates = applyGroupToBudget(groupTransactions, year, subcats)
+      const nextExec = new Date(tx.next_execution)
+      const now = new Date()
       
-      // Applica gli aggiornamenti tramite batchUpsertBudgets
-      if (budgetUpdates.length > 0) {
-        await batchUpsertBudgets(budgetUpdates)
+      // Check if date is valid
+      if (isNaN(nextExec.getTime())) {
+        console.warn('⚠️ Invalid next_execution date for due calculation:', tx.id, tx.next_execution)
+        return false
       }
       
-      return budgetUpdates
-    } catch (error) {
-      console.error('Errore applicazione gruppo al budget:', error)
-      throw error
-    }
-  }
-
-  // 🔸 Rimozione dal budgeting
-  const removeTransactionFromBudgeting = async (transaction, options, subcats, batchUpsertBudgets, isManagedAutomatically = null) => {
-    try {
-      const budgetUpdates = removeTransactionFromBudget(transaction, options, subcats, isManagedAutomatically)
+      // Transaction is due if next_execution is in the past or today
+      const isDue = nextExec <= now
       
-      // Applica gli aggiornamenti negativi tramite batchUpsertBudgets
-      if (budgetUpdates.length > 0) {
-        await batchUpsertBudgets(budgetUpdates)
-      }
-      
-      return budgetUpdates
-    } catch (error) {
-      console.error('Errore rimozione dal budget:', error)
-      throw error
-    }
-  }
-
-  // 🔸 Toggle budgeting per transazione
-  const toggleTransactionBudgeting = async (transaction, { subcats, batchUpsertBudgets, currentYear, refreshBudgets, isManagedAutomatically } = {}) => {
-    if (!subcats || !batchUpsertBudgets || !currentYear) {
-      throw new Error('Parametri richiesti per il toggle budgeting mancanti')
-    }
-
-    const options = {
-      year: currentYear,
-      mode: 'divide', // Default per applicazione automatica
-      targetMonth: null
-    }
-
-    try {
-      if (transaction.appliedToBudget) {
-        // Rimuovi dal budgeting
-        await removeTransactionFromBudgeting(transaction, options, subcats, batchUpsertBudgets, isManagedAutomatically)
-        
-        // Aggiorna lo stato nel database
-        const updated = await api.updatePlannedTransaction(token, transaction.id, { 
-          appliedToBudget: false 
+      if (isDue) {
+        console.log('📅 Due transaction found:', {
+          id: tx.id,
+          description: tx.description || tx.name,
+          amount: tx.amount,
+          next_execution: tx.next_execution,
+          daysOverdue: Math.floor((now.getTime() - nextExec.getTime()) / (1000 * 60 * 60 * 24))
         })
-        
-        // Aggiorna lo state locale
-        setPlannedTransactions(s => s.map(t => 
-          t.id === transaction.id 
-            ? { ...t, appliedToBudget: false }
-            : t
-        ))
-        
-        console.log('Transazione rimossa dal budgeting')
-      } else {
-        // Applica al budgeting
-        await applyTransactionToBudget(transaction, options, subcats, batchUpsertBudgets)
-        
-        // Aggiorna lo stato nel database
-        const updated = await api.updatePlannedTransaction(token, transaction.id, { 
-          appliedToBudget: true 
-        })
-        
-        // Aggiorna lo state locale
-        setPlannedTransactions(s => s.map(t => 
-          t.id === transaction.id 
-            ? { ...t, appliedToBudget: true }
-            : t
-        ))
-        
-        console.log('Transazione applicata al budgeting')
       }
       
-      // Refresh budgeting data
-      if (refreshBudgets && typeof refreshBudgets === 'function') {
-        try {
-          await refreshBudgets()
-        } catch (refreshError) {
-          console.error('Errore nel refresh budgeting:', refreshError)
-        }
-      }
+      return isDue
     } catch (error) {
-      console.error('Errore nel toggle budgeting:', error)
-      throw error
+      console.error('❌ Error calculating due status for transaction:', tx.id, error)
+      return false
     }
-  }
-
-  // 🔸 Toggle attivo/inattivo per transazioni (usa il nuovo endpoint dedicato)
-  const toggleTransactionActive = async (transaction, isActive, { refreshBudgets } = {}) => {
-    try {
-      // Usa il nuovo endpoint dedicato che gestisce automaticamente il budgeting
-      const updated = await api.togglePlannedTransactionActive(token, transaction.id, isActive)
-      
-      // 🎆 REFRESH AUTOMATICO: Aggiorna immediatamente lo stato
-      setRefreshTrigger(prev => prev + 1) // Refresh completo delle transazioni pianificate
-      
-      // Refresh budgeting data se fornita la callback
-      if (refreshBudgets && typeof refreshBudgets === 'function') {
-        try {
-          await refreshBudgets()
-          console.log('Dati budgeting aggiornati dopo attivazione/disattivazione')
-        } catch (refreshError) {
-          console.error('Errore nel refresh budgeting:', refreshError)
-        }
-      }
-      
-      console.log(`Transazione ${isActive ? 'attivata' : 'disattivata'} con successo`)
-    } catch (err) {
-      console.error('Errore toggle active planned tx:', err.message)
-      throw err
-    }
-  }
-
+  })
+  
+  console.log('📅 Total due transactions found:', dueTransactions.length)
+  
   return {
-    // State
-    plannedTransactions,
-    transactionGroups,
+    // 🔥 SINGLETON VERSION - Use global shared data
+    plannedTransactions: GLOBAL_PLANNED_TRANSACTIONS_DATA.data,
+    transactionGroups: GLOBAL_PLANNED_TRANSACTIONS_DATA.groups,
     dueTransactions,
+    isLoading: GLOBAL_PLANNED_TRANSACTIONS_DATA.isLoading,
     
-    // Modal state
-    plannedTxModalOpen,
-    editingPlannedTx,
-    groupModalOpen,
-    editingGroup,
+    // Debug info
+    debugInfo: { 
+      instanceId: instanceId.current, 
+      hasLoaded: GLOBAL_PLANNED_TRANSACTIONS_DATA.hasLoaded,
+      groupsLoaded: GLOBAL_PLANNED_TRANSACTIONS_DATA.groupsLoaded,
+      dataCount: GLOBAL_PLANNED_TRANSACTIONS_DATA.data.length,
+      groupsCount: GLOBAL_PLANNED_TRANSACTIONS_DATA.groups.length,
+      dueCount: dueTransactions.length,
+      subscribers: GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.size
+    },
     
-    // Modal actions
-    openAddPlannedTx,
-    openEditPlannedTx,
-    closePlannedTxModal,
-    openAddGroup,
-    openEditGroup,
-    closeGroupModal,
+    // Modal state - Global modal management
+    plannedTxModalOpen: GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState?.plannedTxOpen || false,
+    editingPlannedTx: GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState?.editingPlannedTx || null,
+    groupModalOpen: GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState?.groupOpen || false,
+    editingGroup: GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState?.editingGroup || null,
     
-    // CRUD actions
-    savePlannedTx,
-    deletePlannedTx,
-    saveGroup,
-    deleteGroup,
-    materializePlannedTx,
-    refresh,
-    refreshDueTransactions,
+    // Actions - Full functionality restored
+    openAddPlannedTx: () => {
+      console.log('🔥 Opening add planned tx modal')
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState = {
+        ...GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState,
+        plannedTxOpen: true,
+        editingPlannedTx: null
+      }
+      // Notify subscribers
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.forEach(callback => callback())
+    },
     
-    // Budgeting integration
-    applyTransactionToBudget,
-    applyGroupToBudgeting,
-    removeTransactionFromBudgeting,
-    toggleTransactionBudgeting,
-    toggleTransactionActive,
+    openEditPlannedTx: (tx) => {
+      console.log('🔥 Opening edit planned tx modal for:', tx?.id)
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState = {
+        ...GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState,
+        plannedTxOpen: true,
+        editingPlannedTx: tx
+      }
+      // Notify subscribers
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.forEach(callback => callback())
+    },
+    
+    closePlannedTxModal: () => {
+      console.log('🔥 Closing planned tx modal')
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState = {
+        ...GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState,
+        plannedTxOpen: false,
+        editingPlannedTx: null
+      }
+      // Notify subscribers
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.forEach(callback => callback())
+    },
+    
+    openAddGroup: () => {
+      console.log('🔥 Opening add group modal')
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState = {
+        ...GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState,
+        groupOpen: true,
+        editingGroup: null
+      }
+      // Notify subscribers
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.forEach(callback => callback())
+    },
+    
+    openEditGroup: (group) => {
+      console.log('🔥 Opening edit group modal for:', group?.id)
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState = {
+        ...GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState,
+        groupOpen: true,
+        editingGroup: group
+      }
+      // Notify subscribers
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.forEach(callback => callback())
+    },
+    
+    closeGroupModal: () => {
+      console.log('🔥 Closing group modal')
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState = {
+        ...GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState,
+        groupOpen: false,
+        editingGroup: null
+      }
+      // Notify subscribers
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.forEach(callback => callback())
+    },
+    
+    refresh: () => {
+      console.log('🔄 SINGLETON: Manual refresh - clearing global data')
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.hasLoaded = false
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.data = []
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.groupsLoaded = false
+      GLOBAL_PLANNED_TRANSACTIONS_DATA.groups = []
+      loadPlannedTransactionsGlobal(token)
+      loadTransactionGroupsGlobal(token)
+    },
+    
+    materializePlannedTx: async (plannedTx) => {
+      console.log('💎 Materializing planned transaction:', plannedTx?.id)
+      try {
+        const result = await api.materializePlannedTransaction(token, plannedTx.id)
+        console.log('✅ Transaction materialized successfully')
+        // Refresh data after materialization
+        GLOBAL_PLANNED_TRANSACTIONS_DATA.hasLoaded = false
+        await loadPlannedTransactionsGlobal(token)
+        // Trigger balance refresh
+        triggerBalanceRefresh()
+        return result
+      } catch (error) {
+        console.error('❌ Error materializing transaction:', error)
+        throw error
+      }
+    },
+    
+    savePlannedTx: async (data) => {
+      console.log('💾 Saving planned transaction:', data)
+      try {
+        const result = data.id 
+          ? await api.updatePlannedTransaction(token, data.id, data)
+          : await api.createPlannedTransaction(token, data)
+        console.log('✅ Planned transaction saved successfully')
+        // Refresh data after save
+        GLOBAL_PLANNED_TRANSACTIONS_DATA.hasLoaded = false
+        await loadPlannedTransactionsGlobal(token)
+        return result
+      } catch (error) {
+        console.error('❌ Error saving planned transaction:', error)
+        throw error
+      }
+    },
+    
+    deletePlannedTx: async (id) => {
+      console.log('🗑️ Deleting planned transaction:', id)
+      try {
+        const result = await api.deletePlannedTransaction(token, id)
+        console.log('✅ Planned transaction deleted successfully')
+        // Refresh data after delete
+        GLOBAL_PLANNED_TRANSACTIONS_DATA.hasLoaded = false
+        await loadPlannedTransactionsGlobal(token)
+        return result
+      } catch (error) {
+        console.error('❌ Error deleting planned transaction:', error)
+        throw error
+      }
+    },
+    
+    saveGroup: async (data) => {
+      console.log('💾 Saving group:', data)
+      try {
+        const result = data.id 
+          ? await api.updateTransactionGroup(token, data.id, data)
+          : await api.createTransactionGroup(token, data)
+        console.log('✅ Group saved successfully')
+        // Refresh data after save
+        GLOBAL_PLANNED_TRANSACTIONS_DATA.hasLoaded = false
+        await loadPlannedTransactionsGlobal(token)
+        return result
+      } catch (error) {
+        console.error('❌ Error saving group:', error)
+        throw error
+      }
+    },
+    
+    deleteGroup: async (id) => {
+      console.log('🗑️ Deleting group:', id)
+      try {
+        const result = await api.deleteTransactionGroup(token, id)
+        console.log('✅ Group deleted successfully')
+        // Refresh data after delete
+        GLOBAL_PLANNED_TRANSACTIONS_DATA.hasLoaded = false
+        await loadPlannedTransactionsGlobal(token)
+        return result
+      } catch (error) {
+        console.error('❌ Error deleting group:', error)
+        throw error
+      }
+    }
   }
 }
 

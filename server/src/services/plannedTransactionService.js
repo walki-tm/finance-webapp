@@ -18,6 +18,7 @@
 
 import { prisma } from '../lib/prisma.js'
 import { invalidateBalanceCache } from './balanceService.js'
+import { updateAccountBalance } from './accountBalanceService.js'
 
 function httpError(status, message) {
   const err = new Error(message)
@@ -59,12 +60,30 @@ function calculateNextDueDate(startDate, frequency, currentDate = new Date()) {
   }
   
   // Data nel futuro: calcola normalmente
-  if (frequency === 'MONTHLY') {
+  if (frequency === 'WEEKLY') {
+    // Trova la prossima settimana (stesso giorno della settimana)
+    while (nextDue <= now) {
+      nextDue.setDate(nextDue.getDate() + 7)
+    }
+    console.log('  - WEEKLY future date, calculated nextDue:', nextDue.toISOString())
+  } else if (frequency === 'MONTHLY') {
     // Trova il prossimo mese con lo stesso giorno
     while (nextDue <= now) {
       nextDue.setMonth(nextDue.getMonth() + 1)
     }
     console.log('  - MONTHLY future date, calculated nextDue:', nextDue.toISOString())
+  } else if (frequency === 'QUARTERLY') {
+    // Trova il prossimo trimestre (ogni 3 mesi)
+    while (nextDue <= now) {
+      nextDue.setMonth(nextDue.getMonth() + 3)
+    }
+    console.log('  - QUARTERLY future date, calculated nextDue:', nextDue.toISOString())
+  } else if (frequency === 'SEMIANNUAL') {
+    // Trova il prossimo semestre (ogni 6 mesi)
+    while (nextDue <= now) {
+      nextDue.setMonth(nextDue.getMonth() + 6)
+    }
+    console.log('  - SEMIANNUAL future date, calculated nextDue:', nextDue.toISOString())
   } else if (frequency === 'YEARLY') {
     // Trova il prossimo anno con la stessa data
     while (nextDue <= now) {
@@ -91,7 +110,11 @@ function calculateNextOccurrenceAfterMaterialization(startDate, frequency, lastD
   const lastDue = new Date(lastDueDate)
   let nextDue = new Date(lastDue)
   
-  if (frequency === 'MONTHLY') {
+  if (frequency === 'WEEKLY') {
+    // Aggiungi 7 giorni alla data di ultima scadenza
+    nextDue.setDate(nextDue.getDate() + 7)
+    console.log('  - WEEKLY: Added 7 days to lastDueDate, result:', nextDue.toISOString())
+  } else if (frequency === 'MONTHLY') {
     // Gestisci correttamente i mesi con numero diverso di giorni
     const originalDay = lastDue.getDate()
     const currentMonth = lastDue.getMonth()
@@ -113,6 +136,14 @@ function calculateNextOccurrenceAfterMaterialization(startDate, frequency, lastD
     
     console.log('  - MONTHLY: Original day', originalDay, '-> Target day', targetDay, 'Result:', nextDue.toISOString())
     
+  } else if (frequency === 'QUARTERLY') {
+    // Aggiungi 3 mesi alla data di ultima scadenza
+    nextDue.setMonth(nextDue.getMonth() + 3)
+    console.log('  - QUARTERLY: Added 3 months to lastDueDate, result:', nextDue.toISOString())
+  } else if (frequency === 'SEMIANNUAL') {
+    // Aggiungi 6 mesi alla data di ultima scadenza
+    nextDue.setMonth(nextDue.getMonth() + 6)
+    console.log('  - SEMIANNUAL: Added 6 months to lastDueDate, result:', nextDue.toISOString())
   } else if (frequency === 'YEARLY') {
     // Aggiungi un anno alla data di ultima scadenza
     nextDue.setFullYear(nextDue.getFullYear() + 1)
@@ -136,7 +167,10 @@ function calculateNextOccurrences(startDate, frequency, count = 5, fromDate = ne
   for (let i = 0; i < count; i++) {
     occurrences.push(new Date(current))
     
-    if (frequency === 'MONTHLY') {
+    if (frequency === 'WEEKLY') {
+      // Aggiungi 7 giorni
+      current.setDate(current.getDate() + 7)
+    } else if (frequency === 'MONTHLY') {
       // Usa la stessa logica corretta per gestire i mesi con diverso numero di giorni
       const originalDay = current.getDate()
       const currentMonth = current.getMonth()
@@ -151,6 +185,12 @@ function calculateNextOccurrences(startDate, frequency, count = 5, fromDate = ne
       const targetDay = Math.min(originalDay, lastDayOfNextMonth)
       current.setDate(targetDay)
       
+    } else if (frequency === 'QUARTERLY') {
+      // Aggiungi 3 mesi
+      current.setMonth(current.getMonth() + 3)
+    } else if (frequency === 'SEMIANNUAL') {
+      // Aggiungi 6 mesi
+      current.setMonth(current.getMonth() + 6)
     } else if (frequency === 'YEARLY') {
       current.setFullYear(current.getFullYear() + 1)
     }
@@ -184,15 +224,16 @@ export async function listPlannedTransactions(userId, { groupId } = {}) {
     where.groupId = groupId
   }
   
+  // 🔧 FIX: Simplified orderBy to prevent infinite loop with NULL groups
   return prisma.plannedTransaction.findMany({
     where,
     orderBy: [
-      { group: { sortOrder: 'asc' } },
-      { createdAt: 'asc' }
+      { createdAt: 'asc' }  // 🔧 FIXED: Removed group.sortOrder that caused loops with NULL groupId
     ],
     include: { 
       subcategory: true,
-      group: true
+      group: true,
+      account: true
     }
   })
 }
@@ -201,7 +242,7 @@ export async function listPlannedTransactions(userId, { groupId } = {}) {
  * 🎯 SERVICE: Crea transazione pianificata
  */
 export async function createPlannedTransaction(userId, data) {
-  const { title, main, subId, subName, amount, note, payee, frequency, startDate, confirmationMode, groupId, appliedToBudget, loanId } = data
+  const { title, main, subId, subName, accountId, amount, note, payee, frequency, startDate, confirmationMode, groupId, appliedToBudget, loanId, repeatCount } = data
   
   // 🔸 DEBUG: Log nel service
   console.log('🐛 DEBUG plannedTransactionService - createPlannedTransaction:')
@@ -229,6 +270,12 @@ export async function createPlannedTransaction(userId, data) {
     if (!loanExists) throw httpError(400, 'Invalid loanId')
   }
   
+  // Verifica che l'account appartenga all'utente se specificato
+  if (accountId) {
+    const accountExists = await prisma.account.findFirst({ where: { id: accountId, userId } })
+    if (!accountExists) throw httpError(400, 'Invalid accountId')
+  }
+  
   // 🔸 Le transazioni provenienti da loan devono essere sempre AUTOMATIC
   let finalConfirmationMode = confirmationMode
   if (loanId) {
@@ -241,6 +288,7 @@ export async function createPlannedTransaction(userId, data) {
     title: title || null,  // ✅ Aggiungi title mancante
     main,
     subId: finalSubId,
+    accountId: accountId || null,  // 🏦 Aggiungi accountId mancante
     amount,
     note: note || null,
     payee: payee || null,
@@ -262,7 +310,8 @@ export async function createPlannedTransaction(userId, data) {
     data: prismaData,
     include: { 
       subcategory: true,
-      group: true
+      group: true,
+      account: true  // 🏦 Includi account per vedere il conto associato
     }
   })
   
@@ -271,29 +320,11 @@ export async function createPlannedTransaction(userId, data) {
   console.log('  - result.startDate:', result.startDate)
   console.log('  - result.startDate.toISOString():', result.startDate?.toISOString())
   
-  // 🔸 Se è una transazione con data odierna e AUTOMATIC, materializzala subito
-  if (finalConfirmationMode === 'AUTOMATIC') {
-    const today = new Date()
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-    const dueDateStart = new Date(result.nextDueDate.getFullYear(), result.nextDueDate.getMonth(), result.nextDueDate.getDate())
-    
-    console.log('- Checking if planned transaction should be materialized immediately:')
-    console.log('  - todayStart:', todayStart.toISOString())
-    console.log('  - dueDateStart:', dueDateStart.toISOString())
-    console.log('  - dueDateStart <= todayStart:', dueDateStart <= todayStart)
-    console.log('  - isLoanTransaction:', !!loanId)
-    
-    if (dueDateStart <= todayStart) {
-      console.log('- ⚙️ Auto-materializing planned transaction due today')
-      try {
-        const materialized = await materializePlannedTransaction(userId, result.id)
-        console.log('✅ Planned transaction auto-materialized:', materialized.id)
-      } catch (error) {
-        console.error('❌ Failed to auto-materialize planned transaction:', error.message)
-        // Non bloccare la creazione della transazione per questo errore
-      }
-    }
-  }
+  // 🔸 RIMOSSA materializzazione automatica alla creazione per evitare confusione
+  // Le transazioni AUTOMATIC vengono materializzate solo da:
+  // 1. Chiamata manuale dell'endpoint "paga"
+  // 2. Cron job automatico (autoMaterializeDueTransactions)
+  console.log('- Transazione creata. Materializzazione differita per controllo utente o cron job.')
   
   return result
 }
@@ -305,7 +336,7 @@ export async function updatePlannedTransaction(userId, id, data) {
   const exists = await prisma.plannedTransaction.findFirst({ where: { id, userId } })
   if (!exists) throw httpError(404, 'Not found')
 
-  const { title, main, subId, subName, amount, note, payee, frequency, startDate, confirmationMode, groupId, isActive, appliedToBudget, budgetApplicationMode, budgetTargetMonth } = data
+  const { title, main, subId, subName, accountId, amount, note, payee, frequency, startDate, confirmationMode, groupId, isActive, appliedToBudget, budgetApplicationMode, budgetTargetMonth } = data
   
   let finalSubId = undefined
   if (subId !== undefined || subName !== undefined) {
@@ -316,6 +347,12 @@ export async function updatePlannedTransaction(userId, id, data) {
   if (groupId !== undefined && groupId !== null) {
     const groupExists = await prisma.transactionGroup.findFirst({ where: { id: groupId, userId } })
     if (!groupExists) throw httpError(400, 'Invalid groupId')
+  }
+  
+  // Verifica account se specificato
+  if (accountId !== undefined && accountId !== null) {
+    const accountExists = await prisma.account.findFirst({ where: { id: accountId, userId } })
+    if (!accountExists) throw httpError(400, 'Invalid accountId')
   }
   
   // Ricalcola nextDueDate se cambiano frequency o startDate
@@ -332,6 +369,7 @@ export async function updatePlannedTransaction(userId, id, data) {
       ...(title !== undefined ? { title } : {}),  // ✅ Aggiungi title per update
       ...(main !== undefined ? { main } : {}),
       ...(finalSubId !== undefined ? { subId: finalSubId } : {}),
+      ...(accountId !== undefined ? { accountId } : {}),  // 🏦 Aggiungi accountId per update
       ...(amount !== undefined ? { amount } : {}),
       ...(note !== undefined ? { note } : {}),
       ...(payee !== undefined ? { payee } : {}),
@@ -347,7 +385,8 @@ export async function updatePlannedTransaction(userId, id, data) {
     },
     include: { 
       subcategory: true,
-      group: true
+      group: true,
+      account: true  // 🏦 Includi account per vedere il conto associato
     }
   })
 }
@@ -587,6 +626,40 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
   })
   if (!plannedTx) throw httpError(404, 'Planned transaction not found')
   
+  // 🛡️ PROTEZIONE: Verifica se la transazione è già stata materializzata oggi
+  const today = new Date()
+  const startOfToday = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()))
+  const endOfToday = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999))
+  // Usa la data odierna (inizio giornata) in UTC per evitare problemi di timezone
+  const transactionDate = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()))
+  
+  const existingToday = await prisma.transaction.findFirst({
+    where: {
+      userId,
+      main: plannedTx.main,
+      subId: plannedTx.subId,
+      amount: plannedTx.main.toUpperCase() === 'INCOME' 
+        ? Math.abs(plannedTx.amount) 
+        : -Math.abs(plannedTx.amount),
+      date: {
+        gte: startOfToday,
+        lte: endOfToday
+      },
+      note: {
+        contains: plannedTx.loanId ? 'Rata prestito' : (plannedTx.title || plannedTx.note?.substring(0, 20) || '')
+      }
+    }
+  })
+  
+  if (existingToday) {
+    console.log('⚠️ DUPLICATE PROTECTION: Transaction already materialized today:', {
+      plannedTxId,
+      existingTransactionId: existingToday.id,
+      date: existingToday.date
+    })
+    throw httpError(409, 'Questa transazione pianificata è già stata materializzata oggi')
+  }
+  
   // Se è una transazione collegata a un loan, registra il pagamento nel loan
   if (plannedTx.loanId) {
     const { payLoan } = await import('./loanService.js')
@@ -628,11 +701,8 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
       
       const paymentNumber = updatedLoan?.paidPayments || 'N/A'
       
-      // Crea la transazione reale con i dati del loan payment
-      // Usa la data odierna (inizio giornata) in UTC per evitare problemi di timezone
-      const today = new Date()
-      const transactionDate = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()))
-      console.log('📊 DEBUG: Creating transaction in register with date:', transactionDate, 'ISO:', transactionDate.toISOString())
+      // Crea la transazione reale con i dati del loan payment (usa transactionDate già definito)
+      console.log('📊 DEBUG: Creating loan transaction in register with date:', transactionDate, 'ISO:', transactionDate.toISOString())
       console.log('📅 DEBUG: Today is:', today.toISOString(), 'but using date:', transactionDate.toISOString())
       
       // 💰 CORREZIONE: Solo INCOME ha importo positivo, tutte le altre categorie sono negative
@@ -650,17 +720,28 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
         payee: plannedTx.payee
       })
       
-      const transaction = await prisma.transaction.create({
-        data: {
-          userId,
-          date: transactionDate,
-          amount: finalAmount, // Usa l'importo corretto
-          main: plannedTx.main,
-          subId: plannedTx.subId,
-          note: `Rata prestito #${paymentNumber} - ${plannedTx.title || 'Rata'} - Capitale: €${loanPaymentResult.payment.principalAmount?.toFixed(2) || '0.00'}, Interessi: €${loanPaymentResult.payment.interestAmount?.toFixed(2) || '0.00'}`,
-          payee: plannedTx.payee,
-        },
-        include: { subcategory: true }
+      // Crea la transazione e aggiorna il saldo in una transazione atomica
+      const transaction = await prisma.$transaction(async (tx) => {
+        // 1. Crea la transazione
+        const newTransaction = await tx.transaction.create({
+          data: {
+            userId,
+            date: transactionDate,
+            amount: finalAmount, // Usa l'importo corretto
+            main: plannedTx.main,
+            subId: plannedTx.subId,
+            accountId: plannedTx.accountId, // Usa il conto dalla planned transaction
+            note: `Rata prestito #${paymentNumber} - ${plannedTx.title || 'Rata'} - Capitale: €${loanPaymentResult.payment.principalAmount?.toFixed(2) || '0.00'}, Interessi: €${loanPaymentResult.payment.interestAmount?.toFixed(2) || '0.00'}`,
+            payee: plannedTx.payee,
+          },
+          include: { subcategory: true, account: true }
+        })
+        
+        // 2. NON aggiornare il saldo del conto per transazioni loan
+        // Il saldo è già stato aggiornato dalla funzione payLoan() chiamata sopra
+        console.log('💰 DEBUG: Skipping account balance update for loan transaction - already handled by payLoan()')
+        
+        return newTransaction
       })
       
       // Invalida cache saldo dopo creazione transazione da loan
@@ -725,10 +806,7 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
     }
   }
   
-  // Comportamento normale per transazioni non-loan
-  // Usa la data odierna (inizio giornata) in UTC per evitare problemi di timezone
-  const today = new Date()
-  const transactionDate = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()))
+  // Comportamento normale per transazioni non-loan (usa transactionDate già definito)
   console.log('📊 DEBUG: Creating non-loan transaction with date:', transactionDate, 'ISO:', transactionDate.toISOString())
   
   // 💰 CORREZIONE: Solo INCOME ha importo positivo, tutte le altre categorie sono negative
@@ -746,17 +824,29 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
     payee: plannedTx.payee
   })
   
-  const transaction = await prisma.transaction.create({
-    data: {
-      userId,
-      date: transactionDate,
-      amount: finalAmount,
-      main: plannedTx.main,
-      subId: plannedTx.subId,
-      note: plannedTx.note,
-      payee: plannedTx.payee,
-    },
-    include: { subcategory: true }
+  // Crea la transazione e aggiorna il saldo in una transazione atomica
+  const transaction = await prisma.$transaction(async (tx) => {
+    // 1. Crea la transazione
+    const newTransaction = await tx.transaction.create({
+      data: {
+        userId,
+        date: transactionDate,
+        amount: finalAmount,
+        main: plannedTx.main,
+        subId: plannedTx.subId,
+        accountId: plannedTx.accountId, // Usa il conto dalla planned transaction
+        note: plannedTx.note,
+        payee: plannedTx.payee,
+      },
+      include: { subcategory: true, account: true }
+    })
+    
+    // 2. Aggiorna il saldo del conto se presente
+    if (plannedTx.accountId) {
+      await updateAccountBalance(plannedTx.accountId, Math.abs(plannedTx.amount), plannedTx.main, { transaction: tx })
+    }
+    
+    return newTransaction
   })
   
   // Invalida cache saldo dopo creazione transazione pianificata
@@ -829,6 +919,8 @@ export function getNextOccurrences(startDate, frequency, count = 5) {
 export async function autoMaterializeDueTransactions() {
   const now = new Date()
   
+  console.log(`🎯 [AutoMaterialize] Controllo transazioni pianificate scadute alle ${now.toISOString()}`)
+  
   // Trova tutte le transazioni pianificate in scadenza con AUTO confirmation
   const dueTransactions = await prisma.plannedTransaction.findMany({
     where: {
@@ -840,6 +932,14 @@ export async function autoMaterializeDueTransactions() {
     },
     include: { subcategory: true }
   })
+  
+  console.log(`🔍 [AutoMaterialize] Trovate ${dueTransactions.length} transazioni automatiche scadute`)
+  
+  if (dueTransactions.length > 0) {
+    dueTransactions.forEach(tx => {
+      console.log(`  📅 ${tx.title || 'Untitled'} - Scadenza: ${tx.nextDueDate?.toISOString()} - User: ${tx.userId}`)
+    })
+  }
   
   const results = []
   

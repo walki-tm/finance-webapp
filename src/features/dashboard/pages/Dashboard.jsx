@@ -68,6 +68,7 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
     transactions, // Tutte le transazioni del periodo per DetailPanel
     budgets,
     budgetTotals,
+    miniBoxData, // ✅ Nuovi dati per mini box
     loading,
     refreshAllData
   } = useFilteredDashboardData(token, memoizedFilters)
@@ -81,99 +82,295 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
     setFilterMain(newFilterMain)
   }, [])
   
-  // 🔸 Calcolo proiezioni transazioni pianificate
+  // 🔥 OPTIMIZED: Safe projections calculation with loop protection
   const projectedData = useMemo(() => {
-    if (!filters || !plannedTransactions?.length) {
+    console.log('🔥 PROJECTIONS: Starting calculation with', plannedTransactions?.length || 0, 'transactions')
+    
+    // 🛡️ Early return if no data to prevent unnecessary calculations
+    if (!filters || !plannedTransactions?.length || !categoryChartData?.length) {
+      console.log('🛡️ PROJECTIONS: No data, returning basic chart data')
       return categoryChartData || []
     }
     
-    // Funzione per calcolare quante volte una transazione pianificata si verificherà nel periodo
-    const calculateOccurrences = (plannedTx, startDate, endDate) => {
-      const start = new Date(startDate)
-      const end = new Date(endDate)
-      let occurrences = 0
-      
-      // Parsing della frequenza (es: "MONTHLY", "WEEKLY", "YEARLY")
-      const frequency = plannedTx.frequency?.toUpperCase()
-      let currentDate = new Date(plannedTx.nextDueDate || plannedTx.startDate)
-      
-      while (currentDate <= end) {
-        if (currentDate >= start) {
-          occurrences++
+    try {
+      // 🔥 OPTIMIZED: Safe occurrence calculation with multiple protections
+      const calculateOccurrencesSafe = (plannedTx, startDate, endDate) => {
+        const start = new Date(startDate)
+        const end = new Date(endDate)
+        
+        // 🛡️ Protection 1: Invalid dates
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+          console.warn('⚠️ Invalid dates for projection:', { startDate, endDate })
+          return 0
         }
         
-        // Incrementa la data in base alla frequenza
-        switch (frequency) {
-          case 'DAILY':
-            currentDate.setDate(currentDate.getDate() + 1)
-            break
-          case 'WEEKLY':
-            currentDate.setDate(currentDate.getDate() + 7)
-            break
-          case 'MONTHLY':
-            currentDate.setMonth(currentDate.getMonth() + 1)
-            break
-          case 'YEARLY':
-            currentDate.setFullYear(currentDate.getFullYear() + 1)
-            break
-          default:
-            // Se la frequenza non è riconosciuta, considera una sola occorrenza
-            occurrences = currentDate >= start && currentDate <= end ? 1 : 0
-            break
+        // 🛡️ Protection 2: End date before start date
+        if (end <= start) {
+          console.warn('⚠️ End date before start date:', { start, end })
+          return 0
         }
         
-        // Protezione contro loop infiniti
-        if (occurrences > 1000) break
+        // 🛡️ Protection 3: Use fixed next_execution from singleton
+        let currentDate = plannedTx.next_execution 
+          ? new Date(plannedTx.next_execution)
+          : new Date(plannedTx.nextDueDate || plannedTx.startDate || start)
+        
+        if (isNaN(currentDate.getTime())) {
+          console.warn('⚠️ Invalid next_execution date:', plannedTx.next_execution)
+          return 0
+        }
+        
+        const frequency = plannedTx.frequency?.toUpperCase() || 'MONTHLY'
+        let occurrences = 0
+        let iterations = 0
+        const MAX_ITERATIONS = 1000 // 🛡️ Protection 4: Hard limit
+        
+        while (currentDate <= end && iterations < MAX_ITERATIONS) {
+          if (currentDate >= start) {
+            occurrences++
+          }
+          
+          // 🔥 OPTIMIZED: Safe date increment
+          try {
+            switch (frequency) {
+              case 'DAILY':
+                currentDate.setDate(currentDate.getDate() + 1)
+                break
+              case 'WEEKLY':
+                currentDate.setDate(currentDate.getDate() + 7)
+                break
+              case 'MONTHLY':
+                currentDate.setMonth(currentDate.getMonth() + 1)
+                break
+              case 'QUARTERLY':
+                currentDate.setMonth(currentDate.getMonth() + 3)
+                break
+              case 'SEMIANNUAL':
+                currentDate.setMonth(currentDate.getMonth() + 6)
+                break
+              case 'YEARLY':
+                currentDate.setFullYear(currentDate.getFullYear() + 1)
+                break
+              default:
+                // One-time or unknown frequency
+                occurrences = currentDate >= start && currentDate <= end ? 1 : 0
+                break
+            }
+          } catch (dateError) {
+            console.error('❌ Date calculation error:', dateError)
+            break
+          }
+          
+          iterations++
+          
+          // 🛡️ Protection 5: Reasonable occurrence limit
+          if (occurrences > 500) {
+            console.warn('⚠️ Too many occurrences, capping at 500')
+            occurrences = 500
+            break
+          }
+        }
+        
+        if (iterations >= MAX_ITERATIONS) {
+          console.warn('⚠️ Hit max iterations for transaction:', plannedTx.id)
+        }
+        
+        return occurrences
       }
       
-      return occurrences
-    }
-    
-    // Calcola le proiezioni per il periodo filtrato
-    let startDate, endDate
-    
-    if (filters.mode === 'month') {
-      const year = filters.pointer.getFullYear()
-      const month = filters.pointer.getMonth()
-      startDate = new Date(year, month, 1)
-      endDate = new Date(year, month + 1, 0)
-    } else if (filters.mode === 'year') {
-      const year = filters.pointer.getFullYear()
-      startDate = new Date(year, 0, 1)
-      endDate = new Date(year, 11, 31)
-    } else if (filters.rangeStart && filters.rangeEnd) {
-      startDate = new Date(filters.rangeStart)
-      endDate = new Date(filters.rangeEnd)
-    } else {
+      // 🔥 Calculate projections safely
+      const now = new Date()
+      let startDate, endDate
+      
+      // 🛡️ Safe date extraction from filters
+      if (filters.mode === 'month') {
+        const year = filters.pointer.getFullYear()
+        const month = filters.pointer.getMonth()
+        startDate = new Date(year, month, 1)
+        endDate = new Date(year, month + 1, 0)
+      } else if (filters.mode === 'year') {
+        const year = filters.pointer.getFullYear()
+        startDate = new Date(year, 0, 1)
+        endDate = new Date(year, 11, 31)
+      } else if (filters.rangeStart && filters.rangeEnd) {
+        startDate = new Date(filters.rangeStart)
+        endDate = new Date(filters.rangeEnd)
+      } else {
+        console.log('🛡️ No valid date range in filters')
+        return categoryChartData || []
+      }
+      
+      // 🛡️ Only future projections (from now onwards)
+      const futureStartDate = new Date(Math.max(startDate.getTime(), now.getTime()))
+      
+      // 🔥 Calculate projections per category
+      const projections = {}
+      
+      plannedTransactions.forEach((tx, index) => {
+        if (!tx.isActive) return // Skip inactive
+        
+        try {
+          const mainKey = tx.main?.toLowerCase() || 'expense'
+          const occurrences = calculateOccurrencesSafe(tx, futureStartDate, endDate)
+          const amount = parseFloat(tx.amount) || 0
+          const projectedAmount = amount * occurrences
+          
+          if (!projections[mainKey]) {
+            projections[mainKey] = 0
+          }
+          projections[mainKey] += projectedAmount
+          
+          if (index < 3) { // Debug first 3 transactions
+            console.log(`📈 Projection ${index + 1}:`, {
+              id: tx.id,
+              mainKey,
+              amount,
+              occurrences,
+              projectedAmount
+            })
+          }
+        } catch (txError) {
+          console.error('❌ Error processing transaction:', tx.id, txError)
+        }
+      })
+      
+      // 🔥 Combine real data with projections
+      const result = (categoryChartData || []).map(category => {
+        const projectedAmount = projections[category.key] || 0
+        return {
+          ...category,
+          projectedValue: projectedAmount,
+          totalWithProjections: Math.abs(category.value || 0) + Math.abs(projectedAmount)
+        }
+      })
+      
+      console.log('✅ PROJECTIONS: Calculation completed successfully for', result.length, 'categories')
+      return result
+      
+    } catch (error) {
+      console.error('❌ PROJECTIONS: Critical error, falling back to basic data:', error)
       return categoryChartData || []
     }
-    
-    // Calcola le proiezioni per categoria
-    const projections = {}
-    
-    plannedTransactions.forEach(tx => {
-      if (!tx.isActive) return // Skip transazioni inattive
-      
-      const mainKey = tx.main?.toLowerCase() || 'expense'
-      const occurrences = calculateOccurrences(tx, startDate, endDate)
-      const projectedAmount = (tx.amount || 0) * occurrences
-      
-      if (!projections[mainKey]) {
-        projections[mainKey] = 0
-      }
-      projections[mainKey] += projectedAmount
-    })
-    
-    // Combina dati reali con proiezioni
-    return (categoryChartData || []).map(category => {
-      const projectedAmount = projections[category.key] || 0
-      return {
-        ...category,
-        projectedValue: projectedAmount,
-        totalWithProjections: Math.abs(category.value) + Math.abs(projectedAmount)
-      }
-    })
   }, [categoryChartData, plannedTransactions, filters])
+  
+  // 🔥 OPTIMIZED: Safe planned expenses calculation
+  const plannedExpensesForPeriod = useMemo(() => {
+    console.log('🔥 PLANNED EXPENSES: Starting calculation')
+    
+    // 🛡️ Early return if no data
+    if (!filters || !plannedTransactions?.length) {
+      console.log('🛡️ PLANNED EXPENSES: No data, returning 0')
+      return 0
+    }
+    
+    try {
+      // 🔥 Calculate period safely
+      const now = new Date()
+      let startDate, endDate
+      
+      if (filters.mode === 'month') {
+        const year = filters.pointer.getFullYear()
+        const month = filters.pointer.getMonth()
+        startDate = new Date(year, month, 1)
+        endDate = new Date(year, month + 1, 0)
+      } else if (filters.mode === 'year') {
+        const year = filters.pointer.getFullYear()
+        startDate = new Date(year, 0, 1)
+        endDate = new Date(year, 11, 31)
+      } else if (filters.rangeStart && filters.rangeEnd) {
+        startDate = new Date(filters.rangeStart)
+        endDate = new Date(filters.rangeEnd)
+      } else {
+        return 0
+      }
+      
+      // 🛡️ Only future expenses (from now onwards)
+      const futureStartDate = new Date(Math.max(startDate.getTime(), now.getTime()))
+      
+      let totalPlannedExpenses = 0
+      let processedCount = 0
+      
+      plannedTransactions.forEach(tx => {
+        if (!tx.isActive || tx.main?.toLowerCase() === 'income') return // Skip income and inactive
+        
+        try {
+          // 🔥 Use fixed next_execution from singleton
+          let currentDate = tx.next_execution 
+            ? new Date(tx.next_execution)
+            : new Date(tx.nextDueDate || tx.startDate || futureStartDate)
+          
+          if (isNaN(currentDate.getTime())) {
+            console.warn('⚠️ Invalid date for expense calculation:', tx.id)
+            return
+          }
+          
+          const frequency = tx.frequency?.toUpperCase() || 'MONTHLY'
+          const amount = Math.abs(parseFloat(tx.amount) || 0)
+          let iterations = 0
+          const MAX_ITERATIONS = 500 // 🛡️ Safety limit
+          
+          while (currentDate <= endDate && iterations < MAX_ITERATIONS) {
+            if (currentDate >= futureStartDate) {
+              totalPlannedExpenses += amount
+            }
+            
+            // 🔥 Safe date increment
+            try {
+              switch (frequency) {
+                case 'DAILY':
+                  currentDate.setDate(currentDate.getDate() + 1)
+                  break
+                case 'WEEKLY':
+                  currentDate.setDate(currentDate.getDate() + 7)
+                  break
+                case 'MONTHLY':
+                  currentDate.setMonth(currentDate.getMonth() + 1)
+                  break
+                case 'QUARTERLY':
+                  currentDate.setMonth(currentDate.getMonth() + 3)
+                  break
+                case 'SEMIANNUAL':
+                  currentDate.setMonth(currentDate.getMonth() + 6)
+                  break
+                case 'YEARLY':
+                  currentDate.setFullYear(currentDate.getFullYear() + 1)
+                  break
+                default:
+                  // One-time
+                  if (currentDate >= futureStartDate && currentDate <= endDate) {
+                    totalPlannedExpenses += amount
+                  }
+                  break
+              }
+            } catch (dateError) {
+              console.error('❌ Date error in expenses calculation:', dateError)
+              break
+            }
+            
+            iterations++
+            
+            // 🛡️ Sanity check
+            if (totalPlannedExpenses > 1000000) {
+              console.warn('⚠️ Expenses calculation capped at 1M')
+              totalPlannedExpenses = 1000000
+              break
+            }
+          }
+          
+          processedCount++
+        } catch (txError) {
+          console.error('❌ Error processing expense transaction:', tx.id, txError)
+        }
+      })
+      
+      console.log('✅ PLANNED EXPENSES: Processed', processedCount, 'transactions, total:', totalPlannedExpenses)
+      return totalPlannedExpenses
+      
+    } catch (error) {
+      console.error('❌ PLANNED EXPENSES: Critical error, returning 0:', error)
+      return 0
+    }
+  }, [plannedTransactions, filters])
   
   
   
@@ -197,69 +394,62 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
             onFiltersChange={handleFiltersChange}
           />
           
-          {/* 🔸 Mini riepilogo in evidenza con icone - Versione compatta */}
+          {/* 🔸 Mini riepilogo in evidenza con icone - NUOVA LOGICA */}
           <div className="mt-3 p-4 bg-gradient-to-br from-slate-50/80 to-slate-100/60 dark:from-slate-800/80 dark:to-slate-700/60 rounded-xl border border-slate-200/30 dark:border-slate-700/30 backdrop-blur-sm">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {/* Totale Entrate */}
+              {/* ✅ Entrate CURRENT del periodo */}
               <div className="flex flex-col items-center space-y-1.5">
                 <div className="flex items-center justify-center w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30">
                   <span className="text-lg">💰</span>
                 </div>
                 <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
                   {(() => {
-                    const incomeValue = Math.abs(donutData.find(d => d.key === 'income')?.value || 0)
-                    return incomeValue === 0 ? '-' : `+${nice(incomeValue)}`
+                    const currentAccountIncome = miniBoxData?.currentAccountIncome || 0
+                    return currentAccountIncome === 0 ? '-' : `+${nice(currentAccountIncome)}`
                   })()}
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Entrate</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Entrate C/C</div>
               </div>
               
-              {/* Totale Spese */}
+              {/* ✅ Uscite del periodo */}
               <div className="flex flex-col items-center space-y-1.5">
                 <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30">
                   <span className="text-lg">💸</span>
                 </div>
                 <div className="text-xl font-bold text-red-500 dark:text-red-400">
                   {(() => {
-                    const expenseValue = Math.abs(donutData.filter(d => d.key !== 'income').reduce((sum, d) => sum + Math.abs(d.value || 0), 0))
-                    return expenseValue === 0 ? '-' : `-${nice(expenseValue)}`
+                    const totalExpenses = miniBoxData?.totalExpenses || 0
+                    return totalExpenses === 0 ? '-' : `-${nice(totalExpenses)}`
                   })()}
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Uscite</div>
               </div>
               
-              {/* Saldo Attuale */}
+              {/* ✅ Uscite Previste (future) */}
               <div className="flex flex-col items-center space-y-1.5">
-                <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                  balance >= 0 
-                    ? 'bg-slate-100 dark:bg-slate-800/50' 
-                    : 'bg-orange-100 dark:bg-orange-900/30'
-                }`}>
-                  <span className="text-lg">{balance >= 0 ? '⚖️' : '⚠️'}</span>
+                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30">
+                  <span className="text-lg">📅</span>
                 </div>
-                <div className={`text-xl font-bold ${
-                  balance >= 0 ? 'text-slate-700 dark:text-slate-300' : 'text-orange-600 dark:text-orange-400'
-                }`}>
-                  {nice(balance || 0)}
+                <div className="text-xl font-bold text-orange-600 dark:text-orange-400">
+                  {(() => {
+                    return plannedExpensesForPeriod === 0 ? '-' : `-${nice(plannedExpensesForPeriod)}`
+                  })()}
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Saldo</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Uscite Previste</div>
               </div>
               
-              {/* Saldo Previsto */}
+              {/* ✅ Saldo Previsto: Saldo - Uscite previste */}
               <div className="flex flex-col items-center space-y-1.5">
                 <div className="flex items-center justify-center w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30">
                   <span className="text-lg">🔮</span>
                 </div>
                 <div className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
                   {(() => {
-                    const projectedIncome = donutData.find(d => d.key === 'income')?.projectedValue || 0
-                    const projectedExpenses = donutData.filter(d => d.key !== 'income').reduce((sum, d) => sum + Math.abs(d.projectedValue || 0), 0)
-                    const projectedBalance = balance + projectedIncome - projectedExpenses
+                    const projectedBalance = (balance || 0) - plannedExpensesForPeriod
                     return nice(projectedBalance)
-                  })()
-                  }
+                  })()}
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Previsto</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Saldo Previsto</div>
               </div>
             </div>
           </div>
@@ -339,7 +529,7 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
                             // 🔸 Caso speciale: Account nuovo senza dati né budget
                             if (currentAmount === 0 && d.budget === 0 && projectedAmount === 0) {
                               return [
-                                { name: 'vuoto', value: 100, category: d.name, type: 'empty' }
+                                { name: 'vuoto', value: 1, category: d.name, type: 'empty' }
                               ]
                             }
                             
@@ -454,7 +644,11 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
                                     </span>
                                   </div>
                                   <div className="font-bold text-center" style={{ color: segment.type === 'excess' ? '#ef4444' : d.color }}>
-                                    {segment.type === 'excess' ? '+' : ''}{nice(segmentValue)}
+                                    {(() => {
+                                      // Per il caso vuoto, mostra sempre 0€ invece del valore interno
+                                      if (segment.type === 'empty') return '0€'
+                                      return `${segment.type === 'excess' ? '+' : ''}${nice(segmentValue)}`
+                                    })()}
                                   </div>
                                   
                                   {/* Linea di connessione dal tooltip al segmento */}

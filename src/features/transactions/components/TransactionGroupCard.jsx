@@ -291,8 +291,8 @@ export default function TransactionGroupCard({
                                   onClick: () => onApplyToBudgeting && onApplyToBudgeting(tx),
                                   variant: tx.appliedToBudget ? 'warning' : 'default'
                                 }] : []),
-                                // 2. Paga (per transazioni NON-mensili o mensili da prestiti)
-                                ...(tx.isActive && (tx.frequency !== 'MONTHLY' || tx.loanId) ? [{
+                                // 2. Paga (per TUTTE le transazioni scadute e attive)
+                                ...(tx.isActive && daysUntil <= 0 ? [{
                                   label: '💰 Paga',
                                   onClick: () => onMaterialize && onMaterialize(tx.id),
                                   variant: 'default'

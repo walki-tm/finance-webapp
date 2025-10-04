@@ -19,7 +19,7 @@
 import { autoMaterializeDueTransactions } from './plannedTransactionService.js'
 
 let schedulerInterval = null
-const SCHEDULER_INTERVAL = 60 * 60 * 1000 // 1 ora in millisecondi
+const SCHEDULER_INTERVAL = 10 * 60 * 1000 // 10 minuti in millisecondi (ridotto per sviluppo)
 
 /**
  * 🎯 SERVICE: Avvia scheduler automatico
@@ -106,20 +106,19 @@ export async function runManualMaterialization() {
   return await runScheduledMaterialization()
 }
 
-// Avvia automaticamente lo scheduler se in produzione
-if (process.env.NODE_ENV === 'production') {
-  startScheduler()
-  
-  // Gestisci shutdown graceful
-  process.on('SIGINT', () => {
-    console.log('[Scheduler] Ricevuto SIGINT, fermando scheduler...')
-    stopScheduler()
-    process.exit(0)
-  })
-  
-  process.on('SIGTERM', () => {
-    console.log('[Scheduler] Ricevuto SIGTERM, fermando scheduler...')
-    stopScheduler()
-    process.exit(0)
-  })
-}
+// 🎯 AVVIA AUTOMATICAMENTE LO SCHEDULER SEMPRE (sviluppo e produzione)
+console.log('[Scheduler] 🚀 Initializing automatic scheduler for planned transactions...')
+startScheduler()
+
+// Gestisci shutdown graceful
+process.on('SIGINT', () => {
+  console.log('[Scheduler] Ricevuto SIGINT, fermando scheduler...')
+  stopScheduler()
+  process.exit(0)
+})
+
+process.on('SIGTERM', () => {
+  console.log('[Scheduler] Ricevuto SIGTERM, fermando scheduler...')
+  stopScheduler()
+  process.exit(0)
+})

@@ -123,6 +123,7 @@ export async function createLoanPaymentPlan(userId, loan) {
       title,
       main: category.main,
       subId: category.subId,
+      accountId: loan.accountId, // 🏦 Account associato al prestito per le rate
       amount: parseFloat(loan.monthlyPayment),
       note: `Rate automatiche per ${loan.name} presso ${loan.lenderName}`,
       payee: loan.lenderName,
@@ -137,6 +138,7 @@ export async function createLoanPaymentPlan(userId, loan) {
     console.log('🏦 DEBUG: Creating planned transaction for loan:', loan.id)
     console.log('📅 Start date:', nextPaymentDate, 'ISO:', nextPaymentDate.toISOString())
     console.log('💰 Monthly payment amount:', parseFloat(loan.monthlyPayment))
+    console.log('🏦 Account ID:', loan.accountId)
     console.log('🔄 Frequency: MONTHLY')
     console.log('⚡ Confirmation mode: AUTOMATIC')
 
@@ -192,6 +194,11 @@ export async function updateLoanPaymentPlan(userId, loan, changes) {
       const category = getLoanPaymentCategory(loan)
       updates.main = category.main
       updates.subId = category.subId
+    }
+
+    // Se è cambiato l'account associato, aggiorna
+    if (changes.accountId !== undefined) {
+      updates.accountId = loan.accountId
     }
 
     // Se è cambiata la frequenza di pagamento

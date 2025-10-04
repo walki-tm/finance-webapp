@@ -28,6 +28,7 @@ import {
   syncLoanWithPaymentPlan
 } from './loanBudgetingService.js'
 import { invalidateBalanceCache } from './balanceService.js'
+import { updateAccountBalance } from './accountBalanceService.js'
 
 const prisma = new PrismaClient()
 
@@ -145,6 +146,7 @@ async function createLoan(userId, loanData) {
     notes,
     categoryMain,
     subcategoryId,
+    accountId, // 🏦 Account associato al prestito
     autoCreatePayments
   } = loanData
 
@@ -181,6 +183,7 @@ async function createLoan(userId, loanData) {
           notes,
           categoryMain,
           subcategoryId,
+          accountId, // 🏦 Account associato al prestito
           status: 'ACTIVE',
           autoCreatePayments
         }
@@ -473,7 +476,18 @@ async function payLoan(userId, loanId, paymentData = {}) {
         }
       })
 
-      // 6️⃣ Aggiorna anche la planned transaction collegata
+      // 6️⃣ Aggiorna saldo del conto se associato al prestito
+      if (loan.accountId) {
+        await updateAccountBalance(
+          loan.accountId,
+          paidAmount,
+          'expense', // Il pagamento di un prestito è sempre un'uscita
+          { transaction: tx }
+        )
+        console.log(`✅ Account balance updated for loan payment: -€${paidAmount}`)
+      }
+
+      // 7️⃣ Aggiorna anche la planned transaction collegata
       if (payment.newBalance > 0.01) {
         await tx.plannedTransaction.updateMany({
           where: { loanId, userId },
@@ -666,6 +680,7 @@ async function payoffLoan(userId, loanId, payoffData = {}) {
           data: {
             userId,
             subId: loan.subcategory.id,
+            accountId: loan.accountId, // Collega al conto del prestito se esiste
             amount: totalAmount,
             date: payoffDate,
             note: payoffData.notes || `Estinzione ${isTotal ? 'totale' : 'parziale'} - ${loan.name}`,
@@ -678,12 +693,24 @@ async function payoffLoan(userId, loanId, payoffData = {}) {
           data: {
             userId,
             subId: null, // Nessuna sottocategoria
+            accountId: loan.accountId, // Collega al conto del prestito se esiste
             amount: totalAmount,
             date: payoffDate,
             note: payoffData.notes || `Estinzione ${isTotal ? 'totale' : 'parziale'} - ${loan.name}`,
             main: loan.categoryMain
           }
         })
+      }
+      
+      // 6️⃣.1 Aggiorna saldo del conto se associato al prestito e se è stata creata una transazione
+      if (transaction && loan.accountId) {
+        await updateAccountBalance(
+          loan.accountId,
+          totalAmount,
+          transaction.main, // Usa la categoria della transazione creata
+          { transaction: tx }
+        )
+        console.log(`✅ Account balance updated for loan payoff: ${transaction.main === 'income' ? '+' : '-'}€${totalAmount}`)
       }
       
       // Invalida cache saldo se è stata creata una transazione
@@ -890,6 +917,7 @@ async function updateLoan(userId, loanId, updateData) {
       'notes',
       'categoryMain',
       'subcategoryId',
+      'accountId', // 🏦 Account associato al prestito
       'autoCreatePayments'
     ]
 

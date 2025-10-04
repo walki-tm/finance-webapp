@@ -48,6 +48,21 @@ router.post('/:id/materialize', materializePlannedTransaction)
 router.get('/due', getPlannedTransactionsDue)
 router.get('/upcoming', getUpcomingPlannedTransactions)
 
+// 🔸 Route per materializzazione automatica manuale (admin/testing)
+router.post('/auto-materialize-today', async (req, res, next) => {
+  try {
+    const { runManualMaterialization } = await import('../services/schedulerService.js')
+    console.log('🎯 Manual auto-materialization triggered via API')
+    await runManualMaterialization()
+    res.json({ 
+      message: 'Auto-materialization executed successfully',
+      timestamp: new Date().toISOString()
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
 // 🔸 Routes per spostamento tra gruppi
 router.patch('/:id/move', movePlannedTransaction)
 

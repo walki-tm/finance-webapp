@@ -57,6 +57,7 @@ const createLoanSchema = z.object({
   notes: z.string().max(1000).optional(),
   categoryMain: z.string().max(32).optional(),
   subcategoryId: z.string().optional(),
+  accountId: z.string().optional(), // 🏦 Account associato al prestito
   autoCreatePayments: z.boolean().default(true)
 })
 
@@ -74,7 +75,8 @@ const updateLoanSchema = z.object({
   description: z.string().max(500).optional(),
   notes: z.string().max(1000).optional(),
   categoryMain: z.string().max(32).optional(),
-  subcategoryId: z.string().optional()
+  subcategoryId: z.string().optional(),
+  accountId: z.string().optional() // 🏦 Account associato al prestito
 })
 
 const simulatePayoffSchema = z.object({

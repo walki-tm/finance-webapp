@@ -24,6 +24,7 @@ model User {
   loans               Loan[]
   savingsGoals        SavingsGoal[]
   goalTransactions    GoalTransaction[]
+  accounts            Account[]
 }
 
 model Category {
@@ -99,6 +100,7 @@ model Transaction {
   amount    Decimal  @db.Decimal(20, 2)
   main      String   @db.VarChar(32) // deve combaciare con la MAIN della Category usata
   subId     String?
+  accountId String?  // collegamento al conto di origine/destinazione
   note      String?
   payee     String?
   createdAt DateTime @default(now())
@@ -109,10 +111,13 @@ model Transaction {
   // quando una Subcategory viene cancellata, vogliamo mantenere la Transaction
   // e semplicemente azzerare il riferimento
   subcategory Subcategory? @relation(fields: [subId], references: [id], onDelete: SetNull)
+  // collegamento al conto (opzionale per backward compatibility)
+  account Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
   @@index([userId, date])
   @@index([userId, main])
   @@index([subId])
+  @@index([accountId])
 }
 
 // Gruppo per organizzare transazioni pianificate
@@ -140,10 +145,11 @@ model PlannedTransaction {
   groupId         String?  // collegamento al gruppo opzionale
   main            String   @db.VarChar(32) // categoria principale
   subId           String?  // sottocategoria
+  accountId       String?  // collegamento al conto per la transazione pianificata
   amount          Decimal  @db.Decimal(20, 2)
   note            String?
   payee           String?
-  frequency       String   // MONTHLY, YEARLY, ONE_TIME
+  frequency       String   // WEEKLY, MONTHLY, QUARTERLY, SEMIANNUAL, YEARLY, ONE_TIME
   startDate       DateTime // data di inizio
   confirmationMode String   @default("MANUAL") // MANUAL, AUTOMATIC
   nextDueDate     DateTime // prossima data di scadenza
@@ -158,11 +164,13 @@ model PlannedTransaction {
   User    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   group   TransactionGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   subcategory Subcategory?  @relation(fields: [subId], references: [id], onDelete: SetNull)
+  account Account?          @relation(fields: [accountId], references: [id], onDelete: SetNull)
   loan    Loan?             @relation(fields: [loanId], references: [id], onDelete: SetNull)
 
   @@index([userId, nextDueDate])
   @@index([userId, frequency])
   @@index([groupId])
+  @@index([accountId])
   @@index([loanId])
 }
 
@@ -205,6 +213,7 @@ model Loan {
   // 🏷️ Categorizzazione
   categoryMain       String?  @db.VarChar(32) // categoria principale per budgeting
   subcategoryId      String?  // sottocategoria specifica
+  accountId          String?  // conto dal quale vengono prelevate le rate
   
   // ⚙️ Stati e configurazione
   status             String   @default("ACTIVE") // ACTIVE, PAID_OFF, SUSPENDED, DEFAULTED
@@ -217,6 +226,7 @@ model Loan {
   // 🔗 Relazioni
   User         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   subcategory  Subcategory?        @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
+  account      Account?            @relation(fields: [accountId], references: [id], onDelete: SetNull)
   transactions LoanTransaction[]   // solo le transazioni effettivamente pagate
   plannedTransactions PlannedTransaction[] // planned transaction ricorrente per le rate
 
@@ -225,6 +235,7 @@ model Loan {
   @@index([userId, loanType])
   @@index([userId, nextPaymentDate])
   @@index([subcategoryId])
+  @@index([accountId])
 }
 
 // 💳 Transazioni effettive del prestito (solo pagamenti avvenuti)
@@ -329,8 +340,71 @@ model GoalTransaction {
   User         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   goal         SavingsGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
 
-  // 📈 Indici per performance
+// 📈 Indici per performance
   @@index([userId, goalId])
   @@index([goalId, createdAt])
   @@index([transactionId])
+}
+
+// =============================================================================
+// 💳 SISTEMA CONTI/ACCOUNTS
+// =============================================================================
+
+// 💳 Tipi di conto disponibili
+enum AccountType {
+  CURRENT      // Conto Corrente
+  INVESTMENTS  // Investimenti
+  SAVINGS      // Risparmio
+  POCKET       // Pocket
+}
+
+// 🏦 Conti utente per gestione multi-account
+model Account {
+  id          String      @id @default(cuid())
+  userId      String
+  name        String      // nome del conto (es: "Unicredit", "Intesa San Paolo")
+  accountType AccountType // tipo di conto con icona automatica
+  balance     Decimal     @db.Decimal(20, 2) @default(0) // saldo attuale del conto
+  colorHex    String      // colore personalizzato per visualizzazione (es: "#3B82F6")
+  
+  // 🕒 Audit
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // 🔗 Relazioni
+  User         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[] // transazioni collegate a questo conto
+  plannedTransactions PlannedTransaction[] // transazioni pianificate per questo conto
+  loans        Loan[]        // prestiti associati a questo conto
+  fromTransfers Transfer[] @relation("FromAccount") // trasferimenti in uscita
+  toTransfers   Transfer[] @relation("ToAccount")   // trasferimenti in entrata
+
+  // 📈 Indici per performance
+  @@index([userId, accountType])
+  @@index([userId, createdAt])
+  @@unique([userId, name]) // nome conto unico per utente
+}
+
+// 🔄 Trasferimenti tra conti
+model Transfer {
+  id            String   @id @default(cuid())
+  userId        String
+  fromAccountId String   // conto di origine
+  toAccountId   String   // conto di destinazione
+  amount        Decimal  @db.Decimal(20, 2) // importo trasferito
+  note          String?  // note opzionali
+  date          DateTime // data del trasferimento
+  
+  // 🕒 Audit
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 🔗 Relazioni
+  fromAccount Account @relation("FromAccount", fields: [fromAccountId], references: [id], onDelete: Cascade)
+  toAccount   Account @relation("ToAccount", fields: [toAccountId], references: [id], onDelete: Cascade)
+
+  // 📈 Indici per performance
+  @@index([userId, date])
+  @@index([fromAccountId])
+  @@index([toAccountId])
 }

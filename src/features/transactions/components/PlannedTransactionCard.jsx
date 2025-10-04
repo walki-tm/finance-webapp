@@ -199,8 +199,8 @@ export default function PlannedTransactionCard({
             } ${dueDateColors.textOpacity}`}>
               €{Math.abs(Number(transaction.amount)).toFixed(2)}
             </span>
-            {/* Action button compatto se necessario - Solo per transazioni MANUAL */}
-            {isDue && transaction.isActive && transaction.confirmationMode === 'MANUAL' && (
+            {/* Bottone Paga per TUTTE le transazioni scadute e attive */}
+            {isDue && transaction.isActive && (
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -208,15 +208,8 @@ export default function PlannedTransactionCard({
                 }}
                 className="px-2 py-1 rounded-md text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-colors flex-shrink-0"
               >
-                ✓ Conferma
+                💰 Paga
               </button>
-            )}
-            {/* Indicatore per transazioni automatiche scadute */}
-            {isDue && transaction.isActive && transaction.confirmationMode === 'AUTOMATIC' && (
-              <div className="px-2 py-1 rounded-md text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 flex items-center gap-1 flex-shrink-0">
-                <span className="animate-pulse">🤖</span>
-                <span>Auto-pagamento</span>
-              </div>
             )}
           </div>
 
@@ -279,8 +272,8 @@ export default function PlannedTransactionCard({
                     onClick: () => onApplyToBudgeting && onApplyToBudgeting(transaction),
                     variant: transaction.appliedToBudget ? 'warning' : 'default'
                   }] : []),
-                  // 2. Paga (per transazioni NON-mensili o mensili da prestiti)
-                  ...(transaction.isActive && (transaction.frequency !== 'MONTHLY' || transaction.loanId) ? [{
+                  // 2. Paga (per TUTTE le transazioni scadute e attive)
+                  ...(transaction.isActive && isDue ? [{
                     label: '💰 Paga',
                     onClick: () => onMaterialize(),
                     variant: 'default'
@@ -365,6 +358,12 @@ export default function PlannedTransactionCard({
                       <div className="flex justify-between">
                         <span className="text-slate-500">Beneficiario:</span>
                         <span className="font-medium text-slate-700 dark:text-slate-300">{transaction.payee}</span>
+                      </div>
+                    )}
+                    {transaction.account && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Conto:</span>
+                        <span className="font-medium text-slate-700 dark:text-slate-300">{transaction.account.name}</span>
                       </div>
                     )}
                   </div>

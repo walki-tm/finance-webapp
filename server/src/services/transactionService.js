@@ -1,5 +1,11 @@
 import { prisma } from '../lib/prisma.js'
 import { invalidateBalanceCache } from './balanceService.js'
+import { 
+  updateAccountBalance,
+  handleTransactionUpdate,
+  revertAccountBalance 
+} from './accountBalanceService.js'
+import { createTransfer } from './transferService.js'
 
 function httpError(status, message) {
   const err = new Error(message)
@@ -19,6 +25,9 @@ export async function listTransactions(userId, query) {
   console.log('  - ToDate:', toDate)
   console.log('  - Limit:', limit)
   
+  // Prepara filtri data per entrambe le query
+  let dateFilter = {}
+  
   // Priorità: se ci sono fromDate/toDate, usa quelli (per range custom e settimane)
   if (fromDate && toDate) {
     const from = new Date(fromDate)
@@ -26,7 +35,8 @@ export async function listTransactions(userId, query) {
     // Assicurati che 'to' includa l'intera giornata
     to.setHours(23, 59, 59, 999)
     
-    where.date = { gte: from, lte: to }
+    dateFilter = { gte: from, lte: to }
+    where.date = dateFilter
     
     console.log('🔍 Using date range filter:')
     console.log('  - From:', from.toISOString())
@@ -38,31 +48,81 @@ export async function listTransactions(userId, query) {
     const m = Number(month) - 1
     const from = new Date(Date.UTC(y, m, 1))
     const to = new Date(Date.UTC(y, m + 1, 1))
-    where.date = { gte: from, lt: to }
+    dateFilter = { gte: from, lt: to }
+    where.date = dateFilter
     
     console.log('🔍 Using year/month filter:')
     console.log('  - Year:', y, 'Month:', m + 1)
     console.log('  - From:', from.toISOString())
     console.log('  - To:', to.toISOString())
   }
-  const results = await prisma.transaction.findMany({
+  
+  // 1. Recupera le transazioni normali
+  const transactions = await prisma.transaction.findMany({
     where,
     orderBy: { date: 'desc' },
     take: Number(limit),
-    include: { subcategory: true }
+    include: { 
+      subcategory: true,
+      account: true
+    }
   })
   
-  // 🔍 DEBUG: Log risultati query
-  if (year && month) {
-    console.log('🔍 Query results:')
-    console.log('  - Found', results.length, 'transactions')
-    if (results.length > 0) {
-      console.log('  - First transaction date:', results[0]?.date?.toISOString())
-      console.log('  - Last transaction date:', results[results.length - 1]?.date?.toISOString())
-    }
+  // 2. Recupera i trasferimenti nello stesso periodo
+  const transferWhere = { userId }
+  if (Object.keys(dateFilter).length > 0) {
+    transferWhere.date = dateFilter
   }
   
-  return results
+  const transfers = await prisma.transfer.findMany({
+    where: transferWhere,
+    orderBy: { date: 'desc' },
+    take: Number(limit),
+    include: {
+      fromAccount: true,
+      toAccount: true
+    }
+  })
+  
+  // 3. Converte i trasferimenti in formato compatibile con le transazioni
+  const formattedTransfers = transfers.map(transfer => ({
+    id: `transfer-${transfer.id}`, // Prefisso per distinguere dai veri ID transazione
+    userId: transfer.userId,
+    date: transfer.date,
+    amount: -Math.abs(Number(transfer.amount)), // Sempre negativo (uscita dal conto di origine)
+    main: 'TRANSFER',
+    subId: null,
+    accountId: transfer.fromAccountId,
+    note: transfer.note,
+    payee: `${transfer.fromAccount.name} → ${transfer.toAccount.name}`, // Formato richiesto
+    createdAt: transfer.createdAt,
+    updatedAt: transfer.updatedAt,
+    // Dati specifici per trasferimenti
+    isTransfer: true,
+    fromAccount: transfer.fromAccount,
+    toAccount: transfer.toAccount,
+    originalTransferId: transfer.id,
+    // Subcategory fittizia per compatibilità
+    subcategory: {
+      id: 'transfer',
+      name: 'Trasferimento',
+      userId: transfer.userId
+    },
+    account: transfer.fromAccount
+  }))
+  
+  // 4. Unisce transazioni e trasferimenti, ordina per data
+  const allResults = [...transactions, ...formattedTransfers]
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, Number(limit)) // Applica il limite finale
+  
+  // 🔍 DEBUG: Log risultati query
+  console.log('🔍 Query results:')
+  console.log('  - Found', transactions.length, 'transactions')
+  console.log('  - Found', transfers.length, 'transfers')
+  console.log('  - Total combined:', allResults.length, 'items')
+  
+  return allResults
 }
 
 async function resolveSubId(userId, subId, subName) {
@@ -81,57 +141,165 @@ async function resolveSubId(userId, subId, subName) {
 }
 
 export async function createTransaction(userId, data) {
-  const { date, amount, main, subId, subName, note, payee } = data
-  const finalSubId = await resolveSubId(userId, subId, subName)
-  const transaction = await prisma.transaction.create({
-    data: {
-      userId,
-      date: new Date(date),
+  const { date, amount, main, subId, subName, accountId, destinationAccountId, note, payee } = data
+  
+  console.log(`🚀 DEBUG createTransaction called:`)
+  console.log(`  - userId: ${userId}`)
+  console.log(`  - data:`, data)
+  console.log(`  - main category: "${main}"`)
+  console.log(`  - accountId: ${accountId}`)
+  console.log(`  - amount: ${amount}`)
+  
+  // Se è un trasferimento, delega al transferService
+  if (main === 'TRANSFER' && accountId && destinationAccountId) {
+    console.log(`➡️ Delegating transfer to transferService`)
+    const transferData = {
+      date,
       amount,
-      main,
-      subId: finalSubId,
-      note: note || null,
-      payee: payee || null
-    },
-    include: { subcategory: true }
+      fromAccountId: accountId,
+      toAccountId: destinationAccountId,
+      note
+    }
+    return await createTransfer(userId, transferData)
+  }
+  
+  const finalSubId = await resolveSubId(userId, subId, subName)
+  
+  // Valida accountId se fornito
+  if (accountId) {
+    const accountExists = await prisma.account.findFirst({ 
+      where: { id: accountId, userId } 
+    })
+    if (!accountExists) throw httpError(400, 'Invalid accountId')
+  }
+  
+  // Crea la transazione e aggiorna il saldo in una transazione atomica
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Crea la transazione (solo per transazioni normali, i trasferimenti sono gestiti separatamente)
+    const transaction = await tx.transaction.create({
+      data: {
+        userId,
+        date: new Date(date),
+        amount,
+        main,
+        subId: finalSubId,
+        accountId: accountId || null,
+        note: note || null,
+        payee: payee || null
+      },
+      include: { 
+        subcategory: true,
+        account: true
+      }
+    })
+    
+    // 2. Aggiorna il saldo del conto per transazioni normali
+    if (accountId) {
+      await updateAccountBalance(accountId, amount, main, { transaction: tx })
+    }
+    
+    return transaction
   })
   
   // Invalida cache saldo dopo creazione
   invalidateBalanceCache(userId)
   
-  return transaction
+  return result
 }
 
 export async function updateTransaction(userId, id, data) {
+  // 🔍 Controlla se è un trasferimento (ID con prefisso "transfer-")
+  if (id.startsWith('transfer-')) {
+    const transferId = id.replace('transfer-', '')
+    const { updateTransfer } = await import('./transferService.js')
+    return await updateTransfer(userId, transferId, data)
+  }
+  
+  // Gestione normale per transazioni
   const exists = await prisma.transaction.findFirst({ where: { id, userId } })
   if (!exists) throw httpError(404, 'Not found')
 
-  let { date, amount, main, subId, subName, note, payee } = data
+  let { date, amount, main, subId, subName, accountId, destinationAccountId, note, payee } = data
   const finalSubId = await resolveSubId(userId, subId, subName)
-
-  const transaction = await prisma.transaction.update({
-    where: { id },
-    data: {
-      ...(date ? { date: new Date(date) } : {}),
-      ...(typeof amount === 'number' ? { amount } : {}),
-      ...(main ? { main } : {}),
-      ...(finalSubId !== undefined ? { subId: finalSubId } : {}),
-      ...(note !== undefined ? { note } : {}),
-      ...(payee !== undefined ? { payee } : {}),
-    },
-    include: { subcategory: true }
+  
+  // Valida accountId se fornito
+  if (accountId !== undefined && accountId !== null) {
+    const accountExists = await prisma.account.findFirst({ 
+      where: { id: accountId, userId } 
+    })
+    if (!accountExists) throw httpError(400, 'Invalid accountId')
+  }
+  
+  // Prepara i dati della nuova transazione (solo campi validi del modello Transaction)
+  const newTransactionData = {
+    ...(date ? { date: date instanceof Date ? date : new Date(date) } : {}),
+    ...(typeof amount === 'number' ? { amount } : {}),
+    ...(main ? { main } : {}),
+    ...(finalSubId !== undefined ? { subId: finalSubId } : {}),
+    ...(accountId !== undefined ? { accountId } : {}),
+    ...(note !== undefined ? { note } : {}),
+    ...(payee !== undefined ? { payee } : {}),
+  }
+  
+  // Aggiorna la transazione e i saldi in una transazione atomica
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Gestisce l'aggiornamento dei saldi (reverte vecchio + applica nuovo)
+    const oldData = {
+      accountId: exists.accountId,
+      amount: exists.amount,
+      main: exists.main
+    }
+    
+    const newData = {
+      accountId: accountId !== undefined ? accountId : exists.accountId,
+      amount: typeof amount === 'number' ? amount : exists.amount,
+      main: main || exists.main
+    }
+    
+    await handleTransactionUpdate(oldData, newData, { transaction: tx })
+    
+    // 2. Aggiorna la transazione
+    const transaction = await tx.transaction.update({
+      where: { id },
+      data: newTransactionData,
+      include: { 
+        subcategory: true,
+        account: true
+      }
+    })
+    
+    return transaction
   })
   
   // Invalida cache saldo dopo modifica
   invalidateBalanceCache(userId)
   
-  return transaction
+  return result
 }
 
 export async function deleteTransaction(userId, id) {
+  // 🔍 Controlla se è un trasferimento (ID con prefisso "transfer-")
+  if (id.startsWith('transfer-')) {
+    const transferId = id.replace('transfer-', '')
+    const { deleteTransfer } = await import('./transferService.js')
+    return await deleteTransfer(userId, transferId)
+  }
+  
+  // Gestione normale per transazioni
   const tx = await prisma.transaction.findFirst({ where: { id, userId } })
   if (!tx) throw httpError(404, 'Not found')
-  await prisma.transaction.delete({ where: { id } })
+  
+  // Elimina la transazione e reverte il saldo in una transazione atomica
+  await prisma.$transaction(async (txClient) => {
+    // 1. Reverte il saldo del conto se esiste
+    // Nota: I trasferimenti vengono gestiti tramite il modello Transfer separato
+    if (tx.accountId) {
+      await revertAccountBalance(tx.accountId, tx.amount, tx.main, { transaction: txClient })
+    }
+    
+    // 2. Elimina la transazione
+    await txClient.transaction.delete({ where: { id } })
+  })
   
   // Invalida cache saldo dopo cancellazione
   invalidateBalanceCache(userId)

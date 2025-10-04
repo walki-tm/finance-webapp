@@ -96,22 +96,20 @@ function AppContent() {
   // 🔸 Wrapper functions che includono refresh per sincronizzazione
   const delTx = useCallback(async (id) => {
     await originalDelTx(id);
-    // Force refresh dopo delete
-    setTimeout(() => {
-      refreshTransactions();
-      // Notifica componenti locali del cambiamento
-      window.dispatchEvent(new CustomEvent('transactionRefresh'));
-    }, 100);
+    // 🔧 TEMPORARY FIX: Disabilitato auto-refresh per evitare loop infinito
+    // setTimeout(() => {
+    //   refreshTransactions();
+    //   window.dispatchEvent(new CustomEvent('transactionRefresh'));
+    // }, 100);
   }, [originalDelTx, refreshTransactions]);
   
   const saveTx = useCallback(async (payload) => {
     await originalSaveTx(payload);
-    // Force refresh dopo save
-    setTimeout(() => {
-      refreshTransactions();
-      // Notifica componenti locali del cambiamento
-      window.dispatchEvent(new CustomEvent('transactionRefresh'));
-    }, 100);
+    // 🔧 TEMPORARY FIX: Disabilitato auto-refresh per evitare loop infinito
+    // setTimeout(() => {
+    //   refreshTransactions();
+    //   window.dispatchEvent(new CustomEvent('transactionRefresh'));
+    // }, 100);
   }, [originalSaveTx, refreshTransactions]);
 
 
@@ -171,6 +169,10 @@ function AppContent() {
       upsertBudget,
       batchUpsertBudgets,
       isManagedAutomatically,
+    },
+    accounts: {
+      // AccountsPage richiede solo token per funzionare
+      token,
     },
     loans: {
       // LoansPage gestisce il suo stato internamente via useLoans hook

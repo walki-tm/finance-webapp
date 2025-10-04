@@ -1,9 +1,12 @@
 // src/features/transactions/components/TransactionModal.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { X, AlertCircle, StickyNote, ChevronDown, TrendingUp, ShoppingCart, CreditCard, PiggyBank } from 'lucide-react';
+import { X, AlertCircle, StickyNote, ChevronDown, TrendingUp, ShoppingCart, CreditCard, PiggyBank, ArrowUpCircle, ArrowDownCircle, ArrowRightLeft } from 'lucide-react';
 import { MAIN_CATS } from '../../../lib/constants.js';
 import SvgIcon from '../../icons/components/SvgIcon.jsx';
 import { formatDateForAPI, getTodayDate } from '../../../lib/dateUtils.js';
+import { getAccountIcon } from '../../../lib/accountIcons.js';
+import { useAccounts } from '../../accounts';
+import { useAuth } from '../../../context/AuthContext';
 
 /* ===== utils ===== */
 function hexToRgba(hex, a = 1) {
@@ -50,7 +53,7 @@ const CORE_MAIN_ICONS = {
 };
 
 /* ===== CategorySelect: mostra anche icone + rispetta 'enabled' ===== */
-function CategorySelect({ value, onChange, mains = [] }) {
+const CategorySelect = React.memo(({ value, onChange, mains = [] }) => {
   const dark = isDark();
 
   // pool = merge passato dal parent, altrimenti MAIN_CATS
@@ -67,11 +70,11 @@ function CategorySelect({ value, onChange, mains = [] }) {
   const { open, setOpen, ref } = useDropdown();
   const mainColor = selected.color;
 
-  const badgeStyle = {
-    backgroundColor: hexToRgba(mainColor, dark ? 0.24 : 0.18),
-    color: mainColor,
-    border: `1px solid ${hexToRgba(mainColor, 0.55)}`
-  };
+  // Memoizza stili per evitare ricreazione
+  const buttonStyle = useMemo(() => ({
+    borderColor: hexToRgba(mainColor, 0.55),
+    backgroundColor: hexToRgba(mainColor, dark ? 0.16 : 0.12)
+  }), [mainColor, dark]);
 
   // se la main corrente sparisce dai visibili, spostati sulla prima disponibile
   useEffect(() => {
@@ -79,21 +82,24 @@ function CategorySelect({ value, onChange, mains = [] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [LIST.map(c => `${c.key}:${c.enabled !== false}`).join('|')]);
 
-  const RenderMainChip = ({ m }) => {
-    // Niente icone per le categorie main: solo testo con stile
+  const RenderMainChip = React.memo(({ m }) => {
+    const chipStyle = useMemo(() => ({
+      backgroundColor: hexToRgba(m.color, dark ? 0.24 : 0.18),
+      color: m.color,
+      border: `1px solid ${hexToRgba(m.color, 0.55)}`
+    }), [m.color, dark]);
+    
     return (
       <span
         className="inline-flex items-center gap-1.5 font-bold uppercase tracking-wide px-2 py-1 rounded-lg"
-        style={{
-          backgroundColor: hexToRgba(m.color, dark ? 0.24 : 0.18),
-          color: m.color,
-          border: `1px solid ${hexToRgba(m.color, 0.55)}`
-        }}
+        style={chipStyle}
       >
         {m.name}
       </span>
     );
-  };
+  });
+
+  const chevronStyle = useMemo(() => ({ color: mainColor }), [mainColor]);
 
   return (
     <div className="relative" ref={ref}>
@@ -101,15 +107,12 @@ function CategorySelect({ value, onChange, mains = [] }) {
         type="button"
         onClick={() => setOpen(o => !o)}
         className="w-full rounded-xl px-2 py-2 text-sm border focus:outline-none flex items-center justify-between"
-        style={{
-          borderColor: hexToRgba(mainColor, 0.55),
-          backgroundColor: hexToRgba(mainColor, dark ? 0.16 : 0.12)
-        }}
+        style={buttonStyle}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
         <RenderMainChip m={selected} />
-        <ChevronDown className="h-4 w-4" style={{ color: mainColor }} />
+        <ChevronDown className="h-4 w-4" style={chevronStyle} />
       </button>
 
       {open && (
@@ -133,7 +136,7 @@ function CategorySelect({ value, onChange, mains = [] }) {
       )}
     </div>
   );
-}
+});
 
 /* ===== SubcatSelect: bolla con icona svg e testo tinto dalla main ===== */
 function SubcatSelect({ value, onChange, options = [], color }) {
@@ -195,6 +198,194 @@ function SubcatSelect({ value, onChange, options = [], color }) {
   );
 }
 
+/* ===== Componente Label Account per evitare errori React ===== */
+const AccountLabel = React.memo(({ transactionType }) => {
+  if (transactionType === 'transfer') {
+    return 'Da conto'
+  }
+  if (transactionType === 'income') {
+    return (
+      <span>
+        Conto <span className="text-emerald-600 ml-1">(riceve)</span>
+      </span>
+    )
+  }
+  if (transactionType === 'expense') {
+    return (
+      <span>
+        Conto <span className="text-red-600 ml-1">(addebita)</span>
+      </span>
+    )
+  }
+  return 'Conto'
+})
+
+/* ===== Tipologie transazione ===== */
+const TRANSACTION_TYPES = {
+  income: {
+    key: 'income',
+    name: 'Entrata',
+    icon: ArrowDownCircle,
+    color: '#10b981',
+    description: 'Denaro che entra in un conto'
+  },
+  expense: {
+    key: 'expense', 
+    name: 'Uscita',
+    icon: ArrowUpCircle,
+    color: '#ef4444',
+    description: 'Denaro che esce da un conto'
+  },
+  transfer: {
+    key: 'transfer',
+    name: 'Trasferimento',
+    icon: ArrowRightLeft,
+    color: '#8b5cf6',
+    description: 'Sposta denaro da un conto a un altro'
+  }
+};
+
+/* ===== Account Layout Components ===== */
+const TransferAccountsLayout = React.memo(({ 
+  accountId, 
+  setAccountId, 
+  destinationAccountId, 
+  setDestinationAccountId, 
+  availableAccounts, 
+  destinationAccounts,
+  transactionType 
+}) => (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-3" key="transfer-layout">
+    <div>
+      <label className="block text-sm mb-1 font-semibold text-slate-700 dark:text-slate-200">
+        <AccountLabel transactionType={transactionType} />
+      </label>
+      <AccountSelect
+        value={accountId}
+        onChange={setAccountId}
+        accounts={availableAccounts}
+        placeholder="Seleziona conto origine"
+      />
+    </div>
+    
+    <div>
+      <label className="block text-sm mb-1 font-semibold text-slate-700 dark:text-slate-200">
+        A conto <span className="text-emerald-600">(riceve)</span>
+      </label>
+      <AccountSelect
+        value={destinationAccountId}
+        onChange={setDestinationAccountId}
+        accounts={destinationAccounts}
+        placeholder="Seleziona conto destinazione"
+      />
+    </div>
+  </div>
+))
+
+const SingleAccountLayout = React.memo(({ 
+  accountId, 
+  setAccountId, 
+  availableAccounts, 
+  transactionType 
+}) => (
+  <div className="grid grid-cols-1 gap-3" key="single-layout">
+    <div>
+      <label className="block text-sm mb-1 font-semibold text-slate-700 dark:text-slate-200">
+        <AccountLabel transactionType={transactionType} />
+      </label>
+      <AccountSelect
+        value={accountId}
+        onChange={setAccountId}
+        accounts={availableAccounts}
+        placeholder="Seleziona conto"
+      />
+    </div>
+  </div>
+))
+
+/* ===== AccountSelect: Dropdown per selezione conto ===== */
+function AccountSelect({ value, onChange, accounts = [], placeholder = "Seleziona conto" }) {
+  const { open, setOpen, ref } = useDropdown();
+  const dark = isDark();
+  
+  const selected = accounts.find(acc => acc.id === value);
+  
+  const AccountItem = ({ account, isSelected = false }) => {
+    const accountIconConfig = getAccountIcon(account.accountType || account.type);
+    const IconComponent = accountIconConfig.icon;
+    
+    return (
+      <div className="flex items-center gap-3">
+        <div
+          className="p-2 rounded-lg"
+          style={{
+            backgroundColor: hexToRgba(account.colorHex || account.color, 0.2),
+            border: `1px solid ${hexToRgba(account.colorHex || account.color, 0.3)}`
+          }}
+        >
+          <IconComponent 
+            className="h-4 w-4" 
+            style={{ color: account.colorHex || account.color }}
+          />
+        </div>
+        <div className="flex-1">
+          <div className="font-semibold text-slate-900 dark:text-white">
+            {account.name}
+          </div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">
+            {accountIconConfig.label} • €{Number(account.balance || 0).toFixed(2)}
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full rounded-xl px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center justify-between hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        {selected ? (
+          <AccountItem account={selected} isSelected />
+        ) : (
+          <span className="text-slate-500 dark:text-slate-400">
+            {placeholder}
+          </span>
+        )}
+        <ChevronDown className="h-4 w-4 text-slate-500" />
+      </button>
+      
+      {open && (
+        <div className="absolute z-50 mt-2 w-full rounded-xl border border-slate-200/20 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
+          <ul role="listbox" className="py-1 max-h-64 overflow-auto">
+            {accounts.map((account) => (
+              <li
+                key={account.id}
+                role="option"
+                onClick={() => { onChange(account.id); setOpen(false); }}
+                className={`px-3 py-2.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 ${
+                  account.id === value ? 'bg-sky-50 dark:bg-sky-900/20' : ''
+                }`}
+              >
+                <AccountItem account={account} />
+              </li>
+            ))}
+            {accounts.length === 0 && (
+              <li className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
+                Nessun conto disponibile
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ===== Modale Aggiungi/Modifica transazione ===== */
 export default function TransactionModal({
   open,
@@ -206,8 +397,22 @@ export default function TransactionModal({
   initial = null,
 }) {
   if (!open) return null;
+  
+  // Ottieni token JWT dall'AuthContext
+  const { token } = useAuth();
+  
+  // Carica conti tramite hook
+  const { accounts = [] } = useAccounts(token);
+  
+  // Determina il tipo di transazione dall'initial se presente
+  const getInitialTransactionType = () => {
+    if (initial?.main === 'income') return 'income';
+    if (initial?.main) return 'expense';
+    return 'expense'; // default
+  };
 
-  // stato form
+  // stato form principale
+  const [transactionType, setTransactionType] = useState(getInitialTransactionType());
   const [main, setMain] = useState(initial?.main || 'expense');
   const [sub, setSub] = useState(initial?.sub || '');
   const [date, setDate] = useState(initial?.date ? formatDateForAPI(new Date(initial.date)) : formatDateForAPI(getTodayDate()));
@@ -215,9 +420,48 @@ export default function TransactionModal({
   const [note, setNote] = useState(initial?.note || '');
   const [showNote, setShowNote] = useState(Boolean(initial?.note));
   const [error, setError] = useState('');
+  
+  // stato conti
+  const [accountId, setAccountId] = useState(initial?.accountId || '');
+  const [destinationAccountId, setDestinationAccountId] = useState('');
+  
+  // Filtro conti disponibili per tipo di transazione
+  const availableAccounts = useMemo(() => {
+    return accounts.filter(account => {
+      // Per trasferimenti, tutti i conti sono validi
+      if (transactionType === 'transfer') return true;
+      
+      // Per entrate/uscite, escludi solo eventuali conti inattivi se presenti
+      return account.isActive !== false;
+    });
+  }, [accounts, transactionType]);
+  
+  // Filtra conti destinazione (escludi conto di origine)
+  const destinationAccounts = useMemo(() => {
+    return availableAccounts.filter(acc => acc.id !== accountId);
+  }, [availableAccounts, accountId]);
+
+  // Effetto per sincronizzare transactionType con main
+  useEffect(() => {
+    if (transactionType === 'transfer') {
+      // Per i trasferimenti, non usiamo le categorie tradizionali
+      setMain('transfer');
+      setSub('');
+    } else {
+      // Per entrate/uscite, usa la categoria tradizionale
+      if (transactionType === 'income' && main !== 'income') {
+        setMain('income');
+      } else if (transactionType === 'expense' && main === 'income') {
+        setMain('expense');
+      }
+    }
+  }, [transactionType, main]);
 
   // lista sub per la main scelta
-  const listForMain = useMemo(() => subcats?.[main] || [], [subcats, main]);
+  const listForMain = useMemo(() => {
+    if (transactionType === 'transfer') return [];
+    return subcats?.[main] || [];
+  }, [subcats, main, transactionType]);
 
   // quando cambio main, allinea la sub
   useEffect(() => {
@@ -226,20 +470,49 @@ export default function TransactionModal({
 
   // colore main corrente (anche custom)
   const mainColor = useMemo(() => {
+    if (transactionType === 'transfer') {
+      return TRANSACTION_TYPES.transfer.color;
+    }
     const pool = (Array.isArray(mains) && mains.length > 0) ? mains : MAIN_CATS;
     return pool.find(m => m.key === main)?.color || '#94a3b8';
-  }, [mains, main]);
+  }, [mains, main, transactionType]);
 
   function submit(e) {
     e?.preventDefault?.();
     setError('');
     const a = Number(amount);
-    if (!sub || !date || isNaN(a) || a <= 0) {
-      setError('Compila i campi obbligatori e usa un importo > 0.');
-      return;
+    
+    // Validazione per trasferimenti
+    if (transactionType === 'transfer') {
+      if (!accountId || !destinationAccountId || !date || isNaN(a) || a <= 0) {
+        setError('Per i trasferimenti: seleziona conti di origine e destinazione, data valida e importo > 0.');
+        return;
+      }
+      if (accountId === destinationAccountId) {
+        setError('Il conto di origine e destinazione devono essere diversi.');
+        return;
+      }
+    } else {
+      // Validazione per entrate/uscite
+      if (!sub || !accountId || !date || isNaN(a) || a <= 0) {
+        setError('Compila tutti i campi obbligatori e usa un importo > 0.');
+        return;
+      }
     }
-    const signed = main === 'income' ? Math.abs(a) : -Math.abs(a);
-    onSave({ main, sub, date, amount: signed, note: note.trim() });
+    
+    // Prepara i dati per il salvataggio
+    const transactionData = {
+      transactionType,
+      main,
+      sub: transactionType === 'transfer' ? 'Trasferimento' : sub,
+      date,
+      amount: Math.abs(a), // Always positive, sign handled by transactionType
+      note: note.trim(),
+      accountId,
+      destinationAccountId: transactionType === 'transfer' ? destinationAccountId : null
+    };
+    
+    onSave(transactionData);
   }
 
   return (
@@ -265,50 +538,106 @@ export default function TransactionModal({
           </div>
 
           {/* form */}
-          <form onSubmit={submit} className="p-5 grid grid-cols-1 md:grid-cols-2 gap-3">
-            {/* CATEGORIA (usa mains incluse custom) */}
+          <form onSubmit={submit} className="p-5 space-y-4">
+            {/* TIPO TRANSAZIONE */}
             <div>
-              <label className="block text-sm mb-1 font-semibold">Categoria</label>
-              <CategorySelect value={main} onChange={(v) => setMain(v)} mains={mains} />
+              <label className="block text-sm mb-2 font-semibold text-slate-700 dark:text-slate-200">
+                Tipo transazione
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {Object.values(TRANSACTION_TYPES).map((type) => {
+                  const IconComponent = type.icon;
+                  const isSelected = transactionType === type.key;
+                  
+                  // Stili memoizzati per evitare ricreazione
+                  const buttonClassName = isSelected 
+                    ? 'p-3 rounded-xl border-2 flex flex-col items-center gap-2 transition-all hover:scale-105 border-current shadow-lg'
+                    : 'p-3 rounded-xl border-2 flex flex-col items-center gap-2 transition-all hover:scale-105 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600';
+                  
+                  const buttonStyle = useMemo(() => ({
+                    color: isSelected ? type.color : undefined,
+                    backgroundColor: isSelected ? hexToRgba(type.color, 0.1) : undefined
+                  }), [isSelected, type.color]);
+                  
+                  return (
+                    <button
+                      key={type.key}
+                      type="button"
+                      onClick={() => setTransactionType(type.key)}
+                      className={buttonClassName}
+                      style={buttonStyle}
+                    >
+                      <IconComponent className="h-6 w-6" />
+                      <span className="text-xs font-semibold">{type.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* SOTTOCATEGORIA */}
-            <div>
-              <label className="block text-sm mb-1 font-semibold">Sottocategoria</label>
-              <SubcatSelect
-                value={sub}
-                onChange={(v) => setSub(v)}
-                options={listForMain}
-                color={mainColor}
+            {/* SEZIONE CONTI */}
+            {transactionType === 'transfer' ? (
+              <TransferAccountsLayout
+                accountId={accountId}
+                setAccountId={setAccountId}
+                destinationAccountId={destinationAccountId}
+                setDestinationAccountId={setDestinationAccountId}
+                availableAccounts={availableAccounts}
+                destinationAccounts={destinationAccounts}
+                transactionType={transactionType}
               />
-            </div>
+            ) : (
+              <SingleAccountLayout
+                accountId={accountId}
+                setAccountId={setAccountId}
+                availableAccounts={availableAccounts}
+                transactionType={transactionType}
+              />
+            )}
 
-            {/* DATA */}
-            <div>
-              <label className="block text-sm mb-1 font-semibold">Data</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm
-               bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-              />
-            </div>
+            {/* CATEGORIA E SOTTOCATEGORIA (solo per entrate/uscite) */}
+            {transactionType !== 'transfer' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm mb-1 font-semibold text-slate-700 dark:text-slate-200">Categoria</label>
+                  <CategorySelect value={main} onChange={setMain} mains={mains} />
+                </div>
+                <div>
+                  <label className="block text-sm mb-1 font-semibold text-slate-700 dark:text-slate-200">Sottocategoria</label>
+                  <SubcatSelect
+                    value={sub}
+                    onChange={setSub}
+                    options={listForMain}
+                    color={mainColor}
+                  />
+                </div>
+              </div>
+            )}
 
-            {/* IMPORTO */}
-            <div>
-              <label className="block text-sm mb-1 font-semibold">Importo (€)</label>
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                inputMode="decimal"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0,00"
-                className="w-full rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm
-               bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-              />
+            {/* DATA E IMPORTO */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm mb-1 font-semibold text-slate-700 dark:text-slate-200">Data</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm mb-1 font-semibold text-slate-700 dark:text-slate-200">Importo (€)</label>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0,00"
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                />
+              </div>
             </div>
 
             {/* NOTA (toggle) */}
@@ -358,7 +687,10 @@ export default function TransactionModal({
               </button>
               <button
                 type="submit"
-                disabled={!sub || !date || !amount || Number(amount) <= 0}
+                disabled={
+                  !date || !amount || Number(amount) <= 0 || !accountId ||
+                  (transactionType === 'transfer' ? !destinationAccountId : !sub)
+                }
                 className="px-3 py-2 rounded-xl text-sm bg-gradient-to-tr from-sky-600 to-indigo-600 text-white
                            hover:opacity-90 disabled:opacity-50"
               >

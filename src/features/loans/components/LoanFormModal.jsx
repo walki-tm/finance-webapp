@@ -13,15 +13,16 @@
  * - Gestione errori integrata
  * 
  * @author Finance WebApp Team
- * @modified 2025-08-31 - Aggiunta selezione categoria/sottocategoria per rate
+ * @modified 14 Settembre 2025 - Campo conto reso obbligatorio
  */
 
 import React, { useState, useEffect, useMemo } from 'react'
-import { X, Calculator, AlertCircle, DollarSign, Calendar, Percent, ChevronDown } from 'lucide-react'
+import { X, Calculator, AlertCircle, DollarSign, Calendar, Percent, ChevronDown, Wallet } from 'lucide-react'
 import { MAIN_CATS } from '../../../lib/constants.js'
 import { useCategories } from '../../categories/useCategories.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import { formatDateForAPI, parseLocalDate } from '../../../lib/dateUtils.js'
+import useAccounts from '../../accounts/useAccounts'
 
 export default function LoanFormModal({ 
   isOpen, 
@@ -36,6 +37,7 @@ export default function LoanFormModal({
 
   const { token } = useAuth()
   const { mains, subcats } = useCategories(token)
+  const { accounts } = useAccounts(token) // 🏦 Hook per caricamento account
 
   // Genera la data odierna in formato YYYY-MM-DD usando timezone-safe utilities
   const getTodayDateString = useMemo(() => {
@@ -59,7 +61,8 @@ export default function LoanFormModal({
     monthlyPayment: '',
     description: '',
     categoryMain: 'DEBT', // Default per prestiti
-    subcategoryId: ''
+    subcategoryId: '',
+    accountId: '' // 🏦 Account associato al prestito
   })
 
   const [errors, setErrors] = useState({})
@@ -111,7 +114,8 @@ export default function LoanFormModal({
         monthlyPayment: initialData.monthlyPayment?.toString() || '',
         description: initialData.description || '',
         categoryMain: initialData.categoryMain || 'DEBT',
-        subcategoryId: initialData.subcategoryId || ''
+        subcategoryId: initialData.subcategoryId || '',
+        accountId: initialData.accountId || '' // 🏦 Account associato al prestito
       }
       console.log('🔄 Setting form data for edit with startDate:', newFormData.startDate)
       setFormData(newFormData)
@@ -128,7 +132,8 @@ export default function LoanFormModal({
         monthlyPayment: '',
         description: '',
         categoryMain: 'DEBT', // Default per prestiti
-        subcategoryId: ''
+        subcategoryId: '',
+        accountId: '' // 🏦 Account associato al prestito
       }
       console.log('🔄 Setting form data for new loan with startDate:', newFormData.startDate)
       setFormData(newFormData)
@@ -212,12 +217,9 @@ export default function LoanFormModal({
       newErrors.startDate = 'Data inizio richiesta'
     }
 
-    if (!formData.categoryMain) {
-      newErrors.categoryMain = 'Categoria principale richiesta'
-    }
 
-    if (!formData.subcategoryId) {
-      newErrors.subcategoryId = 'Sottocategoria richiesta'
+    if (!formData.accountId) {
+      newErrors.accountId = 'Conto richiesto'
     }
 
     setErrors(newErrors)
@@ -252,7 +254,8 @@ export default function LoanFormModal({
         firstPaymentDate: apiFormattedDate, // API usa firstPaymentDate
         monthlyPayment: parseFloat(formData.monthlyPayment),
         categoryMain: formData.categoryMain,
-        subcategoryId: formData.subcategoryId
+        subcategoryId: formData.subcategoryId,
+        accountId: formData.accountId // Account ora obbligatorio
       }
       
       console.log('🐛 [LoanFormModal] Final submitData:', submitData)
@@ -583,6 +586,43 @@ export default function LoanFormModal({
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Account Selection */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-slate-500" />
+              Seleziona Conto *
+            </label>
+            <select
+              value={formData.accountId}
+              onChange={(e) => handleInputChange('accountId', e.target.value)}
+              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                errors.accountId ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <option value="">Seleziona un conto...</option>
+              {accounts.map(account => (
+                <option key={account.id} value={account.id}>
+                  {account.name} {account.balance !== undefined && `(€${account.balance.toFixed(2)})`}
+                </option>
+              ))}
+            </select>
+            {errors.accountId && (
+              <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" />
+                {errors.accountId}
+              </p>
+            )}
+            {formData.accountId && !errors.accountId ? (
+              <p className="mt-1 text-sm text-green-600 dark:text-green-400">
+                ✓ Conto selezionato
+              </p>
+            ) : !errors.accountId ? (
+              <p className="mt-1 text-sm text-slate-500">
+                Seleziona un conto per tracciare l'impatto del prestito
+              </p>
+            ) : null}
           </div>
 
           {/* Description */}

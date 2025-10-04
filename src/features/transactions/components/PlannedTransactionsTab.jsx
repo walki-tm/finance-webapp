@@ -45,8 +45,8 @@ export default function PlannedTransactionsTab({ state, onOpenAddPlannedTx, refr
     isActive: null
   })
   
-  // 🔸 Show expired transactions toggle
-  const [showExpired, setShowExpired] = useState(false)
+  // 🔸 Show expired transactions toggle - SEMPRE TRUE per mostrare sempre le scadute
+  const [showExpired, setShowExpired] = useState(true)
   
   // 🔸 Budget application modal state
   const [budgetModalOpen, setBudgetModalOpen] = useState(false)
@@ -413,10 +413,8 @@ const handleBudgetApplication = async (options) => {
     // Conta le transazioni scadute totali per il toggle
     const totalExpiredCount = filteredTransactions.filter(tx => isExpired(tx)).length
     
-    // Filtra le transazioni scadute se showExpired è false
-    const transactionsToShow = showExpired ? filteredTransactions : filteredTransactions.filter(tx => {
-      return !isExpired(tx)
-    })
+    // SEMPRE mostra tutte le transazioni filtrate (incluse quelle scadute)
+    const transactionsToShow = filteredTransactions
     
     transactionsToShow.forEach(tx => {
       if (tx.groupId) {
@@ -594,27 +592,12 @@ const handleBudgetApplication = async (options) => {
         </div>
       </div>
 
-      {/* Toggle per mostrare transazioni scadute */}
+      {/* Info transazioni scadute - sempre visibili */}
       {expiredCount > 0 && (
         <div className="flex justify-center">
-          <button
-            onClick={() => setShowExpired(!showExpired)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
-              showExpired
-                ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700 hover:bg-red-100 dark:hover:bg-red-900/30'
-                : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
-            }`}
-          >
-            {showExpired ? (
-              <>
-                🙈 <span>Nascondi scadute ({expiredCount})</span>
-              </>
-            ) : (
-              <>
-                👁️ <span>Mostra scadute ({expiredCount})</span>
-              </>
-            )}
-          </button>
+          <div className="px-4 py-2 rounded-xl text-sm font-medium bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700 flex items-center gap-2">
+            ⚠️ <span>Transazioni scadute: {expiredCount}</span>
+          </div>
         </div>
       )}
 
@@ -656,7 +639,7 @@ const handleBudgetApplication = async (options) => {
                     // Get transaction details to check if it's a loan payment
                     const transaction = plannedTransactions.find(tx => tx.id === txId)
                     
-                    const result = await materializePlannedTx(txId)
+                    const result = await materializePlannedTx(transaction)
                     
                     // If this was a loan payment, refresh the loan data (payment already processed by materialize)
                     if (transaction?.loanId && result) {
@@ -756,7 +739,7 @@ const handleBudgetApplication = async (options) => {
                 onDelete={() => deletePlannedTx(tx.id)}
                 onMaterialize={async () => {
                   try {
-                    const result = await materializePlannedTx(tx.id)
+                    const result = await materializePlannedTx(tx)
                     
                     // If this was a loan payment, refresh the loan data (payment already processed by materialize)
                     if (tx.loanId && result) {

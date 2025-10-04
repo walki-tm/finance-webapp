@@ -46,10 +46,11 @@ const plannedTxSchema = z.object({
   main: z.string().min(1).max(32).transform(s => s.toUpperCase()),
   subId: z.string().optional().nullable(),
   subName: z.string().optional().nullable(),
+  accountId: z.string().optional().nullable(),  // 🏦 Aggiungi accountId mancante
   amount: z.coerce.number(),
   note: z.string().optional().nullable(),
   payee: z.string().optional().nullable(),
-  frequency: z.enum(['MONTHLY', 'YEARLY', 'ONE_TIME']),
+  frequency: z.enum(['WEEKLY', 'MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'YEARLY', 'ONE_TIME']),
   startDate: z.coerce.date(),
   confirmationMode: z.enum(['MANUAL', 'AUTOMATIC']).default('MANUAL'),
   groupId: z.string().optional().nullable(),
@@ -61,10 +62,11 @@ const plannedTxPatchSchema = z.object({
   main: z.string().min(1).max(32).transform(s => s.toUpperCase()).optional(),
   subId: z.string().nullable().optional(),
   subName: z.string().nullable().optional(),
+  accountId: z.string().nullable().optional(),  // 🏦 Aggiungi accountId per modifiche
   amount: z.number().optional(),
   note: z.string().nullable().optional(),
   payee: z.string().nullable().optional(),
-  frequency: z.enum(['MONTHLY', 'YEARLY', 'ONE_TIME']).optional(),
+  frequency: z.enum(['WEEKLY', 'MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'YEARLY', 'ONE_TIME']).optional(),
   startDate: z.coerce.date().optional(),
   confirmationMode: z.enum(['MANUAL', 'AUTOMATIC']).optional(),
   groupId: z.string().nullable().optional(),
@@ -102,18 +104,36 @@ export async function createPlannedTransaction(req, res, next) {
   console.log('🐛 DEBUG plannedTransactionsController - createPlannedTransaction:')
   console.log('- req.body.startDate (raw):', req.body.startDate)
   console.log('- typeof req.body.startDate:', typeof req.body.startDate)
+  console.log('- 🏦 req.body.accountId (raw):', req.body.accountId)
+  console.log('- 🔍 FULL req.body:', req.body)
   
   const parsed = plannedTxSchema.safeParse(req.body)
   
   if (!parsed.success) {
-    console.log('🔸 DEBUG - Validation failed:', parsed.error.errors)
-    return res.status(400).json({ error: 'Invalid body', details: parsed.error.errors })
+    console.log('🔸 DEBUG - Validation failed:')
+    console.log('- Raw validation errors:', JSON.stringify(parsed.error.errors, null, 2))
+    console.log('- Error summary:')
+    parsed.error.errors.forEach((err, index) => {
+      console.log(`  ${index + 1}. Field '${err.path.join('.')}': ${err.message}`)
+      console.log(`     Received: ${JSON.stringify(err.received)}`)
+      console.log(`     Expected: ${err.expected || 'valid value'}`)
+    })
+    return res.status(400).json({ 
+      error: 'Invalid body', 
+      details: parsed.error.errors.map(err => ({
+        field: err.path.join('.'),
+        message: err.message,
+        received: err.received
+      }))
+    })
   }
   
   // 🔸 DEBUG: Log dei dati dopo parsing Zod
   console.log('- parsed.data.startDate (after Zod):', parsed.data.startDate)
   console.log('- parsed.data.startDate instanceof Date:', parsed.data.startDate instanceof Date)
   console.log('- parsed.data.startDate.toISOString():', parsed.data.startDate.toISOString())
+  console.log('- 🏦 parsed.data.accountId (after Zod):', parsed.data.accountId)
+  console.log('- 🔍 PARSED DATA:', parsed.data)
   
   try {
     const created = await createPlannedTransactionService(req.user.id, parsed.data)
@@ -400,8 +420,17 @@ export async function removeFromBudgeting(req, res, next) {
         const currentYear = new Date().getFullYear()
         
         for (const tx of otherTransactions) {
-          if (tx.frequency === 'MONTHLY') {
+          if (tx.frequency === 'WEEKLY') {
+            // Transazioni settimanali contribuiscono a tutti i mesi (equivalente mensile)
+            return true
+          } else if (tx.frequency === 'MONTHLY') {
             // Transazioni mensili contribuiscono a tutti i mesi
+            return true
+          } else if (tx.frequency === 'QUARTERLY') {
+            // Transazioni trimestrali contribuiscono a tutti i mesi (divise su 3 mesi per trimestre)
+            return true
+          } else if (tx.frequency === 'SEMIANNUAL') {
+            // Transazioni semestrali contribuiscono a tutti i mesi (divise su 6 mesi per semestre)
             return true
           } else if (tx.frequency === 'YEARLY') {
             if (tx.budgetApplicationMode === 'divide') {

@@ -3,17 +3,18 @@
  * 
  * 🎯 Features:
  * - Selezione Main Category + Subcategory filtrata
- * - Campi dinamici per frequenza (Mensile, Annuale, Una tantum)
+ * - Campi dinamici per frequenza (Settimanale, Mensile, Trimestrale, Semestrale, Annuale, Una tantum)
  * - Preview prossime occorrenze
  * - Validazione realtime e UX migliorata
  * - Support per End Date e Confirmation Mode
  */
 
 import React, { useState, useMemo, useEffect } from 'react'
-import { X, Calendar, Eye, AlertCircle } from 'lucide-react'
+import { X, Calendar, Eye, AlertCircle, Wallet } from 'lucide-react'
 import { MAIN_CATS } from '../../../lib/constants.js'
 import { useAuth } from '../../../context/AuthContext'
 import { api } from '../../../lib/api'
+import useAccounts from '../../accounts/useAccounts'
 
 export default function PlannedTransactionModal({ 
   open, 
@@ -25,10 +26,13 @@ export default function PlannedTransactionModal({
   groups = [] 
 }) {
   const { token } = useAuth()
+  const { accounts } = useAccounts(token) // 🏦 Hook per caricamento account
+  
   const [formData, setFormData] = useState({
     title: initial?.title || '',
     main: initial?.main || 'expense',
     subId: initial?.subId || '',
+    accountId: initial?.accountId || '', // 🏦 Campo per account associato
     amount: initial?.amount || '',
     payee: initial?.payee || '',
     frequency: initial?.frequency || 'MONTHLY',
@@ -77,6 +81,7 @@ export default function PlannedTransactionModal({
       Number(formData.amount) > 0 &&
       formData.main &&
       formData.subId &&
+      formData.accountId &&
       formData.startDate &&
       formData.frequency
     )
@@ -122,6 +127,7 @@ export default function PlannedTransactionModal({
         title: initial.title || '',
         main: initial.main || 'expense',
         subId: initial.subId || '',
+        accountId: initial.accountId || '', // 🏦 Account per editing
         amount: initial.amount || '',
         payee: initial.payee || '',
         frequency: initial.frequency || 'MONTHLY',
@@ -137,6 +143,7 @@ export default function PlannedTransactionModal({
         title: '',
         main: 'expense',
         subId: '',
+        accountId: '', // 🏦 Account vuoto per reset
         amount: '',
         payee: '',
         frequency: 'MONTHLY',
@@ -170,6 +177,15 @@ export default function PlannedTransactionModal({
   const handleSave = () => {
     if (!isValid) return
     
+    // 🔸 Trova il nome della sottocategoria selezionata
+    const selectedSubcat = filteredSubcats.find(sub => sub.id === formData.subId)
+    
+    // 🔸 Prepara il payload con tutti i campi necessari
+    const payload = {
+      ...formData,
+      sub: selectedSubcat?.name || '' // 🐛 FIX: Aggiungi nome sottocategoria
+    }
+    
     // 🔸 DEBUG: Log della data prima del salvataggio
     console.log('🐛 DEBUG PlannedTransactionModal - handleSave:')
     console.log('- formData.startDate (string):', formData.startDate)
@@ -177,8 +193,11 @@ export default function PlannedTransactionModal({
     console.log('- Date ISO string:', new Date(formData.startDate).toISOString())
     console.log('- Today date for comparison:', new Date().toLocaleDateString('it-IT'))
     console.log('- Input startDate vs today:', formData.startDate, 'vs', new Date().toISOString().slice(0, 10))
+    console.log('- 🏦 formData.accountId:', formData.accountId)
+    console.log('- 🐛 selectedSubcat:', selectedSubcat)
+    console.log('- 🔍 FULL payload:', payload)
     
-    onSave(formData)
+    onSave(payload)
   }
   
   const formatDate = (date) => {
@@ -325,6 +344,36 @@ export default function PlannedTransactionModal({
                 />
               </div>
               
+              {/* 🏦 Account Selection */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  <Wallet className="w-4 h-4 inline mr-2" />
+                  Conto di riferimento <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.accountId}
+                  onChange={(e) => setFormData(prev => ({ ...prev, accountId: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                >
+                  <option value="">Seleziona un conto...</option>
+                  {accounts && accounts.length > 0 ? (
+                    accounts.map(account => (
+                      <option key={account.id} value={account.id}>
+                        {account.name} (€{Number(account.balance || 0).toFixed(2)})
+                      </option>
+                    ))
+                  ) : (
+                    <option disabled>Nessun conto disponibile</option>
+                  )}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">
+                  {formData.accountId ? 
+                    'Le transazioni future aggiorneranno automaticamente il saldo di questo conto' : 
+                    'È necessario selezionare un conto per le transazioni pianificate'
+                  }
+                </p>
+              </div>
+              
               {/* 🔸 Frequency + Date */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -336,12 +385,18 @@ export default function PlannedTransactionModal({
                     onChange={(e) => setFormData(prev => ({ ...prev, frequency: e.target.value }))}
                     className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   >
+                    <option value="WEEKLY">Settimanale</option>
                     <option value="MONTHLY">Mensile</option>
+                    <option value="QUARTERLY">Trimestrale</option>
+                    <option value="SEMIANNUAL">Semestrale</option>
                     <option value="YEARLY">Annuale</option>
                     <option value="ONE_TIME">Una volta</option>
                   </select>
                   <p className="text-xs text-slate-500 mt-1">
+                    {formData.frequency === 'WEEKLY' && 'Ripete ogni settimana senza data di fine'}
                     {formData.frequency === 'MONTHLY' && 'Ripete ogni mese senza data di fine'}
+                    {formData.frequency === 'QUARTERLY' && 'Ripete ogni 3 mesi senza data di fine'}
+                    {formData.frequency === 'SEMIANNUAL' && 'Ripete ogni 6 mesi senza data di fine'}
                     {formData.frequency === 'YEARLY' && 'Ripete ogni anno senza data di fine'}
                     {formData.frequency === 'ONE_TIME' && 'Transazione singola, non ricorrente'}
                   </p>
@@ -435,7 +490,10 @@ export default function PlannedTransactionModal({
                       Applica al budgeting generale
                     </label>
                     <p className="text-xs text-green-600 dark:text-green-300 mt-1">
+                      {formData.frequency === 'WEEKLY' && 'Applicherà €' + ((Math.abs(Number(formData.amount) || 0)) * 52 / 12).toFixed(2) + ' al mese (52 settimane/12 mesi)'}
                       {formData.frequency === 'MONTHLY' && 'Applicherà €' + Math.abs(Number(formData.amount) || 0) + ' a tutti i mesi'}
+                      {formData.frequency === 'QUARTERLY' && 'Applicherà €' + ((Math.abs(Number(formData.amount) || 0)) / 3).toFixed(2) + ' al mese (diviso su 3 mesi)'}
+                      {formData.frequency === 'SEMIANNUAL' && 'Applicherà €' + ((Math.abs(Number(formData.amount) || 0)) / 6).toFixed(2) + ' al mese (diviso su 6 mesi)'}
                       {formData.frequency === 'YEARLY' && 'Applicherà €' + ((Math.abs(Number(formData.amount) || 0)) / 12).toFixed(2) + ' al mese (diviso su 12 mesi)'}
                       {formData.frequency === 'ONE_TIME' && 'Applicherà €' + Math.abs(Number(formData.amount) || 0) + ' al mese specifico'}
                       {!formData.frequency && 'Seleziona una frequenza per vedere l\'anteprima'}
