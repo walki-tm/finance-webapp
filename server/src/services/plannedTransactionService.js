@@ -27,7 +27,7 @@ function httpError(status, message) {
 }
 
 // 🔸 Utility per calcolo prossima data di scadenza
-function calculateNextDueDate(startDate, frequency, currentDate = new Date()) {
+function calculateNextDueDate(startDate, frequency, currentDate = new Date(), repeatData = null) {
   const start = new Date(startDate)
   const now = new Date(currentDate)
   
@@ -36,6 +36,7 @@ function calculateNextDueDate(startDate, frequency, currentDate = new Date()) {
   console.log('  - startDate:', start.toISOString())
   console.log('  - currentDate:', now.toISOString())
   console.log('  - frequency:', frequency)
+  console.log('  - repeatData:', repeatData)
   
   if (frequency === 'ONE_TIME') {
     console.log('  - ONE_TIME: returning startDate as-is')
@@ -66,12 +67,12 @@ function calculateNextDueDate(startDate, frequency, currentDate = new Date()) {
       nextDue.setDate(nextDue.getDate() + 7)
     }
     console.log('  - WEEKLY future date, calculated nextDue:', nextDue.toISOString())
-  } else if (frequency === 'MONTHLY') {
-    // Trova il prossimo mese con lo stesso giorno
+  } else if (frequency === 'MONTHLY' || frequency === 'REPEAT') {
+    // Trova il prossimo mese con lo stesso giorno (REPEAT funziona come MONTHLY per il calcolo)
     while (nextDue <= now) {
       nextDue.setMonth(nextDue.getMonth() + 1)
     }
-    console.log('  - MONTHLY future date, calculated nextDue:', nextDue.toISOString())
+    console.log('  - MONTHLY/REPEAT future date, calculated nextDue:', nextDue.toISOString())
   } else if (frequency === 'QUARTERLY') {
     // Trova il prossimo trimestre (ogni 3 mesi)
     while (nextDue <= now) {
@@ -250,6 +251,8 @@ export async function createPlannedTransaction(userId, data) {
   console.log('- startDate instanceof Date:', startDate instanceof Date)
   console.log('- startDate.getTimezoneOffset():', startDate instanceof Date ? startDate.getTimezoneOffset() : 'N/A')
   console.log('- loanId:', loanId)
+  console.log('- frequency:', frequency)
+  console.log('- repeatCount:', repeatCount)
   
   const finalSubId = await resolveSubId(userId, subId, subName)
   
@@ -299,6 +302,13 @@ export async function createPlannedTransaction(userId, data) {
     appliedToBudget: appliedToBudget || false,
     loanId: loanId || null, // ✅ Aggiungi loanId mancante
     nextDueDate,
+  }
+  
+  // 🔄 Aggiungi campi REPEAT se specificati
+  if (frequency === 'REPEAT' && repeatCount) {
+    prismaData.repeatCount = repeatCount
+    prismaData.remainingRepeats = repeatCount // All'inizio, ripetizioni rimanenti = ripetizioni totali
+    console.log('- Added REPEAT fields: repeatCount:', repeatCount, 'remainingRepeats:', repeatCount)
   }
   
   // 🔸 DEBUG: Log dei dati che vanno a Prisma
@@ -852,9 +862,51 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
   // Invalida cache saldo dopo creazione transazione pianificata
   invalidateBalanceCache(userId)
   
-  // Aggiorna nextDueDate della transazione pianificata se ricorrente
-  if (plannedTx.frequency !== 'ONE_TIME') {
-    // Usa la funzione specifica per calcolare la prossima occorrenza dopo materializzazione
+  // 🔄 Gestione speciale per frequenza REPEAT
+  if (plannedTx.frequency === 'REPEAT') {
+    console.log('🔄 Processing REPEAT transaction:')
+    console.log('  - Current remainingRepeats:', plannedTx.remainingRepeats)
+    console.log('  - Total repeatCount:', plannedTx.repeatCount)
+    
+    // Decrementa le ripetizioni rimanenti
+    const newRemainingRepeats = (plannedTx.remainingRepeats || 1) - 1
+    console.log('  - New remainingRepeats after decrement:', newRemainingRepeats)
+    
+    if (newRemainingRepeats <= 0) {
+      // Nessuna ripetizione rimanente: disattiva la transazione
+      console.log('  - No more repeats left, deactivating transaction')
+      
+      await prisma.plannedTransaction.update({
+        where: { id: plannedTxId },
+        data: {
+          remainingRepeats: 0,
+          isActive: false // Disattiva completamente
+        }
+      })
+      
+      console.log('✅ REPEAT transaction completed and deactivated')
+    } else {
+      // Ci sono ancora ripetizioni: calcola prossima data
+      const newNextDueDate = calculateNextOccurrenceAfterMaterialization(
+        plannedTx.startDate,
+        'MONTHLY', // REPEAT usa logica MONTHLY per il calcolo
+        plannedTx.nextDueDate
+      )
+      
+      console.log('  - More repeats remaining, updating to next due date:', newNextDueDate?.toISOString())
+      
+      await prisma.plannedTransaction.update({
+        where: { id: plannedTxId },
+        data: {
+          remainingRepeats: newRemainingRepeats,
+          nextDueDate: newNextDueDate
+        }
+      })
+      
+      console.log('✅ REPEAT transaction updated with remaining repeats:', newRemainingRepeats)
+    }
+  } else if (plannedTx.frequency !== 'ONE_TIME') {
+    // Comportamento normale per MONTHLY e YEARLY
     const newNextDueDate = calculateNextOccurrenceAfterMaterialization(
       plannedTx.startDate,
       plannedTx.frequency,
@@ -874,7 +926,6 @@ export async function materializePlannedTransaction(userId, plannedTxId) {
       where: { id: plannedTxId },
       data: { isActive: false }
     })
-    
   }
   
   return transaction

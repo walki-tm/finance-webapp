@@ -147,7 +147,7 @@ export function useBalance(token) {
     }
   }, [token]) // 🔧 FIX: Solo token como dipendenza, logica inline
   
-  return { balance, isLoading, error }
+  return { balance, isLoading, error, refresh: loadBalance }
 }
 
 // Utility per triggerare refresh globale del saldo

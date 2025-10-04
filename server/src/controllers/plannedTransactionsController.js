@@ -50,11 +50,23 @@ const plannedTxSchema = z.object({
   amount: z.coerce.number(),
   note: z.string().optional().nullable(),
   payee: z.string().optional().nullable(),
-  frequency: z.enum(['WEEKLY', 'MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'YEARLY', 'ONE_TIME']),
+  frequency: z.enum(['WEEKLY', 'MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'YEARLY', 'ONE_TIME', 'REPEAT']), // ✅ Include all frequencies
   startDate: z.coerce.date(),
   confirmationMode: z.enum(['MANUAL', 'AUTOMATIC']).default('MANUAL'),
   groupId: z.string().optional().nullable(),
   appliedToBudget: z.boolean().optional().default(false),
+  
+  // 🔄 Campi per frequenza REPEAT
+  repeatCount: z.number().int().min(1).max(100).optional().nullable(), // numero di ripetizioni (1-100)
+}).refine((data) => {
+  // Se frequency è REPEAT, repeatCount deve essere specificato
+  if (data.frequency === 'REPEAT' && (!data.repeatCount || data.repeatCount < 1)) {
+    return false
+  }
+  return true
+}, {
+  message: "Per la frequenza REPEAT è richiesto un numero di ripetizioni valido (1-100)",
+  path: ["repeatCount"]
 })
 
 const plannedTxPatchSchema = z.object({
@@ -66,12 +78,18 @@ const plannedTxPatchSchema = z.object({
   amount: z.number().optional(),
   note: z.string().nullable().optional(),
   payee: z.string().nullable().optional(),
-  frequency: z.enum(['WEEKLY', 'MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'YEARLY', 'ONE_TIME']).optional(),
+  frequency: z.enum(['WEEKLY', 'MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'YEARLY', 'ONE_TIME', 'REPEAT']).optional(), // ✅ Include all frequencies
   startDate: z.coerce.date().optional(),
   confirmationMode: z.enum(['MANUAL', 'AUTOMATIC']).optional(),
   groupId: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
   appliedToBudget: z.boolean().optional(),
+  budgetApplicationMode: z.string().nullable().optional(), // Aggiungi campo mancante
+  budgetTargetMonth: z.number().nullable().optional(), // Aggiungi campo mancante
+  
+  // 🔄 Campi per frequenza REPEAT
+  repeatCount: z.number().int().min(1).max(100).nullable().optional(),
+  remainingRepeats: z.number().int().min(0).nullable().optional(), // per aggiornamenti interni
 })
 
 const groupSchema = z.object({
