@@ -691,4 +691,22 @@ export const api = {
    */
   deleteTransfer: (token, transferId) =>
     request(`/api/transfers/${transferId}`, "DELETE", token),
+
+  // ---- Backup ----
+  /**
+   * Crea un backup del database.
+   * @param {string} token Token di accesso JWT.
+   * @returns {Promise<object>} Risultato dell'operazione di backup.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  createBackup: (token) =>
+    request("/api/backup", "POST", token),
+  /**
+   * Elenca i backup esistenti.
+   * @param {string} token Token di accesso JWT.
+   * @returns {Promise<object>} Lista dei backup disponibili.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  listBackups: (token) =>
+    request("/api/backup", "GET", token),
 };

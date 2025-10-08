@@ -1,6 +1,6 @@
 // src/features/transactions/components/TransactionModal.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { X, AlertCircle, StickyNote, ChevronDown, TrendingUp, ShoppingCart, CreditCard, PiggyBank, ArrowUpCircle, ArrowDownCircle, ArrowRightLeft } from 'lucide-react';
+import { X, AlertCircle, StickyNote, ChevronDown, TrendingUp, ShoppingCart, CreditCard, PiggyBank, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { MAIN_CATS } from '../../../lib/constants.js';
 import SvgIcon from '../../icons/components/SvgIcon.jsx';
 import { formatDateForAPI, getTodayDate } from '../../../lib/dateUtils.js';
@@ -200,9 +200,6 @@ function SubcatSelect({ value, onChange, options = [], color }) {
 
 /* ===== Componente Label Account per evitare errori React ===== */
 const AccountLabel = React.memo(({ transactionType }) => {
-  if (transactionType === 'transfer') {
-    return 'Da conto'
-  }
   if (transactionType === 'income') {
     return (
       <span>

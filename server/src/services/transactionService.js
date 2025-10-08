@@ -68,61 +68,12 @@ export async function listTransactions(userId, query) {
     }
   })
   
-  // 2. Recupera i trasferimenti nello stesso periodo
-  const transferWhere = { userId }
-  if (Object.keys(dateFilter).length > 0) {
-    transferWhere.date = dateFilter
-  }
-  
-  const transfers = await prisma.transfer.findMany({
-    where: transferWhere,
-    orderBy: { date: 'desc' },
-    take: Number(limit),
-    include: {
-      fromAccount: true,
-      toAccount: true
-    }
-  })
-  
-  // 3. Converte i trasferimenti in formato compatibile con le transazioni
-  const formattedTransfers = transfers.map(transfer => ({
-    id: `transfer-${transfer.id}`, // Prefisso per distinguere dai veri ID transazione
-    userId: transfer.userId,
-    date: transfer.date,
-    amount: -Math.abs(Number(transfer.amount)), // Sempre negativo (uscita dal conto di origine)
-    main: 'TRANSFER',
-    subId: null,
-    accountId: transfer.fromAccountId,
-    note: transfer.note,
-    payee: `${transfer.fromAccount.name} → ${transfer.toAccount.name}`, // Formato richiesto
-    createdAt: transfer.createdAt,
-    updatedAt: transfer.updatedAt,
-    // Dati specifici per trasferimenti
-    isTransfer: true,
-    fromAccount: transfer.fromAccount,
-    toAccount: transfer.toAccount,
-    originalTransferId: transfer.id,
-    // Subcategory fittizia per compatibilità
-    subcategory: {
-      id: 'transfer',
-      name: 'Trasferimento',
-      userId: transfer.userId
-    },
-    account: transfer.fromAccount
-  }))
-  
-  // 4. Unisce transazioni e trasferimenti, ordina per data
-  const allResults = [...transactions, ...formattedTransfers]
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .slice(0, Number(limit)) // Applica il limite finale
-  
-  // 🔍 DEBUG: Log risultati query
+  // 🔍 DEBUG: Log risultati query (solo transazioni, i transfers sono ora separati)
   console.log('🔍 Query results:')
   console.log('  - Found', transactions.length, 'transactions')
-  console.log('  - Found', transfers.length, 'transfers')
-  console.log('  - Total combined:', allResults.length, 'items')
+  console.log('  - Transfers are now handled separately in TransfersTab')
   
-  return allResults
+  return transactions
 }
 
 async function resolveSubId(userId, subId, subName) {
@@ -208,14 +159,7 @@ export async function createTransaction(userId, data) {
 }
 
 export async function updateTransaction(userId, id, data) {
-  // 🔍 Controlla se è un trasferimento (ID con prefisso "transfer-")
-  if (id.startsWith('transfer-')) {
-    const transferId = id.replace('transfer-', '')
-    const { updateTransfer } = await import('./transferService.js')
-    return await updateTransfer(userId, transferId, data)
-  }
-  
-  // Gestione normale per transazioni
+  // Gestione per transazioni normali (i transfers sono ora gestiti separatamente)
   const exists = await prisma.transaction.findFirst({ where: { id, userId } })
   if (!exists) throw httpError(404, 'Not found')
 
@@ -278,14 +222,7 @@ export async function updateTransaction(userId, id, data) {
 }
 
 export async function deleteTransaction(userId, id) {
-  // 🔍 Controlla se è un trasferimento (ID con prefisso "transfer-")
-  if (id.startsWith('transfer-')) {
-    const transferId = id.replace('transfer-', '')
-    const { deleteTransfer } = await import('./transferService.js')
-    return await deleteTransfer(userId, transferId)
-  }
-  
-  // Gestione normale per transazioni
+  // Gestione per transazioni normali (i transfers sono ora gestiti separatamente)
   const tx = await prisma.transaction.findFirst({ where: { id, userId } })
   if (!tx) throw httpError(404, 'Not found')
   

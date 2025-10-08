@@ -3,7 +3,8 @@ import { authRequired } from '../middleware/auth.js'
 import { 
   createTransferHandler, 
   deleteTransferHandler, 
-  listTransfersHandler 
+  listTransfersHandler,
+  updateTransferHandler 
 } from '../controllers/transferController.js'
 
 const router = Router()
@@ -16,6 +17,9 @@ router.post('/', createTransferHandler)
 
 // GET /api/transfers - Lista trasferimenti (con filtri opzionali)
 router.get('/', listTransfersHandler)
+
+// PUT /api/transfers/:id - Aggiorna un trasferimento
+router.put('/:id', updateTransferHandler)
 
 // DELETE /api/transfers/:id - Elimina un trasferimento
 router.delete('/:id', deleteTransferHandler)

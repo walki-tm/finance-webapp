@@ -14,6 +14,7 @@ import balanceRoutes from './routes/balance.js'
 import userSettingsRoutes from './routes/userSettings.js'
 import accountRoutes from './routes/accounts.js'
 import transferRoutes from './routes/transfers.js'
+import backupRoutes from './routes/backup.js'
 import { errorMiddleware } from './middleware/error.js'
 import { debugMiddleware } from '../debug_middleware.js'
 import './services/schedulerService.js' // Inizializza scheduler automatico
@@ -66,6 +67,7 @@ app.use('/api/loans', loanRoutes)
 app.use('/api/savings-goals', savingsGoalsRoutes)
 app.use('/api/accounts', accountRoutes)
 app.use('/api/transfers', transferRoutes)
+app.use('/api/backup', backupRoutes)
 app.use('/api/balance', balanceRoutes)
 app.use('/api/user-settings', userSettingsRoutes)
 

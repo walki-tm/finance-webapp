@@ -132,11 +132,6 @@ export function useTransactions(token, filters = null) {
           main = payload.main ? String(payload.main).toUpperCase() : 'EXPENSE';
           amount = -Math.abs(Number(payload.amount || 0));
           break;
-        case 'transfer':
-          // Per i trasferimenti, gestisci diversamente
-          main = 'TRANSFER';
-          amount = Math.abs(Number(payload.amount || 0));
-          break;
         default:
           main = String(payload.main || 'EXPENSE').toUpperCase();
           amount = Number(payload.amount || 0);

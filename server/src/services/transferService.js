@@ -93,6 +93,77 @@ export async function deleteTransfer(userId, id) {
   invalidateBalanceCache(userId)
 }
 
+export async function updateTransfer(userId, id, data) {
+  const { date, amount, fromAccountId, toAccountId, note } = data
+  
+  console.log(`📋 DEBUG updateTransfer called:`)
+  console.log(`  - userId: ${userId}`)
+  console.log(`  - transferId: ${id}`)
+  console.log(`  - fromAccountId: ${fromAccountId}`)
+  console.log(`  - toAccountId: ${toAccountId}`)
+  console.log(`  - amount: ${amount}`)
+  
+  // Trova il trasferimento esistente
+  const existingTransfer = await prisma.transfer.findFirst({
+    where: { id, userId },
+    include: { fromAccount: true, toAccount: true }
+  })
+  
+  if (!existingTransfer) throw httpError(404, 'Trasferimento non trovato')
+  
+  // Valida che i nuovi conti esistano e appartengano all'utente
+  const [fromAccount, toAccount] = await Promise.all([
+    prisma.account.findFirst({ where: { id: fromAccountId, userId } }),
+    prisma.account.findFirst({ where: { id: toAccountId, userId } })
+  ])
+  
+  if (!fromAccount) throw httpError(400, 'Conto di origine non trovato')
+  if (!toAccount) throw httpError(400, 'Conto di destinazione non trovato')
+  if (fromAccountId === toAccountId) throw httpError(400, 'I conti devono essere diversi')
+  
+  // Aggiorna il trasferimento e i saldi in una transazione atomica
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Reverte il trasferimento precedente
+    console.log(`🔄 AGGIORNAMENTO TRASFERIMENTO - Ripristino trasferimento precedente:`)
+    console.log(`   - Conto mittente precedente "${existingTransfer.fromAccount.name}": +€${existingTransfer.amount}`)
+    console.log(`   - Conto destinatario precedente "${existingTransfer.toAccount.name}": -€${existingTransfer.amount}`)
+    
+    await revertAccountBalance(existingTransfer.fromAccountId, existingTransfer.amount, 'EXPENSE', { transaction: tx })
+    await revertAccountBalance(existingTransfer.toAccountId, existingTransfer.amount, 'INCOME', { transaction: tx })
+    
+    // 2. Aggiorna il record Transfer
+    const updatedTransfer = await tx.transfer.update({
+      where: { id },
+      data: {
+        fromAccountId,
+        toAccountId,
+        amount: Math.abs(amount),
+        note: note || null,
+        date: new Date(date)
+      },
+      include: {
+        fromAccount: true,
+        toAccount: true
+      }
+    })
+    
+    // 3. Applica il nuovo trasferimento
+    console.log(`💸 AGGIORNAMENTO TRASFERIMENTO - Applicazione nuovo trasferimento:`)
+    console.log(`   - Nuovo conto mittente "${fromAccount.name}": -€${Math.abs(amount)}`)
+    console.log(`   - Nuovo conto destinatario "${toAccount.name}": +€${Math.abs(amount)}`)
+    
+    await updateAccountBalance(fromAccountId, Math.abs(amount), 'EXPENSE', { transaction: tx })
+    await updateAccountBalance(toAccountId, Math.abs(amount), 'INCOME', { transaction: tx })
+    
+    return updatedTransfer
+  })
+  
+  // Invalida cache saldo dopo aggiornamento
+  invalidateBalanceCache(userId)
+  
+  return result
+}
+
 export async function listTransfers(userId, query = {}) {
   const { year, month, limit = 200 } = query
   const where = { userId }
@@ -118,5 +189,5 @@ export async function listTransfers(userId, query = {}) {
   
   console.log(`🔍 Found ${transfers.length} transfers for user ${userId}`)
   
-  return transfers
+  return { transfers }
 }

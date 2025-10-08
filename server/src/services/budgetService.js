@@ -244,7 +244,17 @@ export async function batchAccumulateBudgets(userId, budgets) {
     let finalAmount = amount
     if (existingBudget) {
       // Accumula con l'importo esistente
-      finalAmount = parseFloat(existingBudget.amount) + parseFloat(amount)
+      const existingAmount = parseFloat(existingBudget.amount)
+      const newAmount = parseFloat(amount)
+      finalAmount = existingAmount + newAmount
+      
+      console.log(`🔧 [batchAccumulateBudgets] Accumulating budget for ${key}:`)
+      console.log(`  - Existing amount: €${existingAmount}`)
+      console.log(`  - New amount to add: €${newAmount}`)
+      console.log(`  - Final accumulated amount: €${finalAmount}`)
+    } else {
+      console.log(`🔧 [batchAccumulateBudgets] Creating new budget for ${key}:`)
+      console.log(`  - Amount: €${parseFloat(amount)}`)
     }
 
     return prisma.budget.upsert({
