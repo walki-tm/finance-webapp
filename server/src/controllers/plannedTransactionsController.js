@@ -167,8 +167,21 @@ export async function createPlannedTransaction(req, res, next) {
  * 🎯 CONTROLLER: Aggiorna transazione pianificata
  */
 export async function updatePlannedTransaction(req, res, next) {
+  // 🐛 DEBUG: Log dei dati ricevuti nel controller UPDATE
+  console.log('🐛 DEBUG updatePlannedTransaction - received data:')
+  console.log('- req.params.id:', req.params.id)
+  console.log('- req.body.id:', req.body.id)
+  console.log('- req.body.amount:', req.body.amount, typeof req.body.amount)
+  console.log('- req.body.startDate:', req.body.startDate, typeof req.body.startDate)
+  console.log('- req.body.accountId:', req.body.accountId)
+  console.log('- FULL req.body:', JSON.stringify(req.body, null, 2))
+  
   const parsed = plannedTxPatchSchema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid body', details: parsed.error.errors })
+  if (!parsed.success) {
+    console.log('🐛 DEBUG updatePlannedTransaction - Validation failed:')
+    console.log('- Errors:', JSON.stringify(parsed.error.errors, null, 2))
+    return res.status(400).json({ error: 'Invalid body', details: parsed.error.errors })
+  }
   try {
     const updated = await updatePlannedTransactionService(req.user.id, req.params.id, parsed.data)
     res.json(updated)

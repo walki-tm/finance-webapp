@@ -299,7 +299,7 @@ export default function PlannedTransactionCard({
                   // 5. Modifica (per transazioni non-prestiti) - PENULTIMO
                   ...(!transaction.loanId ? [{
                     label: '✏️ Modifica',
-                    onClick: () => onEdit(),
+                    onClick: () => onEdit(transaction),
                     variant: 'default'
                   }] : []),
                   // 6. Rimuovi (per transazioni non-prestiti) - ULTIMO

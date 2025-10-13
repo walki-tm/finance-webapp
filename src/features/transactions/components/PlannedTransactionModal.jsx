@@ -51,8 +51,22 @@ export default function PlannedTransactionModal({
   
   // 🔸 Filtra subcategorie per main selezionata
   const filteredSubcats = useMemo(() => {
-    if (!formData.main || !subcats[formData.main]) return []
-    return subcats[formData.main] || []
+    if (!formData.main) return []
+    
+    // 🐛 DEBUG: Log per capire la struttura di subcats
+    console.log('🐛 DEBUG filteredSubcats - subcats keys:', Object.keys(subcats || {}))
+    console.log('- formData.main:', formData.main)
+    console.log('- subcats[formData.main]:', subcats[formData.main])
+    console.log('- subcats[formData.main.toLowerCase()]:', subcats[formData.main.toLowerCase()])
+    
+    // 🔥 FIX: Prova sia maiuscolo che minuscolo
+    const mainKey = formData.main
+    const lowerKey = formData.main.toLowerCase()
+    
+    const subcatsList = subcats[mainKey] || subcats[lowerKey] || []
+    console.log('- final subcatsList length:', subcatsList.length)
+    
+    return subcatsList
   }, [formData.main, subcats])
   
   // 🔸 Trova main category per colori e icone (include categorie custom)
@@ -78,16 +92,30 @@ export default function PlannedTransactionModal({
   
   // 🔸 Validazione form
   const isValid = useMemo(() => {
-    return (
-      formData.amount && 
-      Number(formData.amount) > 0 &&
-      formData.main &&
-      formData.subId &&
-      formData.accountId &&
-      formData.startDate &&
-      formData.frequency
-    )
-  }, [formData])
+    const validation = {
+      hasAmount: formData.amount && Number(formData.amount) > 0,
+      hasMain: !!formData.main,
+      hasSubId: !!formData.subId,
+      hasAccountId: !!formData.accountId,
+      hasStartDate: !!formData.startDate,
+      hasFrequency: !!formData.frequency
+    }
+    
+    const isFormValid = validation.hasAmount && validation.hasMain && validation.hasSubId && validation.hasAccountId && validation.hasStartDate && validation.hasFrequency
+    
+    // 🐛 DEBUG: Log validation details when editing
+    if (initial) {
+      console.log('🐛 DEBUG PlannedTransactionModal - validation check:', {
+        validation,
+        formData,
+        isFormValid,
+        filteredSubcats: filteredSubcats.length,
+        accounts: accounts?.length || 0
+      })
+    }
+    
+    return isFormValid
+  }, [formData, initial])
   
   // 🔸 Load preview occorrenze
   const loadPreview = async () => {
@@ -115,21 +143,48 @@ export default function PlannedTransactionModal({
     }
   }, [formData.startDate, formData.frequency, showPreview])
   
-  // 🔸 Reset subcategory quando cambia main
+  // 🔸 Reset subcategory quando cambia main - MA NON durante il caricamento iniziale
   useEffect(() => {
-    setFormData(prev => ({ ...prev, subId: '' }))
-  }, [formData.main])
+    // NON resettare se stiamo caricando i dati iniziali del modal
+    if (!initial || !open) {
+      setFormData(prev => ({ ...prev, subId: '' }))
+    }
+  }, [formData.main, initial, open])
   
   // 🔸 Aggiorna formData quando cambia initial (per editing) - SOLO all'apertura del modal
   useEffect(() => {
     if (!open) return // Non fare nulla se il modal è chiuso
     
     if (initial) {
+      // 🐛 DEBUG: Log per capire cosa riceve il modal in editing
+      console.log('🐛 DEBUG PlannedTransactionModal - initial data received:', {
+        id: initial.id,
+        title: initial.title,
+        accountId: initial.accountId,
+        amount: initial.amount,
+        main: initial.main,
+        subId: initial.subId,
+        subcategory: initial.subcategory,
+        account: initial.account,
+        fullInitial: initial
+      })
+      
+      // 🔥 FIX: Gestisci correttamente il mapping della subcategoria e account
+      const mappedSubId = initial.subId || initial.subcategory?.id || ''
+      const mappedAccountId = initial.accountId || initial.account?.id || ''
+      console.log('🐛 DEBUG - field mapping:')
+      console.log('- initial.subId:', initial.subId)
+      console.log('- initial.subcategory?.id:', initial.subcategory?.id)
+      console.log('- mappedSubId:', mappedSubId)
+      console.log('- initial.accountId:', initial.accountId)
+      console.log('- initial.account?.id:', initial.account?.id)
+      console.log('- mappedAccountId:', mappedAccountId)
+      
       setFormData({
         title: initial.title || '',
-        main: initial.main || 'expense',
-        subId: initial.subId || '',
-        accountId: initial.accountId || '', // 🏦 Account per editing
+        main: (initial.main || 'expense').toLowerCase(), // 🔥 FIX: Normalizza a minuscolo
+        subId: mappedSubId, // 🔥 FIX: Usa il subId mappato correttamente
+        accountId: mappedAccountId, // 🔥 FIX: Usa l'accountId mappato correttamente
         amount: initial.amount || '',
         payee: initial.payee || '',
         frequency: initial.frequency || 'MONTHLY',
@@ -187,19 +242,27 @@ export default function PlannedTransactionModal({
     // 🔸 Prepara il payload con tutti i campi necessari
     const payload = {
       ...formData,
-      sub: selectedSubcat?.name || '' // 🐛 FIX: Aggiungi nome sottocategoria
+      // 🔥 FIX CRITICI per validazione backend:
+      amount: Number(formData.amount), // Converti stringa in numero
+      startDate: new Date(formData.startDate), // Converti stringa in Date object
+      appliedToBudget: formData.applyToBudget, // Mappa correttamente il campo
+      subName: selectedSubcat?.name || '', // Usa subName invece di sub
+      ...(initial?.id && { id: initial.id }) // Aggiungi ID per update
     }
+    
+    // 🧹 Rimuovi campi non necessari per il backend
+    delete payload.sub
+    delete payload.applyToBudget
     
     // 🔸 DEBUG: Log della data prima del salvataggio
     console.log('🐛 DEBUG PlannedTransactionModal - handleSave:')
-    console.log('- formData.startDate (string):', formData.startDate)
-    console.log('- Date object from string:', new Date(formData.startDate))
-    console.log('- Date ISO string:', new Date(formData.startDate).toISOString())
-    console.log('- Today date for comparison:', new Date().toLocaleDateString('it-IT'))
-    console.log('- Input startDate vs today:', formData.startDate, 'vs', new Date().toISOString().slice(0, 10))
-    console.log('- 🏦 formData.accountId:', formData.accountId)
-    console.log('- 🐛 selectedSubcat:', selectedSubcat)
-    console.log('- 🔍 FULL payload:', payload)
+    console.log('- Original formData.amount:', formData.amount, typeof formData.amount)
+    console.log('- Converted payload.amount:', payload.amount, typeof payload.amount)
+    console.log('- Original formData.startDate:', formData.startDate, typeof formData.startDate)
+    console.log('- Converted payload.startDate:', payload.startDate, typeof payload.startDate)
+    console.log('- payload.appliedToBudget:', payload.appliedToBudget)
+    console.log('- payload.subName:', payload.subName)
+    console.log('- 🔍 CORRECTED PAYLOAD:', payload)
     
     onSave(payload)
   }

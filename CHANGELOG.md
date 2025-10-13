@@ -5,6 +5,38 @@ Tutte le modifiche importanti al progetto saranno documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/),
 e questo progetto segue il [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2025-10-13 - **PLANNED TRANSACTIONS EDIT FIX** 🛠️
+
+### 🚑 Critical Bug Fixes
+- **Planned Transactions Edit Issue**: Risolto problema critico con la modifica delle transazioni pianificate
+  - **FIX CRITICO**: Correzione passaggio parametri in `PlannedTransactionCard.jsx` - `onEdit()` ora chiama `onEdit(transaction)`
+  - **FIX CRITICO**: Aggiunto ID della transazione nel payload di salvataggio per distinguere create/update
+  - **FIX CRITICO**: Corretta conversione tipi dati nel payload (`amount` da string a number, `startDate` da string a Date)
+  - **FIX CRITICO**: Mappatura corretta campi backend (`applyToBudget` → `appliedToBudget`, `sub` → `subName`)
+  - **FIX CRITICO**: Risolto problema case-sensitivity nel filtro sottocategorie (EXPENSE vs expense)
+  - **FIX**: Migliorato mapping delle sottocategorie nel caricamento dati iniziali
+  - **FIX**: Corretto reset subcategoria per evitare interferenze con dati iniziali
+
+### 🔧 Technical Improvements
+- **Enhanced Validation**: Migliorata validazione Zod nel backend con debug dettagliato
+- **Robust Field Mapping**: Gestione robusta mapping campi con fallback (`initial.subId` || `initial.subcategory?.id`)
+- **Debug System**: Aggiunto sistema di debug avanzato per troubleshooting futuro
+- **Data Normalization**: Normalizzazione automatica dei valori per consistency
+
+### 📝 Files Modified
+- `src/features/transactions/components/PlannedTransactionCard.jsx` - Fix chiamata onEdit con parametri
+- `src/features/transactions/components/PlannedTransactionModal.jsx` - Fix mapping dati e validazione
+- `src/features/transactions/usePlannedTransactions.js` - Debug payload salvataggio
+- `server/src/controllers/plannedTransactionsController.js` - Debug validazione backend
+
+### 🏆 Impact
+- **User Experience**: Risolto completamente il problema del pulsante "Aggiorna Transazione" disabilitato
+- **Data Integrity**: Tutte le modifiche alle transazioni pianificate ora vengono salvate correttamente
+- **Field Pre-population**: Tutti i campi (inclusa sottocategoria) vengono precompilati correttamente in edit mode
+- **Validation**: Eliminati errori "Invalid body" durante il salvataggio
+
+Questa release risolve un bug critico che impediva la modifica delle transazioni pianificate esistenti, rendendo nuovamente funzionale una delle feature core dell'applicazione.
+
 ## [3.1.0] - 2025-10-04 - **STABILITY FIXES & ACCOUNTS SYSTEM** 🔧
 
 ### 🚑 Critical Fixes (Correzioni Critiche)

@@ -44,9 +44,16 @@ async function loadPlannedTransactionsGlobal(token) {
     const planned = await api.listPlannedTransactions(token)
     console.log('✅ SINGLETON: API returned:', planned?.length || 0, 'transactions')
     
-    // Fix next_execution undefined
+    // Fix field mapping and next_execution undefined
     const fixedPlanned = planned.map(tx => {
-      if (!tx.next_execution) {
+      // Map database fields to frontend expected fields
+      const mappedTx = {
+        ...tx,
+        description: tx.title || tx.description, // Map title to description for backward compatibility
+        next_execution: tx.nextDueDate || tx.next_execution // Map nextDueDate to next_execution
+      }
+      
+      if (!mappedTx.next_execution) {
         const now = new Date()
         let nextExecution
         
@@ -67,15 +74,30 @@ async function loadPlannedTransactionsGlobal(token) {
             nextExecution = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
         }
         
-        return { ...tx, next_execution: nextExecution.toISOString() }
+        mappedTx.next_execution = nextExecution.toISOString()
       }
-      return tx
+      
+      return mappedTx
     })
     
     GLOBAL_PLANNED_TRANSACTIONS_DATA.data = fixedPlanned
     GLOBAL_PLANNED_TRANSACTIONS_DATA.hasLoaded = true
     GLOBAL_PLANNED_TRANSACTIONS_DATA.isLoading = false
     GLOBAL_PLANNED_TRANSACTIONS_DATA.error = null
+    
+    // Debug per dashboard uscite previste
+    const activeExpenses = fixedPlanned.filter(tx => tx.isActive && tx.main?.toLowerCase() !== 'income')
+    console.log('🔥 SINGLETON DEBUG: Transazioni per uscite previste:', {
+      totalTransactions: fixedPlanned.length,
+      activeExpenses: activeExpenses.length,
+      activeExpensesDetails: activeExpenses.map(tx => ({
+        id: tx.id,
+        description: tx.description || tx.title,
+        amount: tx.amount,
+        next_execution: tx.next_execution,
+        frequency: tx.frequency
+      }))
+    })
     
     console.log('✅ SINGLETON: Data saved globally, notifying', GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.size, 'subscribers')
     
@@ -340,14 +362,33 @@ export function usePlannedTransactions(token, options = {}) {
     
     savePlannedTx: async (data) => {
       console.log('💾 Saving planned transaction:', data)
+      console.log('🔍 DETAILED PAYLOAD ANALYSIS:')
+      console.log('- data.id:', data.id)
+      console.log('- data.title:', data.title)
+      console.log('- data.main:', data.main)
+      console.log('- data.subId:', data.subId)
+      console.log('- data.accountId:', data.accountId)
+      console.log('- data.amount:', data.amount, typeof data.amount)
+      console.log('- data.startDate:', data.startDate, typeof data.startDate)
+      console.log('- data.frequency:', data.frequency)
+      console.log('- data.confirmationMode:', data.confirmationMode)
+      console.log('- FULL PAYLOAD:', JSON.stringify(data, null, 2))
       try {
         const result = data.id 
           ? await api.updatePlannedTransaction(token, data.id, data)
-          : await api.createPlannedTransaction(token, data)
+          : await api.addPlannedTransaction(token, data)
         console.log('✅ Planned transaction saved successfully')
         // Refresh data after save
         GLOBAL_PLANNED_TRANSACTIONS_DATA.hasLoaded = false
         await loadPlannedTransactionsGlobal(token)
+        // Close modal after successful save
+        GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState = {
+          ...GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState,
+          plannedTxOpen: false,
+          editingPlannedTx: null
+        }
+        // Notify subscribers
+        GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.forEach(callback => callback())
         return result
       } catch (error) {
         console.error('❌ Error saving planned transaction:', error)
@@ -375,11 +416,19 @@ export function usePlannedTransactions(token, options = {}) {
       try {
         const result = data.id 
           ? await api.updateTransactionGroup(token, data.id, data)
-          : await api.createTransactionGroup(token, data)
+          : await api.addTransactionGroup(token, data)
         console.log('✅ Group saved successfully')
         // Refresh data after save
         GLOBAL_PLANNED_TRANSACTIONS_DATA.hasLoaded = false
         await loadPlannedTransactionsGlobal(token)
+        // Close modal after successful save
+        GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState = {
+          ...GLOBAL_PLANNED_TRANSACTIONS_DATA.modalState,
+          groupOpen: false,
+          editingGroup: null
+        }
+        // Notify subscribers
+        GLOBAL_PLANNED_TRANSACTIONS_DATA.subscribers.forEach(callback => callback())
         return result
       } catch (error) {
         console.error('❌ Error saving group:', error)

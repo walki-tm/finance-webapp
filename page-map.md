@@ -417,9 +417,17 @@ User Action → Handler → State Update → Component Re-render
 
 ## 💾 BACKUP SYSTEM
 
-### Struttura Sistema Backup
-**Directory**: `backup/`
+### Struttura Sistema Backup Integrato
+**Directories**: `backup/` (legacy), `server/backups/` (nuovo sistema)
 
+#### Backend API Backup System ⭐ NUOVO
+| File | Tipo | Scopo |
+|------|------|-------|
+| `server/src/controllers/backupController.js` | JS | Controller API per backup |
+| `server/src/routes/backup.js` | JS | Route `/api/backup` |
+| `server/backups/finance-backup-*.json` | JSON | File backup strutturati |
+
+#### Sistema Legacy PowerShell
 | File | Tipo | Scopo |
 |------|------|-------|
 | `backup_facile.bat` | BAT | Esecuzione backup con doppio click |
@@ -430,19 +438,30 @@ User Action → Handler → State Update → Component Re-render
 | `backup_log.txt` | LOG | Log operazioni backup |
 | `finance_webapp_backup_*.dump` | DUMP | File backup database |
 
-### Funzionalità Sistema
-- **Backup Automatizzato**: Script PowerShell con rilevamento PostgreSQL
-- **Rotazione File**: Mantiene automaticamente ultimi 5 backup
-- **Ripristino Sicuro**: Conferma obbligatoria e recreazione database
-- **Logging Completo**: Tracciamento di tutte le operazioni
-- **UI Semplificata**: File BAT per uso con doppio click
+### Funzionalità Sistema Nuovo (Basato su Prisma)
+- **Backup Integrato Frontend**: Icona backup nel dashboard principale
+- **Compatibilità Windows**: Nessuna dipendenza da pg_dump
+- **Export JSON Strutturato**: Dati completi utente in formato leggibile
+- **Sicurezza JWT**: Solo dati utente autenticato nel backup
+- **Metadati e Statistiche**: Timestamp, conteggi, struttura preservata
+- **UI Intuitiva**: Stati di caricamento e notifiche di successo
+
+### Dati Inclusi nel Backup
+- **Transazioni**: Tutte le transazioni dell'utente
+- **Categorie e Sottocategorie**: Configurazione personalizzata
+- **Account**: Multi-account e configurazioni
+- **Prestiti**: Loans completi con pagamenti
+- **Budgeting**: Configurazioni budget e pianificazioni
+- **Transazioni Pianificate**: Con gruppi e schedulazioni
+- **Trasferimenti**: Storia trasferimenti tra account
 
 ### Configurazione Database
 - **Host**: localhost:5432
 - **Database**: finance_webapp
 - **User**: postgres
-- **Formato**: PostgreSQL Custom (.dump)
-- **Compressione**: Abilitata (-Fc)
+- **Formato Nuovo**: JSON strutturato
+- **Formato Legacy**: PostgreSQL Custom (.dump)
+- **Compressione Legacy**: Abilitata (-Fc)
 
 ---
 
