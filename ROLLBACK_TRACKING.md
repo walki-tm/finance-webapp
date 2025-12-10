@@ -67,7 +67,7 @@ git reset --hard [HASH_COMMIT_PRECEDENTE]
 
 ### [001] - Percentuale Impatto Categoria su Entrate nel Dashboard
 **Data**: 10 Dicembre 2025 - 15:35 CET
-**Commit Hash**: [DA AGGIORNARE DOPO COMMIT]
+**Commit Hash**: `83ef8ec75478e21e91ae9140cfb56be616c59db8`
 **Tipo**: FEATURE
 **Rischio**: BASSO
 
