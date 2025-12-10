@@ -152,8 +152,10 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
                 currentDate.setFullYear(currentDate.getFullYear() + 1)
                 break
               default:
-                // One-time or unknown frequency
+                // One-time or unknown frequency - calculate once and exit
                 occurrences = currentDate >= start && currentDate <= end ? 1 : 0
+                // Force exit from while loop for ONE_TIME transactions
+                iterations = MAX_ITERATIONS
                 break
             }
           } catch (dateError) {
@@ -336,10 +338,12 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
                   currentDate.setFullYear(currentDate.getFullYear() + 1)
                   break
                 default:
-                  // One-time
+                  // One-time - count once and exit loop immediately
                   if (currentDate >= futureStartDate && currentDate <= endDate) {
                     totalPlannedExpenses += amount
                   }
+                  // Force exit from while loop for ONE_TIME transactions
+                  iterations = MAX_ITERATIONS
                   break
               }
             } catch (dateError) {
