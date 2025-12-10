@@ -65,6 +65,40 @@ git reset --hard [HASH_COMMIT_PRECEDENTE]
 
 ---
 
+### [001] - Percentuale Impatto Categoria su Entrate nel Dashboard
+**Data**: 10 Dicembre 2025 - 15:35 CET
+**Commit Hash**: [DA AGGIORNARE DOPO COMMIT]
+**Tipo**: FEATURE
+**Rischio**: BASSO
+
+#### Descrizione
+Aggiunta nuova metrica "Impatto sulle entrate" nelle card delle categorie del Dashboard.
+Mostra la percentuale di spesa della categoria rispetto alle entrate totali del periodo selezionato.
+
+Formula applicata: `(spesa_categoria_periodo / entrate_totali_periodo) * 100`
+
+#### File Modificati
+- `src/features/dashboard/useFilteredDashboardData.js`
+  - Aggiunto calcolo `totalIncome` (entrate totali periodo)
+  - Aggiunto campo `incomeImpactPercentage` in `categoryChartData`
+- `src/features/dashboard/pages/Dashboard.jsx`
+  - Aggiunta visualizzazione percentuale sotto il grafico nelle card categoria
+  - Label: "Impatto sulle entrate: X.X%"
+  - Visibile solo per categorie diverse da INCOME e con percentuale > 0
+
+#### Come Rollback
+```bash
+git reset --hard fec279eedefa487caf2d3ed5a1c06746f54dd9e0
+```
+
+#### Note/Avvertenze
+- La percentuale è 0% se non ci sono entrate nel periodo
+- La percentuale NON viene mostrata per la categoria INCOME (evita confusione)
+- Formattazione con 1 cifra decimale (es: 12.4%)
+- Layout compatto: metrica aggiunta sotto il grafico con bordo superiore
+
+---
+
 <!-- ============================================== -->
 <!-- NUOVE MODIFICHE DA AGGIUNGERE QUI SOPRA -->
 <!-- ============================================== -->

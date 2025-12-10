@@ -220,6 +220,15 @@ export function useFilteredDashboardData(token, filters) {
     filters?.rangeEnd?.getTime()
   ])
 
+  // 🔸 Calcolo entrate totali del periodo per percentuale impatto
+  const totalIncome = useMemo(() => {
+    if (!transactions?.length) return 0
+    
+    return transactions
+      .filter(t => t.main === 'income')
+      .reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0)
+  }, [transactions])
+
   // 🔸 Dati per i donut charts delle categorie main - DINAMICI
   const categoryChartData = useMemo(() => {
     // Trova tutte le categorie uniche da transazioni e budget
@@ -239,14 +248,26 @@ export function useFilteredDashboardData(token, filters) {
       // Trova la categoria core se esiste
       const coreCategory = MAIN_CATS.find(cat => cat.key === catKey)
       
+      // Calcola valore speso per la categoria
+      const categoryValue = aggregatedData.sums[catKey] || 0
+      
+      // 🎯 Calcola percentuale impatto sulle entrate
+      // Formula: (spesa_categoria / entrate_totali) * 100
+      // Se non ci sono entrate, percentuale = 0
+      // Se la categoria è INCOME, non calcoliamo l'impatto (sarebbe sempre 100%)
+      const incomeImpactPercentage = catKey === 'income' || totalIncome === 0 
+        ? 0 
+        : (Math.abs(categoryValue) / totalIncome) * 100
+      
       if (coreCategory) {
         // Categoria core: usa i dati definiti
         return {
           key: coreCategory.key,
           name: coreCategory.name,
           color: coreCategory.color,
-          value: aggregatedData.sums[coreCategory.key] || 0,
-          budget: budgetTotals[coreCategory.key] || 0
+          value: categoryValue,
+          budget: budgetTotals[coreCategory.key] || 0,
+          incomeImpactPercentage // ✨ Nuova metrica
         }
       } else {
         // Categoria custom: trova dati dall'API delle categorie
@@ -256,12 +277,13 @@ export function useFilteredDashboardData(token, filters) {
           key: catKey,
           name: customCategory?.name || catKey.toUpperCase(), // Nome dall'API o fallback
           color: customCategory?.color || '#5B86E5', // Colore dall'API o fallback
-          value: aggregatedData.sums[catKey] || 0,
-          budget: budgetTotals[catKey] || 0
+          value: categoryValue,
+          budget: budgetTotals[catKey] || 0,
+          incomeImpactPercentage // ✨ Nuova metrica
         }
       }
     })
-  }, [aggregatedData.sums, budgetTotals, allMainCategories])
+  }, [aggregatedData.sums, budgetTotals, allMainCategories, totalIncome])
 
   // 🔸 Transazioni recenti (prime 10 per la sezione Recent)
   const recentTransactions = useMemo(() => {

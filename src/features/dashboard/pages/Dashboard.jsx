@@ -716,6 +716,18 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
                     </div>
                     
                   </div>
+                  
+                  {/* 🎯 Nuova metrica: Impatto sulle entrate */}
+                  {d.key !== 'income' && d.incomeImpactPercentage > 0 && (
+                    <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-600 dark:text-slate-400">Impatto sulle entrate:</span>
+                        <span className="font-semibold" style={{ color: d.color }}>
+                          {d.incomeImpactPercentage.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </button>
