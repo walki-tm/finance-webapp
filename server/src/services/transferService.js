@@ -11,6 +11,32 @@ function httpError(status, message) {
   return err
 }
 
+/**
+ * 🎯 Determina automaticamente il tipo di trasferimento
+ * 
+ * Regole:
+ * - CORRENTE → POCKET = ALLOCATE (Accantonamento)
+ * - CORRENTE → SAVINGS = SAVING (Risparmio)
+ * - Tutti gli altri casi = INTERNAL (Interno)
+ */
+function determineTransferType(fromAccount, toAccount) {
+  // ALLOCATE: Accantonamento da Corrente a Pocket
+  if (fromAccount.accountType === 'CURRENT' && toAccount.accountType === 'POCKET') {
+    return 'ALLOCATE'
+  }
+  
+  // SAVING: Risparmio da Corrente a Savings
+  if (fromAccount.accountType === 'CURRENT' && toAccount.accountType === 'SAVINGS') {
+    return 'SAVING'
+  }
+  
+  // INTERNAL: tutti gli altri casi
+  // - Stesso tipo di conto
+  // - Verso Corrente
+  // - Pocket → Pocket, Savings → Savings, ecc.
+  return 'INTERNAL'
+}
+
 export async function createTransfer(userId, data) {
   const { date, amount, fromAccountId, toAccountId, note } = data
   
@@ -30,6 +56,10 @@ export async function createTransfer(userId, data) {
   if (!toAccount) throw httpError(400, 'Conto di destinazione non trovato')
   if (fromAccountId === toAccountId) throw httpError(400, 'I conti devono essere diversi')
   
+  // 🎯 Determina automaticamente il tipo di trasferimento
+  const transferType = determineTransferType(fromAccount, toAccount)
+  console.log(`🎯 Transfer type determined: ${transferType} (${fromAccount.accountType} → ${toAccount.accountType})`)
+  
   // Crea il trasferimento e aggiorna i saldi in una transazione atomica
   const result = await prisma.$transaction(async (tx) => {
     // 1. Crea il record Transfer
@@ -40,7 +70,8 @@ export async function createTransfer(userId, data) {
         toAccountId,
         amount: Math.abs(amount), // Sempre positivo nel modello Transfer
         note: note || null,
-        date: new Date(date)
+        date: new Date(date),
+        transferType // 🎯 Classificazione automatica
       },
       include: {
         fromAccount: true,
@@ -121,6 +152,10 @@ export async function updateTransfer(userId, id, data) {
   if (!toAccount) throw httpError(400, 'Conto di destinazione non trovato')
   if (fromAccountId === toAccountId) throw httpError(400, 'I conti devono essere diversi')
   
+  // 🎯 Determina automaticamente il nuovo tipo di trasferimento
+  const transferType = determineTransferType(fromAccount, toAccount)
+  console.log(`🎯 Transfer type determined: ${transferType} (${fromAccount.accountType} → ${toAccount.accountType})`)
+  
   // Aggiorna il trasferimento e i saldi in una transazione atomica
   const result = await prisma.$transaction(async (tx) => {
     // 1. Reverte il trasferimento precedente
@@ -139,7 +174,8 @@ export async function updateTransfer(userId, id, data) {
         toAccountId,
         amount: Math.abs(amount),
         note: note || null,
-        date: new Date(date)
+        date: new Date(date),
+        transferType // 🎯 Aggiorna anche la classificazione
       },
       include: {
         fromAccount: true,

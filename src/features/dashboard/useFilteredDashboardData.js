@@ -12,7 +12,7 @@
  * @modified 3 Settembre 2025 - Creato per dashboard redesign
  */
 
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useTransactions } from '../transactions/useTransactions.js'
 import { useBalance } from '../app/useBalance.js'
 import useBudgets from '../app/useBudgets.js'
@@ -20,6 +20,7 @@ import { useCategories } from '../categories/useCategories.js'
 import { MAIN_CATS } from '../../lib/constants.js'
 import { parseLocalDate } from '../../lib/dateUtils.js'
 import { months } from '../../lib/constants.js'
+import { api } from '../../lib/api.js'
 
 export function useFilteredDashboardData(token, filters) {
   // 🔸 Hook per transazioni filtrate
@@ -28,6 +29,28 @@ export function useFilteredDashboardData(token, filters) {
     loading: txLoading,
     refreshTransactions
   } = useTransactions(token, filters?.apiFilters)
+  
+  // 🔸 State per transfers
+  const [transfers, setTransfers] = useState([])
+  const [transfersLoading, setTransfersLoading] = useState(true)
+  
+  // 🔸 Carica transfers
+  useEffect(() => {
+    const loadTransfers = async () => {
+      if (!token) return
+      try {
+        setTransfersLoading(true)
+        const response = await api.getTransfers(token)
+        setTransfers(response?.transfers || [])
+      } catch (error) {
+        console.error('Error loading transfers:', error)
+        setTransfers([])
+      } finally {
+        setTransfersLoading(false)
+      }
+    }
+    loadTransfers()
+  }, [token])
 
   // 🔸 Hook per balance globale (sempre aggiornato)
   const { balance, loading: balanceLoading, refresh: refreshBalance } = useBalance(token)
@@ -300,10 +323,12 @@ export function useFilteredDashboardData(token, filters) {
 
   // 🔸 Calcoli per mini box riepilogativa speciali
   const miniBoxData = useMemo(() => {
-    if (!transactions?.length) {
+    if (!transactions?.length && !transfers?.length) {
       return {
         currentAccountIncome: 0,
         totalExpenses: 0,
+        totalAllocations: 0,
+        totalSavings: 0,
         plannedExpensesForPeriod: 0
       }
     }
@@ -313,21 +338,46 @@ export function useFilteredDashboardData(token, filters) {
       .filter(t => t.main === 'income' && t.account?.accountType === 'CURRENT')
       .reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0)
 
-    // 🔸 Uscite totali del periodo (escluso INCOME)
+    // 🔸 Uscite totali del periodo (escluso INCOME e SAVING)
     const totalExpenses = transactions
-      .filter(t => t.main !== 'income')
+      .filter(t => {
+        const mainLower = t.main?.toLowerCase()
+        return mainLower !== 'income' && mainLower !== 'saving'
+      })
       .reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0)
+    
+    // 🎯 Nuovi calcoli per accantonamenti e risparmio
+    const totalAllocations = transfers
+      .filter(t => t.transferType === 'ALLOCATE')
+      .reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0)
+    
+    // 💰 Risparmio = transfers SAVING + transactions SAVING
+    const savingsFromTransfers = transfers
+      .filter(t => t.transferType === 'SAVING')
+      .reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0)
+    
+    const savingsFromTransactions = transactions
+      .filter(t => {
+        const mainLower = t.main?.toLowerCase()
+        return mainLower === 'saving'
+      })
+      .reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0)
+    
+    const totalSavings = savingsFromTransfers + savingsFromTransactions
 
     return {
       currentAccountIncome,
       totalExpenses,
+      totalAllocations,
+      totalSavings,
       plannedExpensesForPeriod: 0 // Calcolato in Dashboard.jsx con planned transactions
     }
-  }, [transactions])
+  }, [transactions, transfers])
 
   return {
     // Dati
     transactions,
+    transfers, // ✅ Nuovi transfers con transferType
     balance,
     aggregatedData,
     categoryChartData,
@@ -335,10 +385,11 @@ export function useFilteredDashboardData(token, filters) {
     miniBoxData, // ✅ Nuovi dati per mini box
     
     // Stati
-    loading: txLoading || balanceLoading || budgetsLoading,
+    loading: txLoading || balanceLoading || budgetsLoading || transfersLoading,
     txLoading,
     balanceLoading,
     budgetsLoading,
+    transfersLoading,
     
     // Budgets
     budgets,

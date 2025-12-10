@@ -355,12 +355,19 @@ model GoalTransaction {
 // 💳 SISTEMA CONTI/ACCOUNTS
 // =============================================================================
 
-// 💳 Tipi di conto disponibili
+// 👳 Tipi di conto disponibili
 enum AccountType {
   CURRENT      // Conto Corrente
   INVESTMENTS  // Investimenti
   SAVINGS      // Risparmio
   POCKET       // Pocket
+}
+
+// 🎯 Tipi di trasferimento (classificazione automatica)
+enum TransferType {
+  ALLOCATE  // Accantonamento: Corrente → Pocket
+  SAVING    // Risparmio: Corrente → Savings
+  INTERNAL  // Interno: stesso tipo o verso Corrente
 }
 
 // 🏦 Conti utente per gestione multi-account
@@ -392,13 +399,14 @@ model Account {
 
 // 🔄 Trasferimenti tra conti
 model Transfer {
-  id            String   @id @default(cuid())
+  id            String       @id @default(cuid())
   userId        String
-  fromAccountId String   // conto di origine
-  toAccountId   String   // conto di destinazione
-  amount        Decimal  @db.Decimal(20, 2) // importo trasferito
-  note          String?  // note opzionali
-  date          DateTime // data del trasferimento
+  fromAccountId String       // conto di origine
+  toAccountId   String       // conto di destinazione
+  amount        Decimal      @db.Decimal(20, 2) // importo trasferito
+  note          String?      // note opzionali
+  date          DateTime     // data del trasferimento
+  transferType  TransferType @default(INTERNAL) // 🎯 classificazione automatica (ALLOCATE, SAVING, INTERNAL)
   
   // 🕒 Audit
   createdAt     DateTime @default(now())
@@ -410,6 +418,7 @@ model Transfer {
 
   // 📈 Indici per performance
   @@index([userId, date])
+  @@index([userId, transferType]) // 🎯 Per filtrare per tipo (statistiche)
   @@index([fromAccountId])
   @@index([toAccountId])
 }

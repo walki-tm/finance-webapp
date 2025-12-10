@@ -12,7 +12,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, Button } from '../../ui';
+import { Card, CardContent, Button, Badge } from '../../ui';
 import { Plus, ArrowRight, Calendar, Euro, Edit2, Trash2 } from 'lucide-react';
 import { api } from '../../../lib/api.js';
 import { useAuth } from '../../../context/AuthContext.jsx';
@@ -192,6 +192,9 @@ export default function TransfersTab() {
                     <th className="text-left py-3 px-4 font-medium text-slate-900 dark:text-slate-100">
                       Trasferimento
                     </th>
+                    <th className="text-left py-3 px-4 font-medium text-slate-900 dark:text-slate-100">
+                      Tipo
+                    </th>
                     <th className="text-right py-3 px-4 font-medium text-slate-900 dark:text-slate-100">
                       Importo
                     </th>
@@ -242,6 +245,26 @@ export default function TransfersTab() {
                             </div>
                           </div>
                         </div>
+                      </td>
+
+                      {/* Tipo Transfer con Badge */}
+                      <td className="py-4 px-4">
+                        {transfer.transferType && (
+                          <Badge 
+                            className={`
+                              ${transfer.transferType === 'ALLOCATE' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : ''}
+                              ${transfer.transferType === 'SAVING' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : ''}
+                              ${transfer.transferType === 'INTERNAL' ? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400' : ''}
+                            `}
+                          >
+                            {transfer.transferType === 'ALLOCATE' && '📦 Accantonamento'}
+                            {transfer.transferType === 'SAVING' && '💰 Risparmio'}
+                            {transfer.transferType === 'INTERNAL' && '🔄 Interno'}
+                          </Badge>
+                        )}
+                        {!transfer.transferType && (
+                          <span className="text-xs text-slate-400 italic">N/A</span>
+                        )}
                       </td>
 
                       {/* Importo */}

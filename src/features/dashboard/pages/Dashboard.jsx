@@ -37,6 +37,11 @@ import UpcomingPlannedTransactions from '../components/UpcomingPlannedTransactio
 // ⬇️ usa il nuovo componente che carica e colora SVG da /public/icons
 import SvgIcon from '../../icons/components/SvgIcon.jsx';
 
+// ⬇️ Import per KPI Dashboard
+import useKPIData from '../useKPIData.js';
+import KPICard from '../components/KPICard.jsx';
+import { FiArrowDownCircle, FiArrowUpCircle, FiBox, FiTrendingUp, FiCalendar } from 'react-icons/fi';
+
 export default function Dashboard({ state, year, onSelectMain, detailMain, addTx, onNavigateToPlanned }) {
   const { token } = useAuth();
   
@@ -58,6 +63,9 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
   const memoizedFilters = useMemo(() => {
     return filters ? { ...filters, filterMain } : null
   }, [filters, filterMain])
+  
+  // 🔸 Hook per KPI Dashboard
+  const { kpiData } = useKPIData(token, memoizedFilters)
 
   // 🔸 Hook per dati dashboard filtrati
   const {
@@ -66,6 +74,7 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
     categoryChartData,
     recentTransactions,
     transactions, // Tutte le transazioni del periodo per DetailPanel
+    transfers, // ✅ Transfers con transferType
     budgets,
     budgetTotals,
     miniBoxData, // ✅ Nuovi dati per mini box
@@ -391,83 +400,54 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
       WebkitTouchCallout: 'none',
       WebkitTapHighlightColor: 'transparent'
     }}>
-      {/* 🔸 Sistema filtri avanzato con mini riepilogo */}
-      <Card className="select-none">
-        <CardContent className="py-4">
-          <DashboardFilters 
-            onFiltersChange={handleFiltersChange}
+      {/* 🔸 Filtri periodo */}
+      <div className="flex items-center justify-between">
+        <DashboardFilters 
+          onFiltersChange={handleFiltersChange}
+        />
+        
+        {loading && (
+          <Badge variant="outline" className="rounded-xl animate-pulse select-none">
+            Caricamento...
+          </Badge>
+        )}
+      </div>
+
+      {/* 📊 KPI Cards - Statistiche Transfer Type */}
+      {kpiData && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <KPICard
+            icon={<FiArrowDownCircle />}
+            label="Entrate"
+            value={kpiData.totalIncome}
+            color="green"
           />
-          
-          {/* 🔸 Mini riepilogo in evidenza con icone - NUOVA LOGICA */}
-          <div className="mt-3 p-4 bg-gradient-to-br from-slate-50/80 to-slate-100/60 dark:from-slate-800/80 dark:to-slate-700/60 rounded-xl border border-slate-200/30 dark:border-slate-700/30 backdrop-blur-sm">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {/* ✅ Entrate CURRENT del periodo */}
-              <div className="flex flex-col items-center space-y-1.5">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-                  <span className="text-lg">💰</span>
-                </div>
-                <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                  {(() => {
-                    const currentAccountIncome = miniBoxData?.currentAccountIncome || 0
-                    return currentAccountIncome === 0 ? '-' : `+${nice(currentAccountIncome)}`
-                  })()}
-                </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Entrate C/C</div>
-              </div>
-              
-              {/* ✅ Uscite del periodo */}
-              <div className="flex flex-col items-center space-y-1.5">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30">
-                  <span className="text-lg">💸</span>
-                </div>
-                <div className="text-xl font-bold text-red-500 dark:text-red-400">
-                  {(() => {
-                    const totalExpenses = miniBoxData?.totalExpenses || 0
-                    return totalExpenses === 0 ? '-' : `-${nice(totalExpenses)}`
-                  })()}
-                </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Uscite</div>
-              </div>
-              
-              {/* ✅ Uscite Previste (future) */}
-              <div className="flex flex-col items-center space-y-1.5">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30">
-                  <span className="text-lg">📅</span>
-                </div>
-                <div className="text-xl font-bold text-orange-600 dark:text-orange-400">
-                  {(() => {
-                    return plannedExpensesForPeriod === 0 ? '-' : `-${nice(plannedExpensesForPeriod)}`
-                  })()}
-                </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Uscite Previste</div>
-              </div>
-              
-              {/* ✅ Saldo Previsto: Saldo - Uscite previste */}
-              <div className="flex flex-col items-center space-y-1.5">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30">
-                  <span className="text-lg">🔮</span>
-                </div>
-                <div className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
-                  {(() => {
-                    const projectedBalance = (balance || 0) - plannedExpensesForPeriod
-                    return nice(projectedBalance)
-                  })()}
-                </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Saldo Previsto</div>
-              </div>
-            </div>
-          </div>
-          
-          {/* 🔸 Informazioni periodo ridotte */}
-          {loading && (
-            <div className="mt-4 flex justify-center">
-              <Badge variant="outline" className="rounded-xl animate-pulse select-none">
-                Caricamento...
-              </Badge>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          <KPICard
+            icon={<FiArrowUpCircle />}
+            label="Uscite"
+            value={kpiData.totalExpenses}
+            color="red"
+          />
+          <KPICard
+            icon={<FiBox />}
+            label="Accantonamenti"
+            value={kpiData.totalAllocations}
+            color="blue"
+          />
+          <KPICard
+            icon={<FiTrendingUp />}
+            label="Risparmio"
+            value={kpiData.totalSavings}
+            color="gold"
+          />
+          <KPICard
+            icon={<FiCalendar />}
+            label="Residuo"
+            value={(balance || 0) - plannedExpensesForPeriod}
+            color="purple"
+          />
+        </div>
+      )}
 
       {/* 🔸 Cards categorie main con dati filtrati - Layout 1x4 per visualizzazione orizzontale */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 select-none">
