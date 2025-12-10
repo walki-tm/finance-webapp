@@ -10,6 +10,7 @@ import {
   deleteCategory,
   deleteSubcategory,
   reorderSubcategories,
+  batchTransferTransactions,
 } from '../controllers/categoriesController.js'
 
 const router = Router()
@@ -19,6 +20,7 @@ router.get('/', listCategories)
 router.post('/', createCategory)
 router.put('/:id', updateCategory)
 router.post('/sub', createSubcategory)
+router.post('/batch-transfer', batchTransferTransactions)  // Batch transfer transazioni
 router.put('/sub/reorder', reorderSubcategories)  // DEVE ESSERE PRIMA di /sub/:id
 router.put('/sub/:id', updateSubcategory)
 router.delete('/:id', deleteCategory)

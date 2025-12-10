@@ -5,6 +5,91 @@ Tutte le modifiche importanti al progetto saranno documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/),
 e questo progetto segue il [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2025-10-30 - **BATCH CATEGORY TRANSFER FEATURE** 🔄
+
+### 🎉 New Major Feature
+- **Batch Category Transfer System**: Sistema completo per trasferire in blocco tutte le transazioni tra sottocategorie
+  - Trasferimento atomico di tutte le transazioni (normali e pianificate) da una sottocategoria ad un'altra
+  - Modal dedicato con processo guidato in 2 step (selezione + conferma)
+  - Preview del numero di transazioni da trasferire
+  - Validazione completa per evitare errori
+  - Conferma esplicita con testo "TRASFERISCI" per sicurezza
+  - Aggiornamento automatico categoria principale se necessario
+
+### 🛡️ Enhanced Delete Protection
+- **Smart Delete with Transaction Check**: Protezione intelligente eliminazione sottocategorie
+  - Controllo automatico transazioni collegate prima dell'eliminazione
+  - Errore 409 se esistono transazioni associate
+  - Dialog automatico che propone il batch transfer come soluzione
+  - Prevenzione perdita accidentale di dati
+
+### 🎯 Use Cases
+Questa feature è pensata per diversi scenari reali:
+1. **Riorganizzazione**: Cambiato sistema di categorizzazione e vuoi consolidare categorie
+2. **Merge categorie**: Unificare sottocategorie simili o duplicate
+3. **Correzione errori**: Hai categorizzato male un gruppo di transazioni e vuoi sistemarle
+4. **Pulizia**: Eliminare una sottocategoria ma mantenere tutte le transazioni
+5. **Migrazione dati**: Spostare transazioni storiche verso nuove categorie
+
+### 🔧 Backend Implementation
+- **Service Layer**: 
+  - `transferTransactionsBatch()` in `categoryService.js`
+  - Transazione atomica database per garantire coerenza
+  - Aggiornamento batch di `transactions` e `planned_transactions`
+  - Validazione completa (sottocategorie esistono, IDs diversi, transazioni disponibili)
+- **Controller & Validation**:
+  - Endpoint POST `/api/categories/batch-transfer`
+  - Schema Zod per validazione input rigorosa
+  - Gestione errori con messaggi descrittivi
+- **Enhanced Delete Service**:
+  - `deleteSubcategoryService()` ora controlla transazioni collegate
+  - Errore 409 con dettagli (count transazioni, subcategoryId)
+  - Impedisce eliminazioni accidentali
+
+### 🎨 Frontend Implementation
+- **BatchTransferModal Component**:
+  - UI professionale con design moderno
+  - Processo guidato in 2 step per evitare errori
+  - Step 1: Selezione origine e destinazione con dropdown filtrati
+  - Step 2: Riepilogo e conferma con campo di sicurezza
+  - Gestione loading states e error handling
+  - Dark mode support completo
+- **Integration**:
+  - Pulsante "Trasferisci Transazioni" nella pagina Categorie
+  - Integrazione nel dialog delete per proporre transfer automatico
+  - API client method `batchTransferCategories()`
+  - Refresh automatico dati dopo trasferimento
+
+### 📝 Files Added
+- `src/features/categories/components/BatchTransferModal.jsx` - Modal component completo
+
+### 📝 Files Modified
+#### Backend
+- `server/src/services/categoryService.js` - Aggiunto `transferTransactionsBatch()` e controllo delete
+- `server/src/controllers/categoriesController.js` - Aggiunto `batchTransferTransactions()` controller
+- `server/src/routes/categories.js` - Aggiunta route `/batch-transfer`
+
+#### Frontend
+- `src/lib/api.js` - Aggiunto `batchTransferCategories()` API method
+- `src/features/categories/pages/Categories.jsx` - Integrato modal e pulsante
+- `src/features/categories/pages/SubCategoriesTab.jsx` - Enhanced delete con proposta transfer
+
+### ⚡ Technical Details
+- **Atomicità**: Tutte le operazioni avvengono in una singola transazione database
+- **Rollback**: Se qualcosa fallisce, nessuna modifica viene applicata
+- **Performance**: Batch update ottimizzato per grandi volumi di transazioni
+- **Consistency**: Aggiornamento automatico di `main` category se sottocategorie sono di categorie diverse
+- **Scope**: Include sia `transactions` che `planned_transactions`
+
+### 🏆 Impact
+- **Data Management**: Gestione più flessibile e potente delle categorie
+- **Error Prevention**: Impossibile eliminare accidentalmente sottocategorie con dati
+- **User Experience**: Processo guidato intuitivo con conferme esplicite
+- **Data Integrity**: Transazioni atomiche garantiscono coerenza
+- **Time Saving**: Operazioni che richiedevano ore ora richiedono secondi
+
+Questa feature risponde a una necessità reale degli utenti che devono riorganizzare le proprie categorie dopo periodi di utilizzo o correggere errori di categorizzazione di massa.
+
 ## [3.1.1] - 2025-10-13 - **PLANNED TRANSACTIONS EDIT FIX** 🛠️
 
 ### 🚑 Critical Bug Fixes

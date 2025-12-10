@@ -29,6 +29,7 @@ import {
   deleteCategory as deleteCategoryService,
   deleteSubcategory as deleteSubcategoryService,
   reorderSubcategories as reorderSubcategoriesService,
+  transferTransactionsBatch as transferTransactionsBatchService,
 } from '../services/categoryService.js'
 
 // 🔸 Validation schemas per categorie
@@ -62,6 +63,15 @@ const subcategoryPatchSchema = z.object({
 
 const reorderSchema = z.object({
   items: z.array(z.object({ id: z.string().min(1), sortOrder: z.number().int().min(0) })).min(1)
+})
+
+// 🔸 Validation schema per batch transfer
+const batchTransferSchema = z.object({
+  sourceSubcategoryId: z.string().min(1, 'ID sottocategoria di origine richiesto'),
+  targetSubcategoryId: z.string().min(1, 'ID sottocategoria di destinazione richiesto'),
+}).refine((data) => data.sourceSubcategoryId !== data.targetSubcategoryId, {
+  message: 'Le sottocategorie di origine e destinazione devono essere diverse',
+  path: ['targetSubcategoryId']
 })
 
 /**
@@ -276,5 +286,65 @@ export async function reorderSubcategories(req, res, next) {
     res.status(204).end()
   } catch (e) {
     next(e)
+  }
+}
+
+/**
+ * 🎯 CONTROLLER: Trasferisce in batch tutte le transazioni da una sottocategoria ad un'altra
+ * 
+ * Questa funzione permette di spostare tutte le transazioni (normali e pianificate)
+ * da una sottocategoria di origine ad una di destinazione in una singola operazione atomica.
+ * Utile per riorganizzare le categorie o correggere errori di categorizzazione di massa.
+ * 
+ * @param {Request} req - Express request con { sourceSubcategoryId, targetSubcategoryId }
+ * @param {Response} res - Express response con dettagli del trasferimento
+ * @param {NextFunction} next - Express next function
+ * 
+ * @returns {Object} {
+ *   transferred: number,           // Numero transazioni trasferite
+ *   plannedTransferred: number,    // Numero transazioni pianificate trasferite  
+ *   source: { id, name, category }, // Sottocategoria origine
+ *   target: { id, name, category }  // Sottocategoria destinazione
+ * }
+ */
+export async function batchTransferTransactions(req, res, next) {
+  // 🔸 Validazione input
+  const parsed = batchTransferSchema.safeParse(req.body)
+  if (!parsed.success) {
+    const errors = parsed.error.errors.map(e => e.message).join(', ')
+    return res.status(400).json({ 
+      error: 'Dati trasferimento non validi',
+      details: errors
+    })
+  }
+  
+  try {
+    // 🔸 Business logic
+    const { sourceSubcategoryId, targetSubcategoryId } = parsed.data
+    const result = await transferTransactionsBatchService(
+      req.user.id, 
+      sourceSubcategoryId, 
+      targetSubcategoryId
+    )
+    
+    // 🔸 Risposta con dettagli trasferimento
+    res.json({
+      success: true,
+      message: `Trasferite ${result.transferred} transazioni e ${result.plannedTransferred} transazioni pianificate`,
+      transferred: result.transferred,
+      plannedTransferred: result.plannedTransferred,
+      source: {
+        id: result.source.id,
+        name: result.source.name,
+        categoryName: result.source.Category.name
+      },
+      target: {
+        id: result.target.id,
+        name: result.target.name,
+        categoryName: result.target.Category.name
+      }
+    })
+  } catch (e) { 
+    next(e) 
   }
 }

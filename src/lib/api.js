@@ -140,6 +140,19 @@ export const api = {
    */
   deleteSubCategory: (token, id) =>
     request(`/api/categories/sub/${id}`, "DELETE", token),
+  /**
+   * Trasferisce in batch tutte le transazioni da una sottocategoria ad un'altra.
+   * @param {string} token Token di accesso JWT.
+   * @param {string} sourceSubcategoryId ID della sottocategoria di origine.
+   * @param {string} targetSubcategoryId ID della sottocategoria di destinazione.
+   * @returns {Promise<object>} Dettagli del trasferimento (numero transazioni trasferite, etc).
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  batchTransferCategories: (token, sourceSubcategoryId, targetSubcategoryId) =>
+    request("/api/categories/batch-transfer", "POST", token, {
+      sourceSubcategoryId,
+      targetSubcategoryId
+    }),
 
   // ---- Transactions ----
   /**

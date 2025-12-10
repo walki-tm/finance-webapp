@@ -365,9 +365,23 @@ export default function MainCategoriesTab({ state, updateMainCat, addMainCat, re
                       <ActionsMenu
                         onEdit={() => enterRowEdit(m)}
                         onRemove={!isCore ? async () => {
-                          const ok = await removeMainCat(m.key);
-                          if (!ok) {
-                            toast.error("Impossibile rimuovere la categoria");
+                          try {
+                            await removeMainCat(m.key);
+                            toast.success("Categoria eliminata");
+                          } catch (error) {
+                            // 🔥 Gestione errore 409: categoria con transazioni collegate nelle sottocategorie
+                            if (error.message && error.message.includes('existing transactions')) {
+                              toast.error(
+                                "Impossibile eliminare la categoria",
+                                { 
+                                  description: `La categoria "${m.name}" contiene sottocategorie con transazioni collegate. Usa il trasferimento batch per spostare le transazioni prima di eliminare.` 
+                                }
+                              );
+                            } else {
+                              toast.error("Impossibile rimuovere la categoria", { 
+                                description: error.message || 'Errore sconosciuto' 
+                              });
+                            }
                           }
                         } : undefined}
                         onReset={isCore ? () => resetCore(m) : undefined}

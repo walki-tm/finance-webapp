@@ -1,7 +1,9 @@
 // src/features/categories/pages/Categories.jsx
 import React, { useState } from "react";
+import { ArrowRightLeft } from "lucide-react";
 import MainCategoriesTab from "./MainCategoriesTab.jsx";
 import SubCategoriesTab from "./SubCategoriesTab.jsx";
+import BatchTransferModal from "../components/BatchTransferModal.jsx";
 
 /* ---------------- Error boundary ---------------- */
 class ErrorBoundary extends React.Component {
@@ -34,30 +36,61 @@ export default function Categories({
   updateMainCat,
   addMainCat,
   removeMainCat,
+  refreshCategories,
 }) {
   const [tab, setTab] = useState("main");
+  const [batchTransferOpen, setBatchTransferOpen] = useState(false);
+  const [batchTransferSourceId, setBatchTransferSourceId] = useState(null);
+
+  const handleOpenBatchTransfer = (sourceSubcategoryId = null) => {
+    setBatchTransferSourceId(sourceSubcategoryId);
+    setBatchTransferOpen(true);
+  };
+
+  const handleBatchTransferSuccess = (result) => {
+    // Mostra toast di successo (se hai un sistema toast)
+    console.log('✅ Trasferimento completato:', result);
+    
+    // Refresh delle categorie per aggiornare i dati
+    if (refreshCategories) {
+      refreshCategories();
+    }
+  };
 
   return (
     <ErrorBoundary>
       <div className="space-y-6">
-        <div className="flex gap-2">
+        {/* Header con tabs e pulsante batch transfer */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setTab("main")}
+              className={`px-3 py-2 rounded-xl text-sm transition
+                ${tab === "main"
+                  ? "bg-gradient-to-tr from-sky-600 to-indigo-600 text-white"
+                  : "border border-slate-300 dark:border-slate-700 hover:bg-white/60 dark:hover:bg-slate-900/60"}`}
+            >
+              Categorie Main
+            </button>
+            <button
+              onClick={() => setTab("subs")}
+              className={`px-3 py-2 rounded-xl text-sm transition
+                ${tab === "subs"
+                  ? "bg-gradient-to-tr from-sky-600 to-indigo-600 text-white"
+                  : "border border-slate-300 dark:border-slate-700 hover:bg-white/60 dark:hover:bg-slate-900/60"}`}
+            >
+              Sottocategorie
+            </button>
+          </div>
+          
+          {/* Pulsante Batch Transfer */}
           <button
-            onClick={() => setTab("main")}
-            className={`px-3 py-2 rounded-xl text-sm transition
-              ${tab === "main"
-                ? "bg-gradient-to-tr from-sky-600 to-indigo-600 text-white"
-                : "border border-slate-300 dark:border-slate-700 hover:bg-white/60 dark:hover:bg-slate-900/60"}`}
+            onClick={() => handleOpenBatchTransfer()}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm"
+            title="Trasferisci tutte le transazioni da una sottocategoria ad un'altra"
           >
-            Categorie Main
-          </button>
-          <button
-            onClick={() => setTab("subs")}
-            className={`px-3 py-2 rounded-xl text-sm transition
-              ${tab === "subs"
-                ? "bg-gradient-to-tr from-sky-600 to-indigo-600 text-white"
-                : "border border-slate-300 dark:border-slate-700 hover:bg-white/60 dark:hover:bg-slate-900/60"}`}
-          >
-            Sottocategorie
+            <ArrowRightLeft className="w-4 h-4" />
+            Trasferisci Transazioni
           </button>
         </div>
 
@@ -75,8 +108,19 @@ export default function Categories({
             updateSubcat={updateSubcat}
             removeSubcat={removeSubcat}
             reorderSubcats={reorderSubcats}
+            onOpenBatchTransfer={handleOpenBatchTransfer}
           />
         )}
+        
+        {/* Batch Transfer Modal */}
+        <BatchTransferModal
+          open={batchTransferOpen}
+          onClose={() => setBatchTransferOpen(false)}
+          onSuccess={handleBatchTransferSuccess}
+          categories={state.customMainCats || []}
+          subcats={state.subcats || {}}
+          initialSourceSubcategoryId={batchTransferSourceId}
+        />
       </div>
     </ErrorBoundary>
   );

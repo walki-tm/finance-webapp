@@ -131,7 +131,7 @@ export function useCategories(token) {
       return true;
     } catch (err) {
       console.error('Errore removeMainCat:', err);
-      return false;
+      throw err; // Propaga l'errore per gestirlo nel frontend
     }
   };
 
@@ -173,7 +173,7 @@ export function useCategories(token) {
       return true;
     } catch (err) {
       console.error('Errore removeSubcat:', err);
-      return false;
+      throw err; // Propaga l'errore per gestirlo nel frontend
     }
   };
 

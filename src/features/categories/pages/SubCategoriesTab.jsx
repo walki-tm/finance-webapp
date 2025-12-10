@@ -90,7 +90,7 @@ function getMainPalette(state) {
   return { core, customs, all: [...core, ...customs] };
 }
 
-export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSubcat = () => {}, removeSubcat = () => {}, reorderSubcats = () => {} }) {
+export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSubcat = () => {}, removeSubcat = () => {}, reorderSubcats = () => {}, onOpenBatchTransfer }) {
   const toast = useToast();
   const { core, customs } = getMainPalette(state);
 
@@ -455,8 +455,25 @@ export default function SubCategoriesTab({ state, addSubcat = () => {}, updateSu
                       <ActionsMenu
                         onEdit={() => beginRowEdit(sc)}
                         onRemove={async () => {
-                          const ok = await removeSubcat(main, sc.id);
-                          if (!ok) toast.error("Impossibile rimuovere la sottocategoria");
+                          try {
+                            const ok = await removeSubcat(main, sc.id);
+                            if (!ok) toast.error("Impossibile rimuovere la sottocategoria");
+                          } catch (error) {
+                            // 🔥 Gestione errore 409: sottocategoria con transazioni collegate
+                            if (error.message && error.message.includes('existing transactions')) {
+                              const proceed = confirm(
+                                `Impossibile eliminare la sottocategoria "${sc.name}" perché contiene transazioni collegate.\n\n` +
+                                `Vuoi trasferire tutte le transazioni ad un'altra sottocategoria?`
+                              );
+                              if (proceed && onOpenBatchTransfer) {
+                                onOpenBatchTransfer(sc.id);
+                              }
+                            } else {
+                              toast.error("Errore durante l'eliminazione", { 
+                                description: error.message || 'Errore sconosciuto' 
+                              });
+                            }
+                          }
                         }}
                       />
                     </div>
