@@ -471,7 +471,9 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
 
       {/* 🔸 Cards categorie main con dati filtrati - Layout 1x4 per visualizzazione orizzontale */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 select-none">
-        {donutData.map(d => {
+        {donutData
+          .filter(d => d.key !== 'income') // 🚫 Escludi la card INCOME dal rendering
+          .map(d => {
           const projectedAmount = Math.abs(d.projectedValue || 0)
           const currentAmount = Math.abs(d.value)
           const totalProjected = currentAmount + projectedAmount
@@ -676,58 +678,28 @@ export default function Dashboard({ state, year, onSelectMain, detailMain, addTx
                       </PieChart>
                     </ResponsiveContainer>
                     
-                    {/* 🔸 Percentuale al centro del ring - dinamica con hover */}
+                    {/* 🎯 Percentuale al centro del ring - IMPATTO SULLE ENTRATE */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div className="text-center transition-all duration-200 group-hover:scale-110">
                         <div className="text-xl font-bold transition-all duration-200 group-hover:text-2xl" style={{ 
                           color: isOverBudget ? '#ef4444' : d.color 
                         }}>
                           {(() => {
-                            // 🔸 Caso speciale: Account nuovo senza dati né budget
-                            if (currentAmount === 0 && d.budget === 0 && projectedAmount === 0) {
-                              return '0€'
+                            // 🎯 Mostra SEMPRE la percentuale di impatto sulle entrate
+                            // Caso speciale: nessuna spesa o nessuna entrata
+                            if (d.incomeImpactPercentage === 0) {
+                              return '0%'
                             }
                             
-                            if (d.budget <= 0) {
-                              // Caso: Nessun budget impostato ma ci sono dati
-                              if (currentAmount === 0 && projectedAmount === 0) {
-                                return '0€'
-                              }
-                              return 'N/A'
-                            }
-                            
-                            // Caso: Budget presente
-                            if (progressValue > 100) {
-                              // Over budget: mostra "100%+" per percentuali elevate
-                              if (progressValue > 500) {
-                                const overAmount = (totalProjected - d.budget).toFixed(0)
-                                return `+${overAmount}€`
-                              } else {
-                                return '100%+'
-                              }
-                            }
-                            
-                            return `${progressValue.toFixed(0)}%`
+                            // Mostra percentuale impatto con 1 decimale
+                            return `${d.incomeImpactPercentage.toFixed(1)}%`
                           })()
                         }
                         </div>
-                        
                       </div>
                     </div>
                     
                   </div>
-                  
-                  {/* 🎯 Nuova metrica: Impatto sulle entrate */}
-                  {d.key !== 'income' && d.incomeImpactPercentage > 0 && (
-                    <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-600 dark:text-slate-400">Impatto sulle entrate:</span>
-                        <span className="font-semibold" style={{ color: d.color }}>
-                          {d.incomeImpactPercentage.toFixed(1)}%
-                        </span>
-                      </div>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             </button>
