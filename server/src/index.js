@@ -19,6 +19,7 @@ import dashboardRoutes from './routes/dashboard.js'
 import { errorMiddleware } from './middleware/error.js'
 import { debugMiddleware } from '../debug_middleware.js'
 import './services/schedulerService.js' // Inizializza scheduler automatico
+import { initBackupService } from './services/backupService.js' // Backup automatico
 
 const app = express()
 
@@ -78,4 +79,7 @@ app.use(errorMiddleware)
 const port = process.env.PORT || 3001
 app.listen(port, () => {
   console.log(`API listening on :${port}`)
+  
+  // Inizializza servizio backup automatico
+  initBackupService()
 })

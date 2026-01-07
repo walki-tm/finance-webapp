@@ -12,6 +12,7 @@ model User {
   email     String   @unique
   password  String
   name      String
+  theme     String   @default("light") // Tema UI: light o dark
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

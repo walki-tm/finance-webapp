@@ -114,7 +114,7 @@ export default function UpcomingPlannedTransactions({ token, onNavigateToPlanned
   // 🔸 Funzioni di gestione
   const handleMaterialize = async (transaction) => {
     try {
-      await materializePlannedTx(transaction.id)
+      await materializePlannedTx(transaction)
       // Refresh della lista dopo materializzazione
       refreshUpcoming()
       if (refreshTransactions && typeof refreshTransactions === 'function') {
@@ -291,9 +291,9 @@ export default function UpcomingPlannedTransactions({ token, onNavigateToPlanned
                               {/* Menu Azioni vicino al saldo */}
                               <ActionsMenu
                                 customActions={[
-                                  // Paga (per transazioni NON-mensili o mensili da prestiti)
-                                  ...(tx.isActive && (tx.frequency !== 'MONTHLY' || tx.isFromLoan) ? [{
-                                    label: '💳 Paga',
+                                  // Paga (per TUTTE le transazioni attive)
+                                  ...(tx.isActive ? [{
+                                    label: '💰 Paga',
                                     onClick: () => handleMaterialize(tx),
                                     variant: 'default'
                                   }] : []),

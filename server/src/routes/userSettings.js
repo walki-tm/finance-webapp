@@ -18,6 +18,7 @@ import {
   getUserSettings,
   updateDashboardSettings,
   updateCategoryVisibility,
+  updateTheme,
 } from '../controllers/userSettingsController.js'
 
 const router = Router()
@@ -31,5 +32,8 @@ router.put('/dashboard', updateDashboardSettings)
 
 // 🔸 Routes per visibilità categorie
 router.patch('/category-visibility', updateCategoryVisibility)
+
+// 🔸 Routes per tema UI
+router.patch('/theme', updateTheme)
 
 export default router

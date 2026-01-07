@@ -36,7 +36,7 @@ export function useKPIData(token, filters) {
         startDate = new Date(year, month, 1)
         // Ultimo giorno del mese: usa giorno 0 del mese SUCCESSIVO
         const lastDay = new Date(year, month + 1, 0).getDate()
-        endDate = new Date(year, month, lastDay, 23, 59, 59, 999)
+        endDate = new Date(year, month, lastDay)
       } else if (filters.mode === 'year') {
         const year = filters.pointer?.getFullYear()
         startDate = new Date(year, 0, 1)
@@ -51,9 +51,16 @@ export function useKPIData(token, filters) {
         endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0)
       }
       
-      // Formatta date per query string
-      const startDateStr = startDate.toISOString().split('T')[0]
-      const endDateStr = endDate.toISOString().split('T')[0]
+      // Formatta date per query string (senza timezone shift)
+      const formatDate = (date) => {
+        const y = date.getFullYear()
+        const m = String(date.getMonth() + 1).padStart(2, '0')
+        const d = String(date.getDate()).padStart(2, '0')
+        return `${y}-${m}-${d}`
+      }
+      
+      const startDateStr = formatDate(startDate)
+      const endDateStr = formatDate(endDate)
       
       // Fetch KPI dal backend
       const url = `/api/dashboard/kpi?startDate=${startDateStr}&endDate=${endDateStr}`

@@ -29,6 +29,12 @@ const dashboardSettingsSchema = z.object({
     .optional(),
 })
 
+const themeSchema = z.object({
+  theme: z.enum(['light', 'dark'], { 
+    errorMap: () => ({ message: 'Il tema deve essere "light" o "dark"' }) 
+  })
+})
+
 /**
  * 🎯 CONTROLLER: Ottieni impostazioni utente
  */
@@ -59,6 +65,39 @@ export async function updateDashboardSettings(req, res, next) {
     res.json({
       message: 'Impostazioni dashboard aggiornate con successo',
       settings: updatedSettings
+    })
+  } catch (e) { next(e) }
+}
+
+/**
+ * 🎯 CONTROLLER: Aggiorna tema UI utente
+ */
+export async function updateTheme(req, res, next) {
+  const parsed = themeSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ 
+      error: 'Tema non valido', 
+      details: parsed.error.errors 
+    })
+  }
+
+  try {
+    const { prisma } = await import('../lib/prisma.js')
+    
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { theme: parsed.data.theme },
+      select: { 
+        id: true, 
+        email: true, 
+        name: true, 
+        theme: true 
+      }
+    })
+    
+    res.json({
+      message: `Tema aggiornato a ${parsed.data.theme}`,
+      user: updatedUser
     })
   } catch (e) { next(e) }
 }

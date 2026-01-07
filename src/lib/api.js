@@ -722,4 +722,15 @@ export const api = {
    */
   listBackups: (token) =>
     request("/api/backup", "GET", token),
+
+  // ---- User Settings ----
+  /**
+   * Aggiorna il tema UI dell'utente.
+   * @param {string} token Token di accesso JWT.
+   * @param {string} theme Tema da impostare ('light' o 'dark').
+   * @returns {Promise<object>} Utente aggiornato con nuovo tema.
+   * @throws {Error} Se la richiesta fallisce.
+   */
+  updateTheme: (token, theme) =>
+    request("/api/user-settings/theme", "PATCH", token, { theme }),
 };

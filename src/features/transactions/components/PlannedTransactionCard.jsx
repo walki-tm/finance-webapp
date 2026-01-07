@@ -266,17 +266,17 @@ export default function PlannedTransactionCard({
               <ActionsMenu
                 // NON usare onEdit e onRemove per controllare l'ordine
                 customActions={[
-                  // 1. Applica a Budgeting (per transazioni attive)
+                  // 1. Paga (SEMPRE visibile se onMaterialize è disponibile)
+                  ...(onMaterialize ? [{
+                    label: '💰 Paga',
+                    onClick: () => onMaterialize(),
+                    variant: 'default'
+                  }] : []),
+                  // 2. Applica a Budgeting (per transazioni attive)
                   ...(transaction.isActive ? [{
                     label: transaction.appliedToBudget ? '📉 Rimuovi da Budgeting' : '📈 Applica a Budgeting',
                     onClick: () => onApplyToBudgeting && onApplyToBudgeting(transaction),
                     variant: transaction.appliedToBudget ? 'warning' : 'default'
-                  }] : []),
-                  // 2. Paga (per TUTTE le transazioni scadute e attive)
-                  ...(transaction.isActive && isDue ? [{
-                    label: '💰 Paga',
-                    onClick: () => onMaterialize(),
-                    variant: 'default'
                   }] : []),
                   // 3. Cambia gruppo (per transazioni non-prestiti)
                   ...(!transaction.loanId && groups.length > 0 ? [{

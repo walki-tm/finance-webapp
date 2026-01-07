@@ -47,10 +47,7 @@ import useTabState from './features/app/useTabState.js'
 import { useBalance } from './features/app/useBalance.js'
 
 // 🔸 Import icone
-import { Layers3, LogOut, SunMedium, Moon, User, Plus, Settings, Archive } from 'lucide-react'
-
-// 🔸 Import API
-import { api } from './lib/api.js'
+import { Layers3, LogOut, SunMedium, Moon, User, Plus, Settings } from 'lucide-react'
 
 /**
  * 🎯 COMPONENTE: App Content (interno)
@@ -61,7 +58,6 @@ function AppContent() {
   // 🔸 Hook per autenticazione e saldo
   const { user, logout, token } = useAuth()
   const { balance, isLoading: balanceLoading } = useBalance(token)
-  const [isBackupLoading, setIsBackupLoading] = useState(false)
 
   // 🔸 Hook per UI e navigazione
   const { theme, toggleTheme } = useTheme()
@@ -100,20 +96,16 @@ function AppContent() {
   // 🔸 Wrapper functions che includono refresh per sincronizzazione
   const delTx = useCallback(async (id) => {
     await originalDelTx(id);
-    // 🔧 TEMPORARY FIX: Disabilitato auto-refresh per evitare loop infinito
-    // setTimeout(() => {
-    //   refreshTransactions();
-    //   window.dispatchEvent(new CustomEvent('transactionRefresh'));
-    // }, 100);
+    // Refresh immediato dopo eliminazione
+    refreshTransactions();
+    window.dispatchEvent(new CustomEvent('transactionRefresh'));
   }, [originalDelTx, refreshTransactions]);
   
   const saveTx = useCallback(async (payload) => {
     await originalSaveTx(payload);
-    // 🔧 TEMPORARY FIX: Disabilitato auto-refresh per evitare loop infinito
-    // setTimeout(() => {
-    //   refreshTransactions();
-    //   window.dispatchEvent(new CustomEvent('transactionRefresh'));
-    // }, 100);
+    // Refresh immediato dopo salvataggio
+    refreshTransactions();
+    window.dispatchEvent(new CustomEvent('transactionRefresh'));
   }, [originalSaveTx, refreshTransactions]);
 
 
@@ -137,35 +129,6 @@ function AppContent() {
       window.dispatchEvent(new CustomEvent('setPlannedTab', { detail: { tab: 'planned' } }))
     }, 100)
   }, [setActiveTab])
-
-  // 🔸 Funzione per creare backup
-  const handleBackup = useCallback(async () => {
-    if (!token || isBackupLoading) return
-    
-    try {
-      setIsBackupLoading(true)
-      console.log('🗃️ Avvio backup database...')
-      
-      const result = await api.createBackup(token)
-      
-      if (result.success) {
-        const stats = result.stats || {}
-        const statsText = Object.entries(stats)
-          .map(([key, value]) => `${key}: ${value}`)
-          .join('\n')
-        
-        alert(`✅ Backup creato con successo!\n\nFile: ${result.filename}\nData: ${new Date(result.timestamp).toLocaleString('it-IT')}\n\nDati esportati:\n${statsText}`)
-      } else {
-        throw new Error(result.message || 'Errore durante backup')
-      }
-      
-    } catch (error) {
-      console.error('❌ Errore backup:', error)
-      alert(`❌ Errore durante backup:\n${error.message}`)
-    } finally {
-      setIsBackupLoading(false)
-    }
-  }, [token, isBackupLoading])
 
   // 🔸 Props per i tab components (memoized)
   const tabProps = useMemo(() => ({
@@ -243,23 +206,6 @@ function AppContent() {
                   )}
                 </div>
               </div>
-            )}
-            
-            {/* Pulsante Backup */}
-            {user && (
-              <button
-                onClick={handleBackup}
-                disabled={isBackupLoading}
-                className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title={isBackupLoading ? 'Creazione backup in corso...' : 'Crea backup database'}
-                aria-label="Backup database"
-              >
-                <Archive className={`h-4 w-4 ${
-                  isBackupLoading 
-                    ? 'text-amber-500 animate-pulse' 
-                    : 'text-slate-600 dark:text-slate-400'
-                }`} />
-              </button>
             )}
             
             <Switch checked={theme === 'dark'} onCheckedChange={toggleTheme} />

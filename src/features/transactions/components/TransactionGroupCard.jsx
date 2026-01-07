@@ -285,17 +285,17 @@ export default function TransactionGroupCard({
                             <ActionsMenu
                               // NON usare onEdit e onRemove per controllare l'ordine
                               customActions={[
-                                // 1. Applica a Budgeting (per transazioni attive)
+                                // 1. Paga (per TUTTE le transazioni attive)
+                                ...(tx.isActive && onMaterialize ? [{
+                                  label: '💰 Paga',
+                                  onClick: () => onMaterialize(tx.id),
+                                  variant: 'default'
+                                }] : []),
+                                // 2. Applica a Budgeting (per transazioni attive)
                                 ...(tx.isActive ? [{
                                   label: tx.appliedToBudget ? '📉 Rimuovi da Budgeting' : '📈 Applica a Budgeting',
                                   onClick: () => onApplyToBudgeting && onApplyToBudgeting(tx),
                                   variant: tx.appliedToBudget ? 'warning' : 'default'
-                                }] : []),
-                                // 2. Paga (per TUTTE le transazioni scadute e attive)
-                                ...(tx.isActive && daysUntil <= 0 ? [{
-                                  label: '💰 Paga',
-                                  onClick: () => onMaterialize && onMaterialize(tx.id),
-                                  variant: 'default'
                                 }] : []),
                                 // 3. Disattiva (per transazioni mensili non-prestiti)
                                 ...(tx.frequency === 'MONTHLY' && !tx.loanId ? [{

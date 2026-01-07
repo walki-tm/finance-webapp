@@ -5,6 +5,93 @@ Tutte le modifiche importanti al progetto saranno documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/),
 e questo progetto segue il [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-01-07 - **UI IMPROVEMENTS & BACKUP SYSTEM** 💾
+
+### 🎉 New Major Features
+- **Sistema Backup Automatico**: Implementazione completa sistema backup automatico con rotazione
+  - Backup automatico all'avvio server (se ultimo backup > 5 giorni)
+  - Scheduled backup giornaliero alle 5:00 AM (timezone Italia)
+  - Rotazione automatica: mantiene max 5 backup, elimina i più vecchi
+  - Servizio `backupService.js` con `node-cron` per scheduling
+  - Backup JSON completi di tutti i dati utente
+  - Logs dettagliati per monitoring e troubleshooting
+
+### 🎨 UI/UX Improvements
+- **Preferenza Tema Persistente**: Sistema salvataggio preferenza tema UI
+  - Campo `theme` aggiunto al model User nel database
+  - Endpoint API `PATCH /api/user-settings/theme` per aggiornamento
+  - Tema salvato automaticamente quando utente cambia light/dark
+  - Caricamento automatico tema salvato al login
+  - Persistenza tema attraverso refresh e logout/login
+  - Hook `useTheme` aggiornato con integrazione AuthContext
+
+- **Pulsante "Paga" Universale**: Esteso pulsante pagamento a tutte le transazioni pianificate
+  - Pulsante "Paga" visibile per TUTTE le transazioni attive (non solo scadute)
+  - Disponibile in menu azioni (3 puntini) in tutti i contesti:
+    - Card transazioni pianificate singole
+    - Transazioni pianificate nei gruppi
+    - Widget "Prossime Transazioni" nella dashboard
+  - Rimosse restrizioni su frequenza e stato scadenza
+  - Maggiore flessibilità per utente nel pagamento anticipato
+
+- **Auto-Refresh Transazioni**: Fix refresh automatico lista transazioni
+  - Lista transazioni si aggiorna immediatamente dopo aggiunta/modifica
+  - Nessun refresh manuale necessario
+  - Migliorata user experience con feedback immediato
+
+### 🔧 Technical Improvements
+- **Database Schema**: Migration `add_user_theme` per campo theme su User
+- **Backend Services**: 
+  - `backupService.js`: Servizio completo backup con scheduling
+  - `userSettingsController.js`: Endpoint aggiornamento tema
+  - `authService.js`: Login/register restituiscono campo theme
+- **Frontend Architecture**:
+  - `useTheme.js`: Integrazione con AuthContext per persistenza
+  - `AuthContext.jsx`: Funzione `updateUser()` per aggiornamenti user
+  - `api.js`: Metodo `updateTheme()` per chiamate API
+
+### 🐛 Bug Fixes
+- **Fix Materializzazione Dashboard**: Risolto errore "Planned transaction not found"
+  - Correzione passaggio parametri in `handleMaterialize`
+  - Passaggio oggetto completo invece di solo ID
+  - Fix in `UpcomingPlannedTransactions.jsx`
+
+- **Fix Auto-Refresh Loop**: Rimozione commenti "TEMPORARY FIX" disabilitati
+  - Riattivato refresh automatico transazioni dopo salvataggio/eliminazione
+  - Fix in `App.jsx` per funzioni `saveTx` e `delTx`
+
+### 📝 Files Added
+#### Backend
+- `server/src/services/backupService.js` - Servizio backup automatico completo
+- `server/test_backup_rotation.js` - Script test rotazione backup
+
+### 📝 Files Modified
+#### Backend
+- `server/prisma/schema.prisma` - Aggiunto campo `theme` a model User
+- `server/src/index.js` - Inizializzazione backup service
+- `server/src/controllers/userSettingsController.js` - Endpoint tema
+- `server/src/routes/userSettings.js` - Route tema
+- `server/src/services/authService.js` - Restituzione tema in login/register
+- `server/package.json` - Dipendenza `node-cron` aggiunta
+
+#### Frontend
+- `src/context/AuthContext.jsx` - Funzione `updateUser()` per aggiornamenti
+- `src/features/app/useTheme.js` - Integrazione AuthContext
+- `src/lib/api.js` - Metodo `updateTheme()`
+- `src/App.jsx` - Rimozione pulsante backup manuale, fix auto-refresh
+- `src/features/transactions/components/PlannedTransactionCard.jsx` - Pulsante Paga sempre visibile
+- `src/features/transactions/components/TransactionGroupCard.jsx` - Pulsante Paga nei gruppi
+- `src/features/dashboard/components/UpcomingPlannedTransactions.jsx` - Paga in dashboard, fix materializzazione
+
+### 🎯 Impact
+- **Data Safety**: Backup automatici garantiscono sicurezza dati senza intervento manuale
+- **User Experience**: Tema persistente e refresh automatico migliorano UX significativamente
+- **Flexibility**: Pulsante "Paga" universale offre maggiore controllo all'utente
+- **Automation**: Sistema backup completamente automatizzato riduce overhead operativo
+- **Consistency**: Preferenze tema consistenti attraverso sessioni e dispositivi
+
+Questa release migliora significativamente l'affidabilità del sistema con backup automatici e l'esperienza utente con preferenze persistenti e interfaccia più flessibile.
+
 ## [3.2.0] - 2025-10-30 - **BATCH CATEGORY TRANSFER FEATURE** 🔄
 
 ### 🎉 New Major Feature

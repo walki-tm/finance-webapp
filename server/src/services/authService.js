@@ -102,7 +102,7 @@ export async function registerUser({ name, email, password }) {
     { expiresIn: '7d' }
   )
 
-  return { token, user: { id: user.id, email: user.email, name: user.name } }
+  return { token, user: { id: user.id, email: user.email, name: user.name, theme: user.theme } }
 }
 
 export async function loginUser({ email, password }) {
@@ -117,5 +117,5 @@ export async function loginUser({ email, password }) {
     { expiresIn: '7d' }
   )
 
-  return { token, user: { id: user.id, email: user.email } }
+  return { token, user: { id: user.id, email: user.email, name: user.name, theme: user.theme } }
 }
