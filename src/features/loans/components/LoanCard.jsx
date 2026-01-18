@@ -50,6 +50,31 @@ export default function LoanCard({
     return loansApi.calculateProgress(loan)
   }, [loan])
 
+  // Calcola quota capitale e interessi della rata corrente
+  const currentPaymentBreakdown = useMemo(() => {
+    const currentBalance = parseFloat(loan.currentBalance) || 0
+    const monthlyPayment = parseFloat(loan.monthlyPayment) || 0
+    const interestRate = parseFloat(loan.interestRate) || 0
+    
+    if (currentBalance <= 0 || monthlyPayment <= 0) {
+      return { principal: 0, interest: 0 }
+    }
+    
+    // Tasso periodale mensile
+    const i = interestRate / 12
+    
+    // Quota interessi = Saldo residuo × i
+    const interest = currentBalance * i
+    
+    // Quota capitale = Rata - Quota interessi
+    const principal = Math.min(monthlyPayment - interest, currentBalance)
+    
+    return {
+      principal: Math.max(0, principal),
+      interest: Math.max(0, interest)
+    }
+  }, [loan.currentBalance, loan.monthlyPayment, loan.interestRate])
+
   const nextPaymentInfo = useMemo(() => {
     console.log('🐛 [LoanCard] Processing loan:', loan.name)
     console.log('🐛 [LoanCard] Loan data:', {
@@ -355,6 +380,43 @@ export default function LoanCard({
               <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                 {loansApi.formatCurrency(loan.monthlyPayment)}
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* Quota Capitale/Interessi e Rate Rimanenti - Solo per prestiti attivi */}
+        {progress.percentage < 100 && (
+          <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200/50 dark:border-slate-600/50">
+            <div className="grid grid-cols-2 gap-3">
+              {/* Quota Capitale */}
+              <div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                  Quota Capitale
+                </p>
+                <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                  {loansApi.formatCurrency(currentPaymentBreakdown.principal)}
+                </p>
+              </div>
+              
+              {/* Quota Interessi */}
+              <div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                  Quota Interessi
+                </p>
+                <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+                  {loansApi.formatCurrency(currentPaymentBreakdown.interest)}
+                </p>
+              </div>
+              
+              {/* Rate Rimanenti */}
+              <div className="col-span-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                  Rate Rimanenti
+                </p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {loan.totalPayments - loan.paidPayments} di {loan.totalPayments}
+                </p>
+              </div>
             </div>
           </div>
         )}

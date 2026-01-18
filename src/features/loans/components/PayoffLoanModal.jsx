@@ -174,6 +174,96 @@ export default function PayoffLoanModal({
     }
   }, [formData.payoffType, formData.recalculationType, payoffAmount, remainingAmount, loan])
 
+  // Calcolo quota capitale e interessi della PROSSIMA rata post-estinzione (solo estinzione parziale)
+  const nextPaymentBreakdownPostPayoff = useMemo(() => {
+    if (formData.payoffType === 'TOTAL' || payoffAmount <= 0 || payoffAmount >= remainingAmount) {
+      return { principal: 0, interest: 0 }
+    }
+    
+    const newBalance = remainingAmount - payoffAmount
+    const interestRate = loan ? parseFloat(loan.interestRate) : 0
+    const i = interestRate / 12 // Tasso periodale mensile
+    
+    // Usa la nuova rata se ricalcolata, altrimenti la rata attuale
+    const payment = formData.recalculationType === 'RECALCULATE_PAYMENT' && newMonthlyPayment > 0
+      ? newMonthlyPayment
+      : (loan ? parseFloat(loan.monthlyPayment) : 0)
+    
+    if (newBalance <= 0 || payment <= 0) {
+      return { principal: 0, interest: 0 }
+    }
+    
+    // Quota interessi = Nuovo saldo residuo × i
+    const interest = newBalance * i
+    
+    // Quota capitale = Rata - Quota interessi
+    const principal = Math.min(payment - interest, newBalance)
+    
+    return {
+      principal: Math.max(0, principal),
+      interest: Math.max(0, interest)
+    }
+  }, [formData.payoffType, formData.recalculationType, payoffAmount, remainingAmount, newMonthlyPayment, loan])
+
+  // Calcolo interessi risparmiati (solo estinzione parziale)
+  const savedInterest = useMemo(() => {
+    if (formData.payoffType === 'TOTAL' || payoffAmount <= 0 || payoffAmount >= remainingAmount) {
+      return 0
+    }
+    
+    const currentRemainingPayments = loan ? (loan.totalPayments - loan.paidPayments) : 0
+    const currentMonthlyPayment = loan ? parseFloat(loan.monthlyPayment) : 0
+    const interestRate = loan ? parseFloat(loan.interestRate) : 0
+    const i = interestRate / 12
+    
+    if (currentRemainingPayments <= 0 || currentMonthlyPayment <= 0) {
+      return 0
+    }
+    
+    // Calcola interessi totali del piano ATTUALE (senza estinzione parziale)
+    let currentTotalInterest = 0
+    let currentBalance = remainingAmount
+    
+    for (let month = 0; month < currentRemainingPayments; month++) {
+      const monthInterest = currentBalance * i
+      currentTotalInterest += monthInterest
+      const monthPrincipal = Math.min(currentMonthlyPayment - monthInterest, currentBalance)
+      currentBalance -= monthPrincipal
+      
+      if (currentBalance <= 0) break
+    }
+    
+    // Calcola interessi totali del piano POST-ESTINZIONE
+    let newTotalInterest = 0
+    let newBalance = remainingAmount - payoffAmount
+    const newPayments = remainingPaymentsPostPayoff
+    const newPayment = formData.recalculationType === 'RECALCULATE_PAYMENT' && newMonthlyPayment > 0
+      ? newMonthlyPayment
+      : currentMonthlyPayment
+    
+    for (let month = 0; month < newPayments; month++) {
+      const monthInterest = newBalance * i
+      newTotalInterest += monthInterest
+      const monthPrincipal = Math.min(newPayment - monthInterest, newBalance)
+      newBalance -= monthPrincipal
+      
+      if (newBalance <= 0.01) break // Tolleranza per arrotondamenti
+    }
+    
+    // Risparmio = Interessi vecchio piano - Interessi nuovo piano
+    return Math.max(0, currentTotalInterest - newTotalInterest)
+  }, [formData.payoffType, formData.recalculationType, payoffAmount, remainingAmount, newMonthlyPayment, remainingPaymentsPostPayoff, loan])
+
+  // Calcolo mensilità ridotte (solo per RECALCULATE_DURATION)
+  const reducedMonths = useMemo(() => {
+    if (formData.payoffType === 'TOTAL' || formData.recalculationType !== 'RECALCULATE_DURATION') {
+      return 0
+    }
+    
+    const currentRemainingPayments = loan ? (loan.totalPayments - loan.paidPayments) : 0
+    return Math.max(0, currentRemainingPayments - remainingPaymentsPostPayoff)
+  }, [formData.payoffType, formData.recalculationType, remainingPaymentsPostPayoff, loan])
+
   // =============================================================================
   // 🔸 VALIDATION
   // =============================================================================
@@ -463,16 +553,6 @@ export default function PayoffLoanModal({
                 {errors.payoffAmount && (
                   <p className="text-red-600 text-sm mt-1">{errors.payoffAmount}</p>
                 )}
-                {payoffAmount > 0 && payoffAmount !== remainingAmount && (
-                  <p className={`text-sm mt-1 ${
-                    savingsAmount > 0 ? 'text-green-600' : 'text-amber-600'
-                  }`}>
-                    {savingsAmount > 0 
-                      ? `Risparmio: ${loansApi.formatCurrency(savingsAmount)}`
-                      : `Costo aggiuntivo: ${loansApi.formatCurrency(Math.abs(savingsAmount))}`
-                    }
-                  </p>
-                )}
               </div>
             )}
 
@@ -560,10 +640,11 @@ export default function PayoffLoanModal({
             {/* Total Amount Summary */}
             {(formData.payoffType === 'TOTAL' && remainingAmount > 0) || (formData.payoffType === 'PARTIAL' && payoffAmount > 0) ? (
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                <h5 className="font-medium text-blue-800 dark:text-blue-200 mb-2">
+                <h5 className="font-medium text-blue-800 dark:text-blue-200 mb-3">
                   Riepilogo Importi
                 </h5>
-                <div className="space-y-1 text-sm">
+                <div className="space-y-2 text-sm">
+                  {/* Importo estinzione */}
                   <div className="flex justify-between">
                     <span className="text-blue-700 dark:text-blue-300">Importo estinzione:</span>
                     <span className="font-medium">
@@ -571,15 +652,7 @@ export default function PayoffLoanModal({
                     </span>
                   </div>
                   
-                  {/* Nuova rata - Solo per ricalcolo rata in estinzione parziale */}
-                  {formData.payoffType === 'PARTIAL' && formData.recalculationType === 'RECALCULATE_PAYMENT' && newMonthlyPayment > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-blue-700 dark:text-blue-300">Nuova rata:</span>
-                      <span className="font-medium">{loansApi.formatCurrency(newMonthlyPayment)}</span>
-                    </div>
-                  )}
-                  
-                  {/* Penale - Se presente */}
+                  {/* Penale */}
                   {calculatedPenalty > 0 && (
                     <div className="flex justify-between">
                       <span className="text-blue-700 dark:text-blue-300">Penale:</span>
@@ -587,15 +660,79 @@ export default function PayoffLoanModal({
                     </div>
                   )}
                   
-                  {/* Rate rimanenti - Solo per estinzione parziale */}
-                  {formData.payoffType === 'PARTIAL' && remainingPaymentsPostPayoff > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-blue-700 dark:text-blue-300">Rate rimanenti:</span>
-                      <span className="font-medium">{remainingPaymentsPostPayoff}</span>
-                    </div>
+                  {/* SEZIONE ESTINZIONE PARZIALE */}
+                  {formData.payoffType === 'PARTIAL' && payoffAmount > 0 && payoffAmount < remainingAmount && (
+                    <>
+                      {/* Rate rimanenti */}
+                      {remainingPaymentsPostPayoff > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-blue-700 dark:text-blue-300">Rate rimanenti:</span>
+                          <span className="font-medium">{remainingPaymentsPostPayoff}</span>
+                        </div>
+                      )}
+                      
+                      {/* Saldo residuo */}
+                      <div className="flex justify-between">
+                        <span className="text-blue-700 dark:text-blue-300">Saldo residuo:</span>
+                        <span className="font-medium">
+                          {loansApi.formatCurrency(remainingAmount - payoffAmount)}
+                        </span>
+                      </div>
+                      
+                      {/* Rata attuale / Rata nuova (se ricalcolo rata) */}
+                      {formData.recalculationType === 'RECALCULATE_PAYMENT' && newMonthlyPayment > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-blue-700 dark:text-blue-300">Rata attuale → Rata nuova:</span>
+                          <span className="font-medium">
+                            {loansApi.formatCurrency(loan?.monthlyPayment || 0)} → {loansApi.formatCurrency(newMonthlyPayment)}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Quota Capitale (prossima rata post-estinzione) */}
+                      {nextPaymentBreakdownPostPayoff.principal > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-blue-700 dark:text-blue-300">Quota Capitale:</span>
+                          <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                            {loansApi.formatCurrency(nextPaymentBreakdownPostPayoff.principal)}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Quota Interessi (prossima rata post-estinzione) */}
+                      {nextPaymentBreakdownPostPayoff.interest > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-blue-700 dark:text-blue-300">Quota Interessi:</span>
+                          <span className="font-medium text-amber-600 dark:text-amber-400">
+                            {loansApi.formatCurrency(nextPaymentBreakdownPostPayoff.interest)}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Interessi risparmiati */}
+                      {savedInterest > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-blue-700 dark:text-blue-300">Interessi risparmiati:</span>
+                          <span className="font-medium text-green-600 dark:text-green-400">
+                            {loansApi.formatCurrency(savedInterest)}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Mensilità ridotte (solo per RECALCULATE_DURATION) */}
+                      {formData.recalculationType === 'RECALCULATE_DURATION' && reducedMonths > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-blue-700 dark:text-blue-300">Mensilità ridotte:</span>
+                          <span className="font-medium text-green-600 dark:text-green-400">
+                            -{reducedMonths} mesi
+                          </span>
+                        </div>
+                      )}
+                    </>
                   )}
                   
-                  <div className="border-t border-blue-200 dark:border-blue-700 pt-1 mt-2">
+                  {/* Totale da pagare */}
+                  <div className="border-t border-blue-200 dark:border-blue-700 pt-2 mt-2">
                     <div className="flex justify-between font-semibold">
                       <span className="text-blue-800 dark:text-blue-200">Totale da pagare:</span>
                       <span className="text-blue-800 dark:text-blue-200">
